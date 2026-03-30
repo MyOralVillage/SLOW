@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">SLOW Library</string>
+    <string name="bookstack_base_url">http://10.0.2.2:6875</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_resources">Resources</string>
+    <string name="nav_profile">Profile</string>
+    <string name="filter_country">Country: Sierra Leone</string>
+    <string name="filter_category">Category: savings</string>
+    <string name="filter_type">Type: document</string>
+</resources>

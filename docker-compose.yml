@@ -1,0 +1,44 @@
+services:
+  bookstack_db:
+    image: mariadb:11.4
+    container_name: slow_bookstack_db
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD=root_password
+      - MARIADB_DATABASE=bookstack
+      - MARIADB_USER=bookstack
+      - MARIADB_PASSWORD=bookstack_password
+    volumes:
+      - bookstack_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  bookstack:
+    image: lscr.io/linuxserver/bookstack:latest
+    container_name: slow_bookstack
+    restart: unless-stopped
+    depends_on:
+      bookstack_db:
+        condition: service_healthy
+    ports:
+      - "6875:80"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Vancouver
+      - APP_URL=${APP_URL}
+      - APP_KEY=${APP_KEY}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - bookstack_data:/config
+
+volumes:
+  bookstack_data:
+  bookstack_db_data:

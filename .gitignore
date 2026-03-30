@@ -1,0 +1,13 @@
+.env
+.DS_Store
+
+# Docker
+bookstack_data/
+bookstack_db_data/
+
+# Android
+android-webview/.gradle/
+android-webview/local.properties
+android-webview/**/build/
+android-webview/.idea/
+*.iml
