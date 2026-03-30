@@ -1,10 +1,28 @@
 <resources>
     <string name="app_name">SLOW Library</string>
     <string name="bookstack_base_url">http://10.0.2.2:6875</string>
+    <string name="bookstack_api_token_id"></string>
+    <string name="bookstack_api_token_secret"></string>
+    <string name="bookstack_default_book_id">1</string>
     <string name="nav_home">Home</string>
     <string name="nav_resources">Resources</string>
+    <string name="nav_upload">Upload</string>
     <string name="nav_profile">Profile</string>
     <string name="filter_country">Country: Sierra Leone</string>
     <string name="filter_category">Category: savings</string>
     <string name="filter_type">Type: document</string>
+    <string name="upload_intro">Upload OIM resources with tags so they are searchable later.</string>
+    <string name="upload_title_label">Title</string>
+    <string name="upload_description_label">Short description</string>
+    <string name="upload_country_label">Country</string>
+    <string name="upload_category_label">Category</string>
+    <string name="upload_type_label">Type</string>
+    <string name="upload_file_label">Pick file</string>
+    <string name="upload_submit_label">Submit</string>
+    <string name="tags_preview_label">Tags preview</string>
+    <string name="tags_preview_value">Tags: %1$s</string>
+    <string name="selected_file_none">Selected file: none</string>
+    <string name="selected_file_value">Selected file: %1$s</string>
+    <string name="upload_validation_error">Please fill all required fields.</string>
+    <string name="upload_mock_saved">Saved locally. Add API token values to enable BookStack upload.</string>
 </resources>

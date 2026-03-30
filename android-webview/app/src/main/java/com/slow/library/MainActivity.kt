@@ -1,6 +1,7 @@
 package com.slow.library
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -41,6 +42,10 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.nav_home -> loadPath("$baseUrl/")
                 R.id.nav_resources -> loadPath("$baseUrl/search")
+                R.id.nav_upload -> {
+                    startActivity(Intent(this, UploadActivity::class.java))
+                    true
+                }
                 R.id.nav_profile -> loadPath("$baseUrl/settings/profile")
                 else -> false
             }
