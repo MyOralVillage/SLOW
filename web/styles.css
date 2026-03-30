@@ -199,6 +199,14 @@ button[type="submit"]:hover {
   border: 1px solid #b7c6f0;
   border-radius: 8px;
   font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.panel-hint {
+  margin: 0 0 12px;
+  color: #4a5a73;
+  font-size: 13px;
 }
 
 .status {

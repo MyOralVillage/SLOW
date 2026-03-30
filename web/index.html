@@ -51,43 +51,56 @@
 
       <section class="upload-panel">
         <h3>Upload OIM Resource</h3>
-        <form id="upload-form">
+        <p class="panel-hint">Same fields as Android: required metadata + optional search filters.</p>
+        <form id="upload-form" novalidate>
           <label for="title">Title *</label>
-          <input id="title" name="title" type="text" required />
+          <input id="title" name="title" type="text" required maxlength="200" />
 
-          <label for="description">Short description *</label>
-          <textarea id="description" name="description" rows="3" required></textarea>
+          <label for="description">Short description * (min 10 characters)</label>
+          <textarea id="description" name="description" rows="3" required maxlength="2000"></textarea>
 
           <div class="row">
             <div>
               <label for="country">Country *</label>
               <select id="country" name="country" required>
                 <option value="">Select country</option>
-                <option value="Sierra Leone">Sierra Leone</option>
-                <option value="Liberia">Liberia</option>
-                <option value="Ghana">Ghana</option>
-                <option value="Nigeria">Nigeria</option>
               </select>
             </div>
             <div>
               <label for="category">Category *</label>
               <select id="category" name="category" required>
                 <option value="">Select category</option>
-                <option value="savings">savings</option>
-                <option value="business">business</option>
-                <option value="literacy">literacy</option>
-                <option value="health">health</option>
               </select>
             </div>
             <div>
               <label for="type">Type *</label>
               <select id="type" name="type" required>
                 <option value="">Select type</option>
-                <option value="icon">icon</option>
-                <option value="template">template</option>
-                <option value="document">document</option>
-                <option value="audio">audio</option>
               </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="product_detail">Product detail (optional)</label>
+              <select id="product_detail" name="product_detail">
+                <option value="">—</option>
+              </select>
+            </div>
+            <div>
+              <label for="cross_cutting">Cross-cutting category (optional)</label>
+              <input id="cross_cutting" name="cross_cutting" type="text" maxlength="120" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="institution">Institution / NGO (optional)</label>
+              <input id="institution" name="institution" type="text" maxlength="120" />
+            </div>
+            <div>
+              <label for="keywords">Keywords (optional)</label>
+              <input id="keywords" name="keywords" type="text" maxlength="200" />
             </div>
           </div>
 
@@ -96,7 +109,7 @@
           <p id="file-preview" class="small">Selected file: none</p>
 
           <label>Tags preview</label>
-          <p id="tags-preview" class="preview">country:, category:, type:</p>
+          <p id="tags-preview" class="preview"></p>
 
           <button type="submit">Submit</button>
         </form>
@@ -111,6 +124,7 @@
       </nav>
     </main>
 
+    <script src="./metadata.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

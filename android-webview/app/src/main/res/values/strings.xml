@@ -23,6 +23,17 @@
     <string name="tags_preview_value">Tags: %1$s</string>
     <string name="selected_file_none">Selected file: none</string>
     <string name="selected_file_value">Selected file: %1$s</string>
+    <string name="upload_product_detail_label">Product detail (optional)</string>
+    <string name="upload_cross_cutting_label">Cross-cutting category (optional)</string>
+    <string name="upload_institution_label">Institution / NGO (optional)</string>
+    <string name="upload_keywords_label">Keywords (optional)</string>
     <string name="upload_validation_error">Please fill all required fields.</string>
+    <string name="upload_error_title">Enter a title.</string>
+    <string name="upload_error_description">Enter a short description (at least 10 characters).</string>
+    <string name="upload_error_country">Choose a country.</string>
+    <string name="upload_error_category">Choose a category.</string>
+    <string name="upload_error_type">Choose a type.</string>
+    <string name="upload_error_file">Choose a file to upload.</string>
+    <string name="upload_error_product_detail">Product detail must be individual, group, both, or left blank.</string>
     <string name="upload_mock_saved">Saved locally. Add API token values to enable BookStack upload.</string>
 </resources>

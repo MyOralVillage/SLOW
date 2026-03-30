@@ -20,6 +20,10 @@ class BookStackApiClient(
         val category: String,
         val type: String,
         val selectedFilename: String?,
+        val productDetail: String? = null,
+        val crossCutting: String? = null,
+        val institution: String? = null,
+        val keywords: String? = null,
     )
 
     data class ApiResult(
@@ -39,17 +43,28 @@ class BookStackApiClient(
         }
 
         val htmlDescription = buildHtmlDescription(request)
+        val tags = JSONArray()
+            .put(JSONObject().put("name", "country").put("value", request.country))
+            .put(JSONObject().put("name", "category").put("value", request.category))
+            .put(JSONObject().put("name", "type").put("value", request.type))
+        request.productDetail?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            tags.put(JSONObject().put("name", "product_detail").put("value", it))
+        }
+        request.crossCutting?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            tags.put(JSONObject().put("name", "cross_cutting").put("value", it))
+        }
+        request.institution?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            tags.put(JSONObject().put("name", "institution").put("value", it))
+        }
+        request.keywords?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            tags.put(JSONObject().put("name", "keywords").put("value", it))
+        }
+
         val payload = JSONObject()
             .put("name", request.title)
             .put("book_id", request.bookId)
             .put("html", htmlDescription)
-            .put(
-                "tags",
-                JSONArray()
-                    .put(JSONObject().put("name", "country").put("value", request.country))
-                    .put(JSONObject().put("name", "category").put("value", request.category))
-                    .put(JSONObject().put("name", "type").put("value", request.type))
-            )
+            .put("tags", tags)
 
         OutputStreamWriter(conn.outputStream).use { writer ->
             writer.write(payload.toString())
@@ -75,13 +90,32 @@ class BookStackApiClient(
         val fileLine = request.selectedFilename?.let {
             "<p><strong>Selected file:</strong> $it (attachment upload pending)</p>"
         }.orEmpty()
+        val optional = buildOptionalHtml(request)
 
         return """
             <p>$safeDescription</p>
             <p><strong>Country:</strong> ${request.country}</p>
             <p><strong>Category:</strong> ${request.category}</p>
             <p><strong>Type:</strong> ${request.type}</p>
+            $optional
             $fileLine
         """.trimIndent()
+    }
+
+    private fun buildOptionalHtml(request: CreateResourceRequest): String {
+        val parts = mutableListOf<String>()
+        request.productDetail?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            parts.add("<p><strong>Product detail:</strong> $it</p>")
+        }
+        request.crossCutting?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            parts.add("<p><strong>Cross-cutting:</strong> $it</p>")
+        }
+        request.institution?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            parts.add("<p><strong>Institution:</strong> $it</p>")
+        }
+        request.keywords?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            parts.add("<p><strong>Keywords:</strong> $it</p>")
+        }
+        return parts.joinToString("")
     }
 }
