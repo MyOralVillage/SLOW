@@ -11,3 +11,7 @@ android-webview/local.properties
 android-webview/**/build/
 android-webview/.idea/
 *.iml
+
+# Python
+__pycache__/
+*.pyc
