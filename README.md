@@ -1,5 +1,7 @@
 # SLOW (Salone OIM Library) - Week 1 Bootstrap
 
+The Sierra Leone Oral Wiki provides resources and tools that poorly-schooled adults can safely and conveniently use, and a discussion forum for practitioners. OIM materials can be captured, uploaded, tagged, stored, and retrieved on demand.
+
 This repository contains a practical Week 1 setup for the SLOW MVP:
 
 - BookStack backend running in Docker
