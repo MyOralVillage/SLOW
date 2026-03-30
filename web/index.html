@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SLOW Resource Upload</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>SLOW Resource Upload</h1>
+      <p class="subtitle">
+        Web upload flow mirroring Android: same fields, tag preview, and submit behavior.
+      </p>
+
+      <form id="upload-form">
+        <label for="title">Title *</label>
+        <input id="title" name="title" type="text" required />
+
+        <label for="description">Short description *</label>
+        <textarea id="description" name="description" rows="4" required></textarea>
+
+        <label for="country">Country *</label>
+        <select id="country" name="country" required>
+          <option value="">Select country</option>
+          <option value="Sierra Leone">Sierra Leone</option>
+          <option value="Liberia">Liberia</option>
+          <option value="Ghana">Ghana</option>
+          <option value="Nigeria">Nigeria</option>
+        </select>
+
+        <label for="category">Category *</label>
+        <select id="category" name="category" required>
+          <option value="">Select category</option>
+          <option value="savings">savings</option>
+          <option value="business">business</option>
+          <option value="literacy">literacy</option>
+          <option value="health">health</option>
+        </select>
+
+        <label for="type">Type *</label>
+        <select id="type" name="type" required>
+          <option value="">Select type</option>
+          <option value="icon">icon</option>
+          <option value="template">template</option>
+          <option value="document">document</option>
+          <option value="audio">audio</option>
+        </select>
+
+        <label for="file">File upload *</label>
+        <input id="file" name="file" type="file" required />
+        <p id="file-preview" class="small">Selected file: none</p>
+
+        <label>Tags preview</label>
+        <p id="tags-preview" class="preview">country:, category:, type:</p>
+
+        <button type="submit">Submit</button>
+      </form>
+
+      <p id="status" class="status"></p>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

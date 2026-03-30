@@ -8,6 +8,7 @@ This repository contains a practical Week 1 setup for the SLOW MVP:
 - API integration and validation scripts
 - Architecture and API design notes
 - Android WebView app with navigation + quick filter routing
+- Web upload page with matching upload fields and tag preview
 
 ## 1) Start Backend (BookStack + MariaDB)
 
@@ -80,7 +81,36 @@ Current screens:
 
 These route to BookStack URLs from a bottom navigation bar.
 
-## 4) Week 1 Output Mapping
+## 4) Web Upload Page (Matches Android Upload)
+
+Path: `web/`
+
+### Run locally
+
+```bash
+cd web
+python3 -m http.server 8080
+```
+
+Then open: `http://localhost:8080`
+
+### Included upload fields
+
+- Title
+- Short description
+- Country
+- Category
+- Type (`icon`, `template`, `document`, `audio`)
+- File picker
+- Tags preview
+- Submit
+
+Behavior:
+
+- always saves mock payload to browser local storage (`slow_latest_submission`)
+- optionally attempts BookStack API page creation if credentials are set in `web/app.js`
+
+## 5) Week 1 Output Mapping
 
 - Backend running: `docker-compose.yml`
 - API tested: `scripts/api_smoke_test.sh`
@@ -88,8 +118,9 @@ These route to BookStack URLs from a bottom navigation bar.
 - Data/API design: `docs/architecture.md`
 - Resource/content structure plan: `docs/resource_content_structure.md`
 - Android app routing: `android-webview/`
+- Web upload UI: `web/`
 
-## 5) Logged Work -> Delivered Artifacts
+## 6) Logged Work -> Delivered Artifacts
 
 - **BookStack setup**
   - `docker-compose.yml`
@@ -105,8 +136,11 @@ These route to BookStack URLs from a bottom navigation bar.
 - **Tag-based filtering strategy implementation**
   - Quick filter routes in Android app
   - Search composition in API validator
+- **Frontend upload page**
+  - Android upload screen (`UploadActivity`)
+  - Web upload page (`web/index.html`)
 
-## 6) Next (Week 2)
+## 7) Next (Week 2)
 
 - Seed tags/categories conventions (`country`, `category`, `type`)
 - Create admin moderation pages/process
