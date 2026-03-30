@@ -140,9 +140,3 @@ Behavior:
   - Android upload screen (`UploadActivity`)
   - Web upload page (`web/index.html`)
 
-## 7) Next (Week 2)
-
-- Seed tags/categories conventions (`country`, `category`, `type`)
-- Create admin moderation pages/process
-- Add resource upload and edit flows validation
-- Add filtered search UI shortcuts for Android
