@@ -3,6 +3,8 @@ package com.slow.library
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.DataOutputStream
+import java.io.InputStream
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
@@ -31,7 +33,13 @@ class BookStackApiClient(
         val message: String,
     )
 
-    fun createResourcePage(request: CreateResourceRequest): ApiResult {
+    data class PageCreateResult(
+        val success: Boolean,
+        val message: String,
+        val pageId: Int? = null,
+    )
+
+    fun createResourcePage(request: CreateResourceRequest): PageCreateResult {
         val endpoint = "${baseUrl.trimEnd('/')}/api/pages"
         val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -76,19 +84,108 @@ class BookStackApiClient(
         val responseBody = stream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
 
         return if (isSuccess) {
-            ApiResult(success = true, message = "Uploaded to BookStack successfully.")
+            val pageId = parsePageId(responseBody)
+            PageCreateResult(
+                success = true,
+                message = "Page created in BookStack.",
+                pageId = pageId,
+            )
         } else {
-            ApiResult(
+            PageCreateResult(
                 success = false,
                 message = "BookStack API failed ($statusCode): ${responseBody.take(220)}",
+                pageId = null,
             )
         }
     }
 
+    fun uploadFileAttachment(
+        pageId: Int,
+        inputStream: InputStream,
+        fileName: String,
+        mimeType: String,
+    ): ApiResult {
+        val boundary = "----SLOW${System.currentTimeMillis()}"
+        val endpoint = "${baseUrl.trimEnd('/')}/api/attachments"
+        val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Authorization", "Token $tokenId:$tokenSecret")
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            connectTimeout = 20000
+            readTimeout = 120000
+        }
+
+        DataOutputStream(conn.outputStream).use { out ->
+            writeMultipartField(out, boundary, "uploaded_to", pageId.toString())
+            writeMultipartField(out, boundary, "name", fileName.ifBlank { "upload" })
+            writeMultipartFile(out, boundary, "file", fileName.ifBlank { "upload.bin" }, mimeType, inputStream)
+            out.writeBytes("--$boundary--\r\n")
+        }
+
+        val statusCode = conn.responseCode
+        val isSuccess = statusCode in 200..299
+        val respStream = if (isSuccess) conn.inputStream else conn.errorStream
+        val responseBody = respStream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
+
+        return if (isSuccess) {
+            ApiResult(success = true, message = "Attachment uploaded.")
+        } else {
+            ApiResult(
+                success = false,
+                message = "Attachment failed ($statusCode): ${responseBody.take(220)}",
+            )
+        }
+    }
+
+    private fun writeMultipartField(out: DataOutputStream, boundary: String, name: String, value: String) {
+        out.writeBytes("--$boundary\r\n")
+        out.writeBytes("Content-Disposition: form-data; name=\"$name\"\r\n\r\n")
+        out.writeBytes(value)
+        out.writeBytes("\r\n")
+    }
+
+    private fun writeMultipartFile(
+        out: DataOutputStream,
+        boundary: String,
+        fieldName: String,
+        filename: String,
+        mimeType: String,
+        stream: InputStream,
+    ) {
+        val safeName = filename.replace("\"", "")
+        out.writeBytes("--$boundary\r\n")
+        out.writeBytes(
+            "Content-Disposition: form-data; name=\"$fieldName\"; filename=\"$safeName\"\r\n",
+        )
+        out.writeBytes("Content-Type: $mimeType\r\n\r\n")
+        stream.copyTo(out)
+        out.writeBytes("\r\n")
+    }
+
+    private fun parsePageId(body: String): Int? =
+        try {
+            val root = JSONObject(body)
+            when {
+                root.has("id") && !root.isNull("id") -> root.getInt("id")
+                root.has("data") -> {
+                    val data = root.get("data")
+                    if (data is JSONObject && data.has("id") && !data.isNull("id")) {
+                        data.getInt("id")
+                    } else {
+                        null
+                    }
+                }
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+
     private fun buildHtmlDescription(request: CreateResourceRequest): String {
         val safeDescription = request.description.replace("\n", "<br/>")
         val fileLine = request.selectedFilename?.let {
-            "<p><strong>Selected file:</strong> $it (attachment upload pending)</p>"
+            "<p><strong>Selected file:</strong> $it (attached via API after page create)</p>"
         }.orEmpty()
         val optional = buildOptionalHtml(request)
 

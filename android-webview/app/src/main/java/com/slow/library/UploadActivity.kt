@@ -245,14 +245,20 @@ class UploadActivity : AppCompatActivity() {
             return
         }
 
+        val fileUri = selectedFileUri
+        val fileNameSafe = selectedFilename ?: "upload.bin"
+
         thread {
-            val result =
+            val client =
+                BookStackApiClient(
+                    baseUrl = apiBaseUrl,
+                    tokenId = tokenId,
+                    tokenSecret = tokenSecret,
+                )
+
+            val createResult =
                 try {
-                    BookStackApiClient(
-                        baseUrl = apiBaseUrl,
-                        tokenId = tokenId,
-                        tokenSecret = tokenSecret,
-                    ).createResourcePage(
+                    client.createResourcePage(
                         BookStackApiClient.CreateResourceRequest(
                             title = title,
                             description = description,
@@ -268,19 +274,58 @@ class UploadActivity : AppCompatActivity() {
                         ),
                     )
                 } catch (err: Exception) {
-                    BookStackApiClient.ApiResult(
+                    BookStackApiClient.PageCreateResult(
                         success = false,
                         message = "Upload failed: ${err.message ?: "Unknown error"}",
+                        pageId = null,
+                    )
+                }
+
+            if (!createResult.success) {
+                runOnUiThread {
+                    btnSubmit.isEnabled = true
+                    Snackbar.make(
+                        btnSubmit,
+                        "${getString(R.string.upload_mock_saved)} ${createResult.message}",
+                        Snackbar.LENGTH_LONG,
+                    ).show()
+                }
+                return@thread
+            }
+
+            val pageId = createResult.pageId
+            if (pageId == null || fileUri == null) {
+                runOnUiThread {
+                    btnSubmit.isEnabled = true
+                    Snackbar.make(
+                        btnSubmit,
+                        getString(R.string.upload_page_no_id),
+                        Snackbar.LENGTH_LONG,
+                    ).show()
+                }
+                return@thread
+            }
+
+            val attachResult =
+                try {
+                    contentResolver.openInputStream(fileUri)?.use { stream ->
+                        val mime = contentResolver.getType(fileUri) ?: "application/octet-stream"
+                        client.uploadFileAttachment(pageId, stream, fileNameSafe, mime)
+                    } ?: BookStackApiClient.ApiResult(false, "Could not open file.")
+                } catch (err: Exception) {
+                    BookStackApiClient.ApiResult(
+                        success = false,
+                        message = err.message ?: "Attachment error",
                     )
                 }
 
             runOnUiThread {
                 btnSubmit.isEnabled = true
                 val msg =
-                    if (result.success) {
-                        result.message
+                    if (attachResult.success) {
+                        getString(R.string.upload_page_and_attachment_ok)
                     } else {
-                        "${getString(R.string.upload_mock_saved)} ${result.message}"
+                        getString(R.string.upload_attachment_failed, attachResult.message)
                     }
                 Snackbar.make(btnSubmit, msg, Snackbar.LENGTH_LONG).show()
             }

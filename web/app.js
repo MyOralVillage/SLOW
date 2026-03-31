@@ -170,11 +170,15 @@ function buildOptionalTags(payload) {
   return tags;
 }
 
-async function tryBookStackSubmit(payload) {
-  if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
-    return { success: false, message: "No API credentials configured." };
-  }
+function parsePageIdFromJson(data) {
+  if (!data || typeof data !== "object") return null;
+  if (typeof data.id === "number") return data.id;
+  if (data.data && typeof data.data.id === "number") return data.data.id;
+  return null;
+}
 
+async function createBookStackPage(payload) {
+  const base = config.apiBaseUrl.replace(/\/$/, "");
   const baseTags = [
     { name: "country", value: payload.country },
     { name: "category", value: payload.category },
@@ -182,7 +186,7 @@ async function tryBookStackSubmit(payload) {
     ...buildOptionalTags(payload),
   ];
 
-  const response = await fetch(`${config.apiBaseUrl.replace(/\/$/, "")}/api/pages`, {
+  const response = await fetch(`${base}/api/pages`, {
     method: "POST",
     headers: {
       Authorization: `Token ${config.apiTokenId}:${config.apiTokenSecret}`,
@@ -197,18 +201,76 @@ async function tryBookStackSubmit(payload) {
         <p><strong>Category:</strong> ${escapeHtml(payload.category)}</p>
         <p><strong>Type:</strong> ${escapeHtml(payload.type)}</p>
         ${optionalHtml(payload)}
-        <p><strong>Selected file:</strong> ${escapeHtml(payload.filename || "none")} (attachment upload pending)</p>
+        <p><strong>Selected file:</strong> ${escapeHtml(payload.filename || "none")} (attached via API after page create)</p>
       `,
       tags: baseTags,
     }),
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    return { success: false, message: `BookStack API failed (${response.status}): ${text.slice(0, 220)}` };
+  const text = await response.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = null;
   }
 
-  return { success: true, message: "Uploaded to BookStack successfully." };
+  if (!response.ok) {
+    return { ok: false, message: `BookStack API failed (${response.status}): ${text.slice(0, 220)}`, pageId: null };
+  }
+
+  const pageId = parsePageIdFromJson(json);
+  return { ok: true, message: "Page created.", pageId };
+}
+
+async function uploadBookStackAttachment(pageId, file) {
+  const base = config.apiBaseUrl.replace(/\/$/, "");
+  const fd = new FormData();
+  fd.append("uploaded_to", String(pageId));
+  fd.append("name", file.name || "upload");
+  fd.append("file", file, file.name || "upload");
+
+  const response = await fetch(`${base}/api/attachments`, {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${config.apiTokenId}:${config.apiTokenSecret}`,
+    },
+    body: fd,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    return { ok: false, message: `Attachment failed (${response.status}): ${text.slice(0, 220)}` };
+  }
+  return { ok: true, message: "Attachment uploaded." };
+}
+
+async function tryBookStackSubmit(payload) {
+  if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
+    return { success: false, message: "No API credentials configured." };
+  }
+
+  const created = await createBookStackPage(payload);
+  if (!created.ok) {
+    return { success: false, message: created.message };
+  }
+
+  const file = fileInput.files && fileInput.files[0];
+  if (!file || created.pageId == null) {
+    return {
+      success: true,
+      message: created.pageId == null
+        ? "Page created but response had no page id; attachment skipped."
+        : "Page created (no file to attach).",
+    };
+  }
+
+  const attached = await uploadBookStackAttachment(created.pageId, file);
+  if (!attached.ok) {
+    return { success: false, message: `Page created. ${attached.message}` };
+  }
+
+  return { success: true, message: "Page and file uploaded to BookStack." };
 }
 
 function escapeHtml(text) {
