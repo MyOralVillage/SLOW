@@ -347,6 +347,7 @@ form.addEventListener("submit", async (event) => {
       initDropdowns();
       filePreview.textContent = "Selected file: none";
       updateTagsPreview();
+      renderBrowse();
       return;
     }
     setStatus(`Mock save complete. ${result.message}`, false);
@@ -360,5 +361,73 @@ openUploadBtn.addEventListener("click", () => {
   titleInput.focus();
 });
 
+const browseListEl = document.getElementById("browse-list");
+const btnRefreshBrowse = document.getElementById("btn-refresh-browse");
+
+function renderLocalBrowseCards() {
+  const hist = JSON.parse(localStorage.getItem("slow_upload_history") || "[]");
+  return hist.map((h) => ({
+    title: h.title || "Untitled",
+    meta: `${h.country || "—"} · ${h.category || "—"} · ${h.type || "—"} · ${h.submittedAt || ""}`,
+    badge: "Saved locally",
+  }));
+}
+
+async function fetchBookStackPages() {
+  if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
+    return [];
+  }
+  const base = config.apiBaseUrl.replace(/\/$/, "");
+  const response = await fetch(`${base}/api/pages?count=20`, {
+    headers: {
+      Authorization: `Token ${config.apiTokenId}:${config.apiTokenSecret}`,
+      Accept: "application/json",
+    },
+  });
+  if (!response.ok) return [];
+  const json = await response.json();
+  const rows = json.data || [];
+  return rows.map((p) => ({
+    title: p.name || "Untitled",
+    meta: `BookStack page #${p.id}`,
+    badge: "BookStack",
+  }));
+}
+
+function cardHtml(card) {
+  return `<article class="browse-card"><span class="meta">${card.badge}</span><h4>${escapeHtml(card.title)}</h4><p class="meta">${escapeHtml(card.meta)}</p></article>`;
+}
+
+async function renderBrowse() {
+  if (!browseListEl) return;
+  browseListEl.innerHTML = "<p class=\"meta\">Loading…</p>";
+  let apiCards = [];
+  try {
+    apiCards = await fetchBookStackPages();
+  } catch {
+    apiCards = [];
+  }
+  const localCards = renderLocalBrowseCards();
+  const parts = [];
+  if (apiCards.length) {
+    parts.push("<p class=\"meta\"><strong>From BookStack</strong></p>");
+    parts.push(...apiCards.map(cardHtml));
+  }
+  if (localCards.length) {
+    parts.push("<p class=\"meta\"><strong>From this device</strong></p>");
+    parts.push(...localCards.map(cardHtml));
+  }
+  if (!parts.length) {
+    browseListEl.innerHTML = "<p class=\"meta\">No items yet. Submit an upload or configure API keys.</p>";
+    return;
+  }
+  browseListEl.innerHTML = parts.join("");
+}
+
+if (btnRefreshBrowse) {
+  btnRefreshBrowse.addEventListener("click", () => renderBrowse());
+}
+
 initDropdowns();
 updateTagsPreview();
+renderBrowse();
