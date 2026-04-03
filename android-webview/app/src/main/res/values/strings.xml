@@ -13,6 +13,10 @@
     <string name="filter_type">Type: document</string>
     <string name="search_keywords_hint">Search keywords</string>
     <string name="search_apply">Search</string>
+    <string name="nav_saved">Saved</string>
+    <string name="saved_uploads_intro">Recent submissions stored on this device (metadata only).</string>
+    <string name="saved_uploads_empty">No saved uploads yet.</string>
+    <string name="saved_uploads_parse_error">Could not read saved history.</string>
     <string name="upload_intro">Upload OIM resources with tags so they are searchable later.</string>
     <string name="upload_title_label">Title</string>
     <string name="upload_description_label">Short description</string>

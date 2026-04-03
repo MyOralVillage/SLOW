@@ -20,6 +20,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnFilterType: MaterialButton
     private lateinit var inputSearchKeywords: TextInputEditText
     private lateinit var btnSearchApply: MaterialButton
+    private lateinit var btnSavedUploads: MaterialButton
     private lateinit var baseUrl: String
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -34,6 +35,7 @@ class MainActivity : AppCompatActivity() {
         btnFilterType = findViewById(R.id.btn_filter_type)
         inputSearchKeywords = findViewById(R.id.input_search_keywords)
         btnSearchApply = findViewById(R.id.btn_search_apply)
+        btnSavedUploads = findViewById(R.id.btn_saved_uploads)
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -69,6 +71,10 @@ class MainActivity : AppCompatActivity() {
                     keywords
                 }
             loadSearch(query)
+        }
+
+        btnSavedUploads.setOnClickListener {
+            startActivity(Intent(this, SavedUploadsActivity::class.java))
         }
     }
 

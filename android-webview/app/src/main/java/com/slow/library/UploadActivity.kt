@@ -14,6 +14,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -359,9 +361,31 @@ class UploadActivity : AppCompatActivity() {
             keywords=$keywords
             filename=${filename ?: "none"}
             """.trimIndent()
-        getSharedPreferences("slow_uploads", MODE_PRIVATE)
-            .edit()
+        val prefs = getSharedPreferences("slow_uploads", MODE_PRIVATE)
+        val historyJson = prefs.getString("upload_history_json", "[]") ?: "[]"
+        val prev = try { JSONArray(historyJson) } catch (_: Exception) { JSONArray() }
+        val entry =
+            JSONObject()
+                .put("time", now)
+                .put("title", title)
+                .put("description", description)
+                .put("country", country)
+                .put("category", category)
+                .put("type", type)
+                .put("product_detail", productDetail)
+                .put("cross_cutting", crossCutting)
+                .put("institution", institution)
+                .put("keywords", keywords)
+                .put("filename", filename ?: JSONObject.NULL)
+        val newArr = JSONArray()
+        newArr.put(entry)
+        val keep = minOf(49, prev.length())
+        for (i in 0 until keep) {
+            newArr.put(prev.get(i))
+        }
+        prefs.edit()
             .putString("latest_submission", payload)
+            .putString("upload_history_json", newArr.toString())
             .apply()
     }
 

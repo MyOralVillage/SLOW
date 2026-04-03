@@ -38,6 +38,14 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:text="@string/filter_type" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_saved_uploads"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/nav_saved" />
         </LinearLayout>
     </HorizontalScrollView>
 
