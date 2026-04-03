@@ -281,6 +281,13 @@ button[type="submit"]:hover {
   max-width: 240px;
 }
 
+.search-advanced button.apply-search.secondary {
+  margin-top: 8px;
+  background: #e8ecfb;
+  color: #2f3f73;
+  border: 1px solid #c5cee8;
+}
+
 .status {
   min-height: 20px;
   margin-top: 10px;

@@ -11,6 +11,8 @@
     <string name="filter_country">Country: Sierra Leone</string>
     <string name="filter_category">Category: savings</string>
     <string name="filter_type">Type: document</string>
+    <string name="search_keywords_hint">Search keywords</string>
+    <string name="search_apply">Search</string>
     <string name="upload_intro">Upload OIM resources with tags so they are searchable later.</string>
     <string name="upload_title_label">Title</string>
     <string name="upload_description_label">Short description</string>

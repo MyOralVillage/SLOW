@@ -19,6 +19,34 @@
         </div>
       </header>
 
+      <section class="search-advanced" id="search-advanced">
+        <h3>Search &amp; filters</h3>
+        <p class="panel-hint">Builds the same tag-style query as the upload preview. Opens BookStack search when API URL is set.</p>
+        <div class="row">
+          <div>
+            <label for="sf_country">Country</label>
+            <select id="sf_country"></select>
+          </div>
+          <div>
+            <label for="sf_category">Category</label>
+            <select id="sf_category"></select>
+          </div>
+          <div>
+            <label for="sf_type">Type</label>
+            <select id="sf_type"></select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="sf_keywords">Keywords</label>
+            <input id="sf_keywords" type="text" maxlength="200" placeholder="e.g. withdrawal loan" />
+          </div>
+        </div>
+        <button type="button" class="apply-search" id="btn-apply-search">Open BookStack search</button>
+        <button type="button" class="apply-search secondary" id="btn-api-search">Search via API</button>
+        <div id="search-api-results" class="browse-list" style="margin-top: 10px"></div>
+      </section>
+
       <section class="screen">
         <aside class="left-rail">
           <button type="button" class="rail-btn">Download</button>

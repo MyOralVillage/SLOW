@@ -9,6 +9,7 @@ import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.textfield.TextInputEditText
 import java.net.URLEncoder
 
 class MainActivity : AppCompatActivity() {
@@ -17,6 +18,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnFilterCountry: MaterialButton
     private lateinit var btnFilterCategory: MaterialButton
     private lateinit var btnFilterType: MaterialButton
+    private lateinit var inputSearchKeywords: TextInputEditText
+    private lateinit var btnSearchApply: MaterialButton
     private lateinit var baseUrl: String
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -29,6 +32,8 @@ class MainActivity : AppCompatActivity() {
         btnFilterCountry = findViewById(R.id.btn_filter_country)
         btnFilterCategory = findViewById(R.id.btn_filter_category)
         btnFilterType = findViewById(R.id.btn_filter_type)
+        inputSearchKeywords = findViewById(R.id.input_search_keywords)
+        btnSearchApply = findViewById(R.id.btn_search_apply)
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -54,6 +59,17 @@ class MainActivity : AppCompatActivity() {
         btnFilterCountry.setOnClickListener { loadSearch("country:\"Sierra Leone\"") }
         btnFilterCategory.setOnClickListener { loadSearch("category:savings") }
         btnFilterType.setOnClickListener { loadSearch("type:document") }
+
+        btnSearchApply.setOnClickListener {
+            val keywords = inputSearchKeywords.text?.toString()?.trim().orEmpty()
+            val query =
+                if (keywords.isEmpty()) {
+                    "resource"
+                } else {
+                    keywords
+                }
+            loadSearch(query)
+        }
     }
 
     private fun loadPath(url: String): Boolean {

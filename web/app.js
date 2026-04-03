@@ -428,6 +428,94 @@ if (btnRefreshBrowse) {
   btnRefreshBrowse.addEventListener("click", () => renderBrowse());
 }
 
+const sfCountry = document.getElementById("sf_country");
+const sfCategory = document.getElementById("sf_category");
+const sfType = document.getElementById("sf_type");
+const sfKeywords = document.getElementById("sf_keywords");
+const topSearchInput = document.getElementById("search");
+const btnApplySearch = document.getElementById("btn-apply-search");
+const btnApiSearch = document.getElementById("btn-api-search");
+const searchApiResults = document.getElementById("search-api-results");
+
+function initSearchFilters() {
+  const o = getOptions();
+  if (sfCountry) fillSelect(sfCountry, o.countries, "Any country");
+  if (sfCategory) fillSelect(sfCategory, o.categories, "Any category");
+  if (sfType) fillSelect(sfType, o.types, "Any type");
+}
+
+function buildFilterSearchQuery() {
+  const parts = [];
+  if (sfCountry?.value) parts.push(`country:"${sfCountry.value}"`);
+  if (sfCategory?.value) parts.push(`category:${sfCategory.value}`);
+  if (sfType?.value) parts.push(`type:${sfType.value}`);
+  const kw = (sfKeywords?.value || "").trim() || (topSearchInput?.value || "").trim();
+  if (kw) parts.push(kw);
+  return parts.join(" ").trim() || "resource";
+}
+
+function bookStackOrigin() {
+  if (!config.apiBaseUrl) return null;
+  try {
+    return new URL(config.apiBaseUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
+if (btnApplySearch) {
+  btnApplySearch.addEventListener("click", () => {
+    const origin = bookStackOrigin();
+    if (!origin) {
+      alert("Set config.apiBaseUrl in app.js to open BookStack search.");
+      return;
+    }
+    const q = buildFilterSearchQuery();
+    window.open(`${origin}/search?term=${encodeURIComponent(q)}`, "_blank", "noopener");
+  });
+}
+
+if (btnApiSearch) {
+  btnApiSearch.addEventListener("click", async () => {
+    if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
+      if (searchApiResults) {
+        searchApiResults.innerHTML = "<p class=\"meta\">Configure API credentials in app.js.</p>";
+      }
+      return;
+    }
+    const base = config.apiBaseUrl.replace(/\/$/, "");
+    const q = buildFilterSearchQuery();
+    if (searchApiResults) searchApiResults.innerHTML = "<p class=\"meta\">Searching…</p>";
+    try {
+      const url = `${base}/api/search?query=${encodeURIComponent(q)}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Token ${config.apiTokenId}:${config.apiTokenSecret}`,
+          Accept: "application/json",
+        },
+      });
+      const json = await response.json();
+      const rows = json.data || [];
+      if (!searchApiResults) return;
+      if (!rows.length) {
+        searchApiResults.innerHTML = "<p class=\"meta\">No results.</p>";
+        return;
+      }
+      const cards = rows.slice(0, 15).map((item) => {
+        const name = item.name || item.title || "Result";
+        const id = item.id || "";
+        return `<article class="browse-card"><h4>${escapeHtml(String(name))}</h4><p class="meta">id: ${escapeHtml(String(id))} · type: ${escapeHtml(String(item.type || ""))}</p></article>`;
+      });
+      searchApiResults.innerHTML = cards.join("");
+    } catch (err) {
+      if (searchApiResults) {
+        searchApiResults.innerHTML = `<p class="meta">Search failed: ${escapeHtml(err.message)}</p>`;
+      }
+    }
+  });
+}
+
 initDropdowns();
+initSearchFilters();
 updateTagsPreview();
 renderBrowse();
