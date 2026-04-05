@@ -15,6 +15,7 @@ const fileInput = document.getElementById("file");
 const filePreview = document.getElementById("file-preview");
 const tagsPreview = document.getElementById("tags-preview");
 const statusEl = document.getElementById("status");
+const openUploadBtn = document.getElementById("btn-open-upload");
 
 function updateTagsPreview() {
   const country = countryInput.value;
@@ -112,6 +113,11 @@ form.addEventListener("submit", async (event) => {
   } catch (error) {
     setStatus(`Mock save complete. Upload failed: ${error.message}`, false);
   }
+});
+
+openUploadBtn.addEventListener("click", () => {
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("title").focus();
 });
 
 updateTagsPreview();

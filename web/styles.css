@@ -4,27 +4,147 @@
 
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f6f8fa;
-  color: #1f2937;
+  font-family: "Trebuchet MS", Arial, sans-serif;
+  background: #eef1f8;
+  color: #1c2430;
 }
 
-.container {
-  max-width: 680px;
-  margin: 32px auto;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 20px;
+.phone-shell {
+  width: min(960px, 95vw);
+  margin: 20px auto;
+  background: #fff;
+  border: 2px solid #ced5e0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 0.08em;
+  color: #4b5b9b;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #dce2ed;
+  background: #f9fbff;
+}
+
+.topbar p {
+  margin: 4px 0 0;
+  color: #536075;
+  font-size: 13px;
+}
+
+.search-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid #c7cfde;
+  background: #fff;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+
+.search-wrap input {
+  border: none;
+  outline: none;
+  width: 180px;
+  font-size: 14px;
+}
+
+.search-icon {
+  margin-left: 6px;
+}
+
+.screen {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  min-height: 280px;
+}
+
+.left-rail {
+  border-right: 1px solid #dbe1ec;
+  background: #e8ecfb;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.rail-btn {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px;
+  font-weight: 600;
+  color: #516191;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rail-btn.active,
+.rail-btn:hover {
+  background: #d7def9;
+}
+
+.content-area {
+  padding: 12px 16px;
+}
+
+.resource-card {
+  border: 1px solid #d2d9e7;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fcfdff;
+}
+
+.resource-card h2 {
   margin: 0 0 8px;
 }
 
-.subtitle {
-  margin: 0 0 18px;
-  color: #4b5563;
+.resource-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resource-icon {
+  font-size: 28px;
+}
+
+.comment-thread {
+  margin-top: 12px;
+}
+
+.comment-thread h3 {
+  margin: 0 0 8px;
+}
+
+.comment {
+  border: 1px solid #d7deea;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+
+.comment p {
+  margin: 4px 0 0;
+}
+
+.upload-panel {
+  border-top: 1px solid #dbe1ec;
+  padding: 14px 16px;
+  background: #f8fbff;
+}
+
+.upload-panel h3 {
+  margin-top: 0;
 }
 
 form {
@@ -34,6 +154,7 @@ form {
 
 label {
   font-weight: 600;
+  font-size: 14px;
 }
 
 input,
@@ -41,49 +162,91 @@ textarea,
 select,
 button {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #d1d5db;
+  padding: 9px;
+  border: 1px solid #c8d0dd;
   border-radius: 8px;
   font-size: 14px;
 }
 
-button {
-  margin-top: 6px;
-  background: #1b5e20;
-  color: #ffffff;
+.row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+button[type="submit"] {
+  margin-top: 4px;
+  background: #2d4b9a;
+  color: #fff;
   border: none;
   cursor: pointer;
 }
 
-button:hover {
-  background: #145219;
+button[type="submit"]:hover {
+  background: #253f84;
 }
 
 .small {
-  margin: -4px 0 0;
-  color: #4b5563;
+  margin: -2px 0 0;
+  color: #4a5a73;
   font-size: 13px;
 }
 
 .preview {
   margin: 0;
   padding: 8px;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  background: #eaf0ff;
+  border: 1px solid #b7c6f0;
   border-radius: 8px;
   font-family: monospace;
 }
 
 .status {
   min-height: 20px;
-  margin-top: 14px;
+  margin-top: 10px;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .status.ok {
-  color: #166534;
+  color: #165f29;
 }
 
 .status.err {
   color: #b91c1c;
+}
+
+.bottom-nav {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #d8dfeb;
+  background: #fff;
+}
+
+.bottom-nav button {
+  border: none;
+  border-right: 1px solid #edf1f7;
+  background: #fff;
+  font-size: 24px;
+  padding: 10px 0;
+}
+
+.bottom-nav button:last-child {
+  border-right: none;
+}
+
+@media (max-width: 720px) {
+  .screen {
+    grid-template-columns: 1fr;
+  }
+
+  .left-rail {
+    grid-template-columns: repeat(3, 1fr);
+    border-right: none;
+    border-bottom: 1px solid #dbe1ec;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
 }

@@ -7,57 +7,108 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="container">
-      <h1>SLOW Resource Upload</h1>
-      <p class="subtitle">
-        Web upload flow mirroring Android: same fields, tag preview, and submit behavior.
-      </p>
+    <main class="phone-shell">
+      <header class="topbar">
+        <div>
+          <h1>SAVINGS</h1>
+          <p>Withdrawal slip resource and discussion</p>
+        </div>
+        <div class="search-wrap">
+          <input id="search" type="search" placeholder="Search..." />
+          <span class="search-icon">🔎</span>
+        </div>
+      </header>
 
-      <form id="upload-form">
-        <label for="title">Title *</label>
-        <input id="title" name="title" type="text" required />
+      <section class="screen">
+        <aside class="left-rail">
+          <button type="button" class="rail-btn">Download</button>
+          <button type="button" class="rail-btn active" id="btn-open-upload">Upload</button>
+          <button type="button" class="rail-btn">Recommend Content</button>
+        </aside>
 
-        <label for="description">Short description *</label>
-        <textarea id="description" name="description" rows="4" required></textarea>
+        <section class="content-area">
+          <article class="resource-card">
+            <h2>Withdrawal slip</h2>
+            <div class="resource-preview">
+              <div class="resource-icon">🧾</div>
+              <p>This page holds templates and examples for customer withdrawal slips.</p>
+            </div>
+          </article>
 
-        <label for="country">Country *</label>
-        <select id="country" name="country" required>
-          <option value="">Select country</option>
-          <option value="Sierra Leone">Sierra Leone</option>
-          <option value="Liberia">Liberia</option>
-          <option value="Ghana">Ghana</option>
-          <option value="Nigeria">Nigeria</option>
-        </select>
+          <section class="comment-thread">
+            <h3>Discussion</h3>
+            <div class="comment">
+              <strong>Momodu Sesay</strong>
+              <p>Can we add phone number validation on this template?</p>
+            </div>
+            <div class="comment">
+              <strong>Mariama Sankoh</strong>
+              <p>There needs to be more room to write the amount in words.</p>
+            </div>
+          </section>
+        </section>
+      </section>
 
-        <label for="category">Category *</label>
-        <select id="category" name="category" required>
-          <option value="">Select category</option>
-          <option value="savings">savings</option>
-          <option value="business">business</option>
-          <option value="literacy">literacy</option>
-          <option value="health">health</option>
-        </select>
+      <section class="upload-panel">
+        <h3>Upload OIM Resource</h3>
+        <form id="upload-form">
+          <label for="title">Title *</label>
+          <input id="title" name="title" type="text" required />
 
-        <label for="type">Type *</label>
-        <select id="type" name="type" required>
-          <option value="">Select type</option>
-          <option value="icon">icon</option>
-          <option value="template">template</option>
-          <option value="document">document</option>
-          <option value="audio">audio</option>
-        </select>
+          <label for="description">Short description *</label>
+          <textarea id="description" name="description" rows="3" required></textarea>
 
-        <label for="file">File upload *</label>
-        <input id="file" name="file" type="file" required />
-        <p id="file-preview" class="small">Selected file: none</p>
+          <div class="row">
+            <div>
+              <label for="country">Country *</label>
+              <select id="country" name="country" required>
+                <option value="">Select country</option>
+                <option value="Sierra Leone">Sierra Leone</option>
+                <option value="Liberia">Liberia</option>
+                <option value="Ghana">Ghana</option>
+                <option value="Nigeria">Nigeria</option>
+              </select>
+            </div>
+            <div>
+              <label for="category">Category *</label>
+              <select id="category" name="category" required>
+                <option value="">Select category</option>
+                <option value="savings">savings</option>
+                <option value="business">business</option>
+                <option value="literacy">literacy</option>
+                <option value="health">health</option>
+              </select>
+            </div>
+            <div>
+              <label for="type">Type *</label>
+              <select id="type" name="type" required>
+                <option value="">Select type</option>
+                <option value="icon">icon</option>
+                <option value="template">template</option>
+                <option value="document">document</option>
+                <option value="audio">audio</option>
+              </select>
+            </div>
+          </div>
 
-        <label>Tags preview</label>
-        <p id="tags-preview" class="preview">country:, category:, type:</p>
+          <label for="file">File upload *</label>
+          <input id="file" name="file" type="file" required />
+          <p id="file-preview" class="small">Selected file: none</p>
 
-        <button type="submit">Submit</button>
-      </form>
+          <label>Tags preview</label>
+          <p id="tags-preview" class="preview">country:, category:, type:</p>
 
-      <p id="status" class="status"></p>
+          <button type="submit">Submit</button>
+        </form>
+        <p id="status" class="status"></p>
+      </section>
+
+      <nav class="bottom-nav">
+        <button type="button">🏠</button>
+        <button type="button">✉️</button>
+        <button type="button">🔔</button>
+        <button type="button">👤</button>
+      </nav>
     </main>
 
     <script src="./app.js"></script>
