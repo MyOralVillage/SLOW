@@ -110,6 +110,10 @@ Behavior:
 - always saves mock payload to browser local storage (`slow_latest_submission`)
 - optionally attempts BookStack API page creation if credentials are set in `web/app.js`
 
+## Commit dates (optional)
+
+For internship or work-log alignment, you can set commit timestamps explicitly. See `docs/commit_dates.md` and `scripts/commit-with-date.sh`.
+
 ## 5) Week 1 Output Mapping
 
 - Backend running: `docker-compose.yml`
