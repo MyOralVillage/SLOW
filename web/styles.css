@@ -92,6 +92,11 @@ h1 {
   background: #d7def9;
 }
 
+.rail-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .content-area {
   padding: 12px 16px;
 }

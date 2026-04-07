@@ -20,6 +20,135 @@ const filePreview = document.getElementById("file-preview");
 const tagsPreview = document.getElementById("tags-preview");
 const statusEl = document.getElementById("status");
 const openUploadBtn = document.getElementById("btn-open-upload");
+const btnDownload = document.getElementById("btn-download");
+
+/** Last file from a successful submit (same browser session). */
+let lastUploadedFile = null;
+
+const DOWNLOAD_META_KEY = "slow_download_meta";
+
+function setLastUploadedFile(file) {
+  lastUploadedFile = file && file instanceof File ? file : null;
+}
+
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "download";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function triggerFileDownload(file) {
+  if (!file) return;
+  triggerBlobDownload(file, file.name || "download");
+}
+
+function saveDownloadMeta(meta) {
+  if (!meta?.attachmentId) return;
+  try {
+    localStorage.setItem(
+      DOWNLOAD_META_KEY,
+      JSON.stringify({
+        attachmentId: meta.attachmentId,
+        pageId: meta.pageId ?? null,
+        filename: meta.filename || "download",
+        savedAt: new Date().toISOString(),
+      }),
+    );
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function loadDownloadMeta() {
+  try {
+    return JSON.parse(localStorage.getItem(DOWNLOAD_META_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+async function downloadFromBookStack(meta) {
+  if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
+    throw new Error("Configure API credentials in app.js to download from BookStack.");
+  }
+  const base = config.apiBaseUrl.replace(/\/$/, "");
+  const auth = {
+    Authorization: `Token ${config.apiTokenId}:${config.apiTokenSecret}`,
+  };
+
+  const tryFile = await fetch(`${base}/api/attachments/${meta.attachmentId}/file`, {
+    headers: auth,
+  });
+  if (tryFile.ok) {
+    const blob = await tryFile.blob();
+    triggerBlobDownload(blob, meta.filename || "download");
+    return;
+  }
+
+  const metaRes = await fetch(`${base}/api/attachments/${meta.attachmentId}`, {
+    headers: { ...auth, Accept: "application/json" },
+  });
+  if (!metaRes.ok) {
+    throw new Error(`Could not load attachment (${metaRes.status}).`);
+  }
+  const json = await metaRes.json();
+  const row = json.id != null ? json : json.data || json;
+  const link =
+    row.url ||
+    row.link ||
+    row.links?.html ||
+    row.links?.raw ||
+    (typeof row.path === "string" && row.path.startsWith("http") ? row.path : null);
+
+  if (link) {
+    window.open(link, "_blank", "noopener");
+    return;
+  }
+
+  const origin = bookStackOrigin();
+  if (origin && meta.pageId) {
+    window.open(`${origin}/pages/${meta.pageId}`, "_blank", "noopener");
+    throw new Error("Opened the BookStack page in a new tab; use the page to download the attachment if the API file link was unavailable.");
+  }
+
+  throw new Error("BookStack did not return a downloadable link for this attachment.");
+}
+
+function updateDownloadHint() {
+  if (!btnDownload) return;
+  const meta = loadDownloadMeta();
+  const ready = Boolean(lastUploadedFile || meta?.attachmentId);
+  btnDownload.disabled = !ready;
+  btnDownload.title = ready
+    ? lastUploadedFile
+      ? `Download ${lastUploadedFile.name}`
+      : `Download last BookStack attachment (#${meta.attachmentId})`
+    : "Upload a file first, then download";
+}
+
+async function handleDownloadClick() {
+  if (lastUploadedFile) {
+    triggerFileDownload(lastUploadedFile);
+    setStatus(`Downloaded ${lastUploadedFile.name}`, true);
+    return;
+  }
+  const meta = loadDownloadMeta();
+  if (meta?.attachmentId) {
+    try {
+      await downloadFromBookStack(meta);
+      setStatus(`Download started (${meta.filename || "file"})`, true);
+    } catch (err) {
+      setStatus(err.message || "Download failed", false);
+    }
+    return;
+  }
+  setStatus("Upload a file first, then use Download.", false);
+}
 
 function getOptions() {
   return (
@@ -240,9 +369,18 @@ async function uploadBookStackAttachment(pageId, file) {
 
   const text = await response.text();
   if (!response.ok) {
-    return { ok: false, message: `Attachment failed (${response.status}): ${text.slice(0, 220)}` };
+    return { ok: false, message: `Attachment failed (${response.status}): ${text.slice(0, 220)}`, attachmentId: null };
   }
-  return { ok: true, message: "Attachment uploaded." };
+  let attachmentId = null;
+  try {
+    const j = JSON.parse(text);
+    const raw = j.id ?? j.data?.id ?? null;
+    attachmentId = raw != null ? Number(raw) : null;
+    if (Number.isNaN(attachmentId)) attachmentId = null;
+  } catch {
+    /* non-JSON success body */
+  }
+  return { ok: true, message: "Attachment uploaded.", attachmentId };
 }
 
 async function tryBookStackSubmit(payload) {
@@ -262,15 +400,30 @@ async function tryBookStackSubmit(payload) {
       message: created.pageId == null
         ? "Page created but response had no page id; attachment skipped."
         : "Page created (no file to attach).",
+      pageId: created.pageId,
+      attachmentId: null,
+      filename: file?.name ?? null,
     };
   }
 
   const attached = await uploadBookStackAttachment(created.pageId, file);
   if (!attached.ok) {
-    return { success: false, message: `Page created. ${attached.message}` };
+    return {
+      success: false,
+      message: `Page created. ${attached.message}`,
+      pageId: created.pageId,
+      attachmentId: null,
+      filename: file.name,
+    };
   }
 
-  return { success: true, message: "Page and file uploaded to BookStack." };
+  return {
+    success: true,
+    message: "Page and file uploaded to BookStack.",
+    pageId: created.pageId,
+    attachmentId: attached.attachmentId,
+    filename: file.name,
+  };
 }
 
 function escapeHtml(text) {
@@ -337,22 +490,36 @@ form.addEventListener("submit", async (event) => {
   }
 
   saveMockLocally(payload);
+  const fileForDownload = fileInput.files && fileInput.files[0];
+  setLastUploadedFile(fileForDownload);
+  updateDownloadHint();
+
   setStatus("Saved locally. Attempting BookStack upload if configured...", true);
 
   try {
     const result = await tryBookStackSubmit(payload);
     if (result.success) {
+      if (result.attachmentId) {
+        saveDownloadMeta({
+          attachmentId: result.attachmentId,
+          pageId: result.pageId,
+          filename: result.filename || payload.filename,
+        });
+      }
       setStatus(result.message, true);
       form.reset();
       initDropdowns();
       filePreview.textContent = "Selected file: none";
       updateTagsPreview();
       renderBrowse();
+      updateDownloadHint();
       return;
     }
     setStatus(`Mock save complete. ${result.message}`, false);
+    updateDownloadHint();
   } catch (error) {
     setStatus(`Mock save complete. Upload failed: ${error.message}`, false);
+    updateDownloadHint();
   }
 });
 
@@ -515,7 +682,14 @@ if (btnApiSearch) {
   });
 }
 
+if (btnDownload) {
+  btnDownload.addEventListener("click", () => {
+    handleDownloadClick();
+  });
+}
+
 initDropdowns();
 initSearchFilters();
 updateTagsPreview();
 renderBrowse();
+updateDownloadHint();
