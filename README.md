@@ -18,9 +18,43 @@ Set at least: `APP_URL`, `APP_KEY`, database vars, and (for API tests) `BOOKSTAC
 docker compose up -d
 ```
 
-3. Open the app in a browser (default compose port is **6875**):
+3. In the browser, finish BookStack setup and create at least one **book**. Note its **numeric id** (from the book URL or API).
+
+4. In BookStack: **User profile → API Tokens** → create a token with access to create pages and attachments.
+
+5. Open the main site (default compose port **6875**):
 
 `http://localhost:6875`
+
+## Web UI (uploads to BookStack)
+
+Browsers block cross-origin API calls. This project includes a small **proxy** so uploads work from `http://127.0.0.1:8080`.
+
+1. Copy the web config template and add your token + book id:
+
+```bash
+cp web/config.local.json.example web/config.local.json
+```
+
+Edit `web/config.local.json`:
+
+- `apiTokenId` / `apiTokenSecret` — from BookStack API tokens  
+- `defaultBookId` — id of the book where new pages should be created  
+- `useBookStackProxy` — keep `true` when using `web/server.py` below  
+- `bookStackPublicUrl` — usually `http://localhost:6875` (used for “open BookStack search” in the UI)
+
+`web/config.local.json` is gitignored so secrets are not committed.
+
+2. From the **repository root**, start the static server **with** the BookStack proxy:
+
+```bash
+export BOOKSTACK_URL=http://localhost:6875
+python3 web/server.py
+```
+
+3. Open **http://127.0.0.1:8080** and use **Submit** — resources should appear in BookStack under the book you configured.
+
+If you only run `python3 -m http.server` inside `web/`, the page loads but **Submit cannot reach BookStack** (CORS). Use `web/server.py` for full uploads.
 
 ## API smoke test (optional)
 
@@ -30,17 +64,6 @@ chmod +x scripts/api_smoke_test.sh
 ```
 
 Requires a filled `.env` with valid API tokens.
-
-## Web UI (`web/`)
-
-```bash
-cd web
-python3 -m http.server 8080
-```
-
-Open `http://localhost:8080`.
-
-To talk to BookStack from the browser (upload, browse, search API), set `config` in `web/app.js` (`apiBaseUrl`, `apiTokenId`, `apiTokenSecret`, `defaultBookId`).
 
 ## Android app (`android-webview/`)
 

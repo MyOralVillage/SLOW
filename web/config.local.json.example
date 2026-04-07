@@ -1,0 +1,7 @@
+{
+  "useBookStackProxy": true,
+  "bookStackPublicUrl": "http://localhost:6875",
+  "apiTokenId": "paste-token-id-here",
+  "apiTokenSecret": "paste-token-secret-here",
+  "defaultBookId": 1
+}

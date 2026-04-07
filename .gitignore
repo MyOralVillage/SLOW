@@ -1,6 +1,9 @@
 .env
 .DS_Store
 
+# Web — local BookStack API settings (never commit secrets)
+web/config.local.json
+
 # Docker
 bookstack_data/
 bookstack_db_data/

@@ -1,9 +1,58 @@
 const config = {
   apiBaseUrl: "",
+  bookStackPublicUrl: "",
+  useBookStackProxy: false,
   apiTokenId: "",
   apiTokenSecret: "",
   defaultBookId: 1,
 };
+
+function apiBase() {
+  return (config.apiBaseUrl || "").replace(/\/$/, "");
+}
+
+function hasBookStackApiConfig() {
+  return Boolean(
+    apiBase() && (config.apiTokenId || "").trim() && (config.apiTokenSecret || "").trim(),
+  );
+}
+
+async function loadLocalConfig() {
+  try {
+    const res = await fetch("config.local.json", { cache: "no-store" });
+    if (!res.ok) return;
+    const extra = await res.json();
+    Object.assign(config, extra);
+  } catch {
+    /* optional file */
+  }
+  if (config.useBookStackProxy && typeof window !== "undefined" && window.location?.origin) {
+    config.apiBaseUrl = `${window.location.origin.replace(/\/$/, "")}/bookstack-proxy`;
+  }
+}
+
+function updateConfigBanner() {
+  const el = document.getElementById("config-banner");
+  if (!el) return;
+  if (!hasBookStackApiConfig()) {
+    el.textContent =
+      "BookStack is not connected — uploads stay in this browser only. Add web/config.local.json (see config.local.json.example) and run python3 web/server.py with BOOKSTACK_URL set.";
+    el.className = "panel-hint config-banner warn";
+    return;
+  }
+  if (config.useBookStackProxy && !(config.bookStackPublicUrl || "").trim()) {
+    el.textContent =
+      "Set bookStackPublicUrl in config.local.json (e.g. http://localhost:6875) so “Open BookStack search” opens the real site.";
+    el.className = "panel-hint config-banner warn";
+    return;
+  }
+  let msg = `BookStack connected — Submit publishes to your library (book id ${config.defaultBookId ?? 1}).`;
+  if (config.useBookStackProxy) {
+    msg += " Run python3 web/server.py (not plain http.server) so /bookstack-proxy reaches BookStack.";
+  }
+  el.textContent = msg;
+  el.className = "panel-hint config-banner ok";
+}
 
 const form = document.getElementById("upload-form");
 const titleInput = document.getElementById("title");
@@ -73,10 +122,10 @@ function loadDownloadMeta() {
 }
 
 async function downloadFromBookStack(meta) {
-  if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
-    throw new Error("Configure API credentials in app.js to download from BookStack.");
+  if (!hasBookStackApiConfig()) {
+    throw new Error("Add web/config.local.json with your API token to download from BookStack.");
   }
-  const base = config.apiBaseUrl.replace(/\/$/, "");
+  const base = apiBase();
   const auth = {
     Authorization: `Token ${config.apiTokenId}:${config.apiTokenSecret}`,
   };
@@ -301,13 +350,17 @@ function buildOptionalTags(payload) {
 
 function parsePageIdFromJson(data) {
   if (!data || typeof data !== "object") return null;
-  if (typeof data.id === "number") return data.id;
-  if (data.data && typeof data.data.id === "number") return data.data.id;
+  const raw = data.id ?? data.data?.id;
+  if (typeof raw === "number" && !Number.isNaN(raw)) return raw;
+  if (typeof raw === "string" && raw.trim()) {
+    const n = Number(raw);
+    return Number.isNaN(n) ? null : n;
+  }
   return null;
 }
 
 async function createBookStackPage(payload) {
-  const base = config.apiBaseUrl.replace(/\/$/, "");
+  const base = apiBase();
   const baseTags = [
     { name: "country", value: payload.country },
     { name: "category", value: payload.category },
@@ -353,7 +406,7 @@ async function createBookStackPage(payload) {
 }
 
 async function uploadBookStackAttachment(pageId, file) {
-  const base = config.apiBaseUrl.replace(/\/$/, "");
+  const base = apiBase();
   const fd = new FormData();
   fd.append("uploaded_to", String(pageId));
   fd.append("name", file.name || "upload");
@@ -384,8 +437,8 @@ async function uploadBookStackAttachment(pageId, file) {
 }
 
 async function tryBookStackSubmit(payload) {
-  if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
-    return { success: false, message: "No API credentials configured." };
+  if (!hasBookStackApiConfig()) {
+    return { success: false, code: "NO_CONFIG", message: "Missing API configuration." };
   }
 
   const created = await createBookStackPage(payload);
@@ -494,7 +547,19 @@ form.addEventListener("submit", async (event) => {
   setLastUploadedFile(fileForDownload);
   updateDownloadHint();
 
-  setStatus("Saved locally. Attempting BookStack upload if configured...", true);
+  await loadLocalConfig();
+  updateConfigBanner();
+
+  if (!hasBookStackApiConfig()) {
+    setStatus(
+      "Saved on this device only. To publish OIM resources to BookStack: copy web/config.local.json.example → web/config.local.json, add your API token and defaultBookId, then run BOOKSTACK_URL=http://localhost:6875 python3 web/server.py and open http://127.0.0.1:8080 (a plain http.server cannot upload to BookStack because of browser CORS).",
+      false,
+    );
+    updateDownloadHint();
+    return;
+  }
+
+  setStatus("Uploading to BookStack…", true);
 
   try {
     const result = await tryBookStackSubmit(payload);
@@ -511,14 +576,15 @@ form.addEventListener("submit", async (event) => {
       initDropdowns();
       filePreview.textContent = "Selected file: none";
       updateTagsPreview();
-      renderBrowse();
+      await renderBrowse();
       updateDownloadHint();
+      updateConfigBanner();
       return;
     }
-    setStatus(`Mock save complete. ${result.message}`, false);
+    setStatus(`Could not finish BookStack upload: ${result.message}`, false);
     updateDownloadHint();
   } catch (error) {
-    setStatus(`Mock save complete. Upload failed: ${error.message}`, false);
+    setStatus(`Upload failed: ${error.message}`, false);
     updateDownloadHint();
   }
 });
@@ -541,10 +607,10 @@ function renderLocalBrowseCards() {
 }
 
 async function fetchBookStackPages() {
-  if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
+  if (!hasBookStackApiConfig()) {
     return [];
   }
-  const base = config.apiBaseUrl.replace(/\/$/, "");
+  const base = apiBase();
   const response = await fetch(`${base}/api/pages?count=20`, {
     headers: {
       Authorization: `Token ${config.apiTokenId}:${config.apiTokenSecret}`,
@@ -622,9 +688,18 @@ function buildFilterSearchQuery() {
 }
 
 function bookStackOrigin() {
-  if (!config.apiBaseUrl) return null;
+  const pub = (config.bookStackPublicUrl || "").trim();
+  if (pub) {
+    try {
+      return new URL(pub).origin;
+    } catch {
+      return null;
+    }
+  }
+  const base = apiBase();
+  if (!base) return null;
   try {
-    return new URL(config.apiBaseUrl).origin;
+    return new URL(base).origin;
   } catch {
     return null;
   }
@@ -634,7 +709,7 @@ if (btnApplySearch) {
   btnApplySearch.addEventListener("click", () => {
     const origin = bookStackOrigin();
     if (!origin) {
-      alert("Set config.apiBaseUrl in app.js to open BookStack search.");
+      alert("Set bookStackPublicUrl in web/config.local.json (or apiBaseUrl if not using the proxy) to open BookStack search.");
       return;
     }
     const q = buildFilterSearchQuery();
@@ -644,13 +719,13 @@ if (btnApplySearch) {
 
 if (btnApiSearch) {
   btnApiSearch.addEventListener("click", async () => {
-    if (!config.apiBaseUrl || !config.apiTokenId || !config.apiTokenSecret) {
+    if (!hasBookStackApiConfig()) {
       if (searchApiResults) {
-        searchApiResults.innerHTML = "<p class=\"meta\">Configure API credentials in app.js.</p>";
+        searchApiResults.innerHTML = "<p class=\"meta\">Add web/config.local.json with API token (see example file).</p>";
       }
       return;
     }
-    const base = config.apiBaseUrl.replace(/\/$/, "");
+    const base = apiBase();
     const q = buildFilterSearchQuery();
     if (searchApiResults) searchApiResults.innerHTML = "<p class=\"meta\">Searching…</p>";
     try {
@@ -688,8 +763,14 @@ if (btnDownload) {
   });
 }
 
-initDropdowns();
-initSearchFilters();
-updateTagsPreview();
-renderBrowse();
-updateDownloadHint();
+async function bootstrap() {
+  await loadLocalConfig();
+  updateConfigBanner();
+  initDropdowns();
+  initSearchFilters();
+  updateTagsPreview();
+  await renderBrowse();
+  updateDownloadHint();
+}
+
+bootstrap().catch((err) => console.error(err));

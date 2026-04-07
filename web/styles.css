@@ -9,6 +9,22 @@ body {
   color: #1c2430;
 }
 
+.config-banner {
+  margin: 0;
+  border-radius: 0;
+  border-bottom: 1px solid #dbe1ec;
+}
+
+.config-banner.ok {
+  background: #ecfdf3;
+  border-left: 4px solid #166534;
+}
+
+.config-banner.warn {
+  background: #fffbeb;
+  border-left: 4px solid #b45309;
+}
+
 .phone-shell {
   width: min(960px, 95vw);
   margin: 20px auto;
