@@ -240,13 +240,9 @@ function initDropdowns() {
     opt.textContent = v;
     productDetailInput.appendChild(opt);
   });
-  if (o.categories.length) {
-    categoryInput.value = o.categories[0];
+  if (o.types.includes("document")) {
+    typeInput.value = "document";
   }
-  if (o.countries.length) {
-    countryInput.value = o.countries[0];
-  }
-  typeInput.value = "document";
 }
 
 function buildSearchQuery(payload) {
@@ -589,9 +585,34 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-openUploadBtn.addEventListener("click", () => {
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
-  titleInput.focus();
+function scrollToUpload(focusTitle = true) {
+  const section = document.getElementById("upload-section");
+  if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (focusTitle && titleInput) titleInput.focus();
+}
+
+if (openUploadBtn) {
+  openUploadBtn.addEventListener("click", () => {
+    scrollToUpload(true);
+  });
+}
+
+document.querySelectorAll(".featured-card .card-cta").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const t = btn.getAttribute("data-prefill-title");
+    if (t && titleInput) titleInput.value = t;
+    scrollToUpload(true);
+    updateTagsPreview();
+  });
+});
+
+document.querySelectorAll(".bottom-nav-btn[data-scroll]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const sel = btn.getAttribute("data-scroll");
+    if (!sel) return;
+    const el = document.querySelector(sel);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 });
 
 const browseListEl = document.getElementById("browse-list");
@@ -624,11 +645,18 @@ async function fetchBookStackPages() {
     title: p.name || "Untitled",
     meta: `BookStack page #${p.id}`,
     badge: "BookStack",
+    pageId: p.id,
   }));
 }
 
 function cardHtml(card) {
-  return `<article class="browse-card"><span class="meta">${card.badge}</span><h4>${escapeHtml(card.title)}</h4><p class="meta">${escapeHtml(card.meta)}</p></article>`;
+  const origin = bookStackOrigin();
+  let actions = "";
+  if (card.pageId != null && origin) {
+    const href = `${origin.replace(/\/$/, "")}/pages/${card.pageId}`;
+    actions = `<div class="browse-card-actions"><a class="btn btn-secondary" href="${escapeHtml(href)}" target="_blank" rel="noopener">Open</a></div>`;
+  }
+  return `<article class="browse-card"><span class="badge">${escapeHtml(card.badge)}</span><h4>${escapeHtml(card.title)}</h4><p class="meta">${escapeHtml(card.meta)}</p>${actions}</article>`;
 }
 
 async function renderBrowse() {
@@ -743,10 +771,17 @@ if (btnApiSearch) {
         searchApiResults.innerHTML = "<p class=\"meta\">No results.</p>";
         return;
       }
+      const origin = bookStackOrigin();
       const cards = rows.slice(0, 15).map((item) => {
         const name = item.name || item.title || "Result";
         const id = item.id || "";
-        return `<article class="browse-card"><h4>${escapeHtml(String(name))}</h4><p class="meta">id: ${escapeHtml(String(id))} · type: ${escapeHtml(String(item.type || ""))}</p></article>`;
+        const type = String(item.type || "");
+        let actions = "";
+        if (origin && id && String(item.type || "").toLowerCase() === "page") {
+          const href = `${origin.replace(/\/$/, "")}/pages/${id}`;
+          actions = `<div class="browse-card-actions"><a class="btn btn-secondary" href="${escapeHtml(href)}" target="_blank" rel="noopener">Open</a></div>`;
+        }
+        return `<article class="browse-card"><span class="badge">Result</span><h4>${escapeHtml(String(name))}</h4><p class="meta">id: ${escapeHtml(String(id))} · type: ${escapeHtml(type)}</p>${actions}</article>`;
       });
       searchApiResults.innerHTML = cards.join("");
     } catch (err) {
