@@ -3,116 +3,194 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SLOW Resource Upload</title>
+    <title>Salone OIM Library</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="phone-shell">
-      <p id="config-banner" class="panel-hint config-banner" role="status"></p>
-      <header class="topbar">
-        <div>
-          <h1>SAVINGS</h1>
-          <p>Withdrawal slip resource and discussion</p>
+    <main class="app-shell">
+      <p id="config-banner" class="config-banner" role="status"></p>
+
+      <header class="app-header">
+        <div class="brand">
+          <h1 class="brand-title">Salone OIM Library</h1>
+          <p class="brand-tagline">Browse, search, and upload OIM resources</p>
+          <p class="brand-sub">
+            Upload and manage templates, guides, icons, and audio resources.
+          </p>
         </div>
-        <div class="search-wrap">
-          <input id="search" type="search" placeholder="Search..." />
-          <span class="search-icon">🔎</span>
+        <div class="header-search" role="search">
+          <label class="visually-hidden" for="search">Quick search</label>
+          <input id="search" type="search" placeholder="Search keywords…" autocomplete="off" />
+          <span class="search-icon" aria-hidden="true">⌕</span>
         </div>
       </header>
 
-      <section class="search-advanced" id="search-advanced">
-        <h3>Search &amp; filters</h3>
-        <p class="panel-hint">Builds the same tag-style query as the upload preview. Opens BookStack search when API URL is set.</p>
-        <div class="row">
-          <div>
+      <section class="section section-find" id="find-resources" aria-labelledby="find-heading">
+        <div class="section-head">
+          <h2 id="find-heading" class="section-title">Find resources</h2>
+          <p class="section-lede">
+            Filter by metadata and run a search. Results use the same tag-style query as the upload form.
+          </p>
+        </div>
+        <div class="filter-grid">
+          <div class="field">
             <label for="sf_country">Country</label>
             <select id="sf_country"></select>
           </div>
-          <div>
+          <div class="field">
             <label for="sf_category">Category</label>
             <select id="sf_category"></select>
           </div>
-          <div>
+          <div class="field">
             <label for="sf_type">Type</label>
             <select id="sf_type"></select>
           </div>
-        </div>
-        <div class="row">
-          <div>
+          <div class="field field-span">
             <label for="sf_keywords">Keywords</label>
-            <input id="sf_keywords" type="text" maxlength="200" placeholder="e.g. withdrawal loan" />
+            <input id="sf_keywords" type="text" maxlength="200" placeholder="e.g. withdrawal, loan, audio" />
           </div>
         </div>
-        <button type="button" class="apply-search" id="btn-apply-search">Open BookStack search</button>
-        <button type="button" class="apply-search secondary" id="btn-api-search">Search via API</button>
-        <div id="search-api-results" class="browse-list" style="margin-top: 10px"></div>
+        <div class="filter-actions">
+          <button type="button" class="btn btn-primary" id="btn-api-search">Search</button>
+          <button type="button" class="btn btn-secondary" id="btn-apply-search">Open in BookStack</button>
+        </div>
+        <div id="search-api-results" class="browse-grid search-results" aria-live="polite"></div>
       </section>
 
-      <section class="screen">
-        <aside class="left-rail">
-          <button type="button" class="rail-btn" id="btn-download" title="Download your last uploaded file">Download</button>
-          <button type="button" class="rail-btn active" id="btn-open-upload">Upload</button>
-          <button type="button" class="rail-btn">Recommend Content</button>
-        </aside>
+      <section class="section section-browse" aria-labelledby="browse-heading">
+        <div class="section-head">
+          <h2 id="browse-heading" class="section-title">Browse resources</h2>
+          <p class="section-lede">
+            Example resource types in the library. Below, your BookStack pages and local upload history appear.
+          </p>
+        </div>
 
-        <section class="content-area">
-          <article class="resource-card">
-            <h2>Withdrawal slip</h2>
-            <div class="resource-preview">
-              <div class="resource-icon">🧾</div>
-              <p>This page holds templates and examples for customer withdrawal slips.</p>
+        <div class="featured-grid" aria-label="Example resources">
+          <article class="featured-card">
+            <div class="featured-card-icon" aria-hidden="true">📄</div>
+            <h3 class="featured-card-title">Withdrawal slip</h3>
+            <p class="featured-card-desc">Template and examples for customer withdrawal slips.</p>
+            <div class="tag-row">
+              <span class="tag">Sierra Leone</span>
+              <span class="tag">savings</span>
+              <span class="tag">template</span>
             </div>
+            <button type="button" class="btn btn-ghost card-cta" data-prefill-title="Withdrawal slip">
+              Use as starting title
+            </button>
           </article>
-
-          <section class="comment-thread">
-            <h3>Discussion</h3>
-            <div class="comment">
-              <strong>Momodu Sesay</strong>
-              <p>Can we add phone number validation on this template?</p>
+          <article class="featured-card">
+            <div class="featured-card-icon" aria-hidden="true">📊</div>
+            <h3 class="featured-card-title">Savings tracking sheet</h3>
+            <p class="featured-card-desc">Track group or individual savings over time.</p>
+            <div class="tag-row">
+              <span class="tag">Ghana</span>
+              <span class="tag">savings</span>
+              <span class="tag">document</span>
             </div>
-            <div class="comment">
-              <strong>Mariama Sankoh</strong>
-              <p>There needs to be more room to write the amount in words.</p>
+            <button type="button" class="btn btn-ghost card-cta" data-prefill-title="Savings tracking sheet">
+              Use as starting title
+            </button>
+          </article>
+          <article class="featured-card">
+            <div class="featured-card-icon" aria-hidden="true">🤝</div>
+            <h3 class="featured-card-title">Group loan template</h3>
+            <p class="featured-card-desc">Structured form for group lending workflows.</p>
+            <div class="tag-row">
+              <span class="tag">Liberia</span>
+              <span class="tag">business</span>
+              <span class="tag">template</span>
             </div>
-          </section>
-        </section>
-      </section>
+            <button type="button" class="btn btn-ghost card-cta" data-prefill-title="Group loan template">
+              Use as starting title
+            </button>
+          </article>
+          <article class="featured-card">
+            <div class="featured-card-icon" aria-hidden="true">🔊</div>
+            <h3 class="featured-card-title">Audio guide — savings form</h3>
+            <p class="featured-card-desc">Spoken instructions to accompany printed materials.</p>
+            <div class="tag-row">
+              <span class="tag">Nigeria</span>
+              <span class="tag">literacy</span>
+              <span class="tag">audio</span>
+            </div>
+            <button type="button" class="btn btn-ghost card-cta" data-prefill-title="Audio guide — savings form">
+              Use as starting title
+            </button>
+          </article>
+        </div>
 
-      <section class="browse-panel" id="browse-panel">
-        <div class="browse-header">
-          <h3>Browse resources</h3>
-          <button type="button" class="rail-btn small-rail" id="btn-refresh-browse">Refresh</button>
+        <p class="wiki-hint">
+          Core icon vocabulary (currency, navigation, identity, transactions):
+          <a
+            href="https://github.com/MyOralVillage/SLOW/wiki/Salone-OIM-Library-(SOL)-Core-Icons"
+            target="_blank"
+            rel="noopener noreferrer"
+            >SOL core icons (wiki)</a
+          >.
+        </p>
+
+        <div class="library-toolbar">
+          <h3 class="subsection-title">Your library</h3>
+          <button type="button" class="btn btn-small btn-secondary" id="btn-refresh-browse">Refresh</button>
         </div>
         <p class="panel-hint">
-          Local queue from this browser plus BookStack pages when API credentials are set in <code>app.js</code>.
+          BookStack pages when the API is configured in <code>config.local.json</code>, plus uploads saved in this browser.
         </p>
-        <div id="browse-list" class="browse-list"></div>
+        <div id="browse-list" class="browse-grid"></div>
+
+        <div class="quick-actions">
+          <button type="button" class="btn btn-secondary" id="btn-download" title="Download your last uploaded file">
+            Download last upload
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-open-upload">Upload new resource</button>
+        </div>
       </section>
 
-      <section class="upload-panel">
-        <h3>Upload OIM Resource</h3>
-        <p class="panel-hint">Same fields as Android: required metadata + optional search filters.</p>
-        <form id="upload-form" novalidate>
-          <label for="title">Title *</label>
-          <input id="title" name="title" type="text" required maxlength="200" />
+      <section class="section section-upload" id="upload-section" aria-labelledby="upload-heading">
+        <div class="section-head">
+          <h2 id="upload-heading" class="section-title">Upload OIM resource</h2>
+          <p class="section-lede">
+            Required metadata matches the Android app. Optional fields improve search and filtering.
+          </p>
+        </div>
+        <form id="upload-form" class="upload-form" novalidate>
+          <div class="field">
+            <label for="title">Title *</label>
+            <input id="title" name="title" type="text" required maxlength="200" placeholder="Resource name" />
+          </div>
+          <div class="field">
+            <label for="description">Short description * (min 10 characters)</label>
+            <textarea
+              id="description"
+              name="description"
+              rows="3"
+              required
+              maxlength="2000"
+              placeholder="What this resource is for and how to use it"
+            ></textarea>
+          </div>
 
-          <label for="description">Short description * (min 10 characters)</label>
-          <textarea id="description" name="description" rows="3" required maxlength="2000"></textarea>
-
-          <div class="row">
-            <div>
+          <div class="filter-grid">
+            <div class="field">
               <label for="country">Country *</label>
               <select id="country" name="country" required>
                 <option value="">Select country</option>
               </select>
             </div>
-            <div>
+            <div class="field">
               <label for="category">Category *</label>
               <select id="category" name="category" required>
                 <option value="">Select category</option>
               </select>
             </div>
-            <div>
+            <div class="field">
               <label for="type">Type *</label>
               <select id="type" name="type" required>
                 <option value="">Select type</option>
@@ -120,47 +198,48 @@
             </div>
           </div>
 
-          <div class="row">
-            <div>
+          <div class="filter-grid">
+            <div class="field">
               <label for="product_detail">Product detail (optional)</label>
               <select id="product_detail" name="product_detail">
                 <option value="">—</option>
               </select>
             </div>
-            <div>
+            <div class="field">
               <label for="cross_cutting">Cross-cutting category (optional)</label>
               <input id="cross_cutting" name="cross_cutting" type="text" maxlength="120" />
             </div>
-          </div>
-
-          <div class="row">
-            <div>
+            <div class="field">
               <label for="institution">Institution / NGO (optional)</label>
               <input id="institution" name="institution" type="text" maxlength="120" />
             </div>
-            <div>
+            <div class="field">
               <label for="keywords">Keywords (optional)</label>
               <input id="keywords" name="keywords" type="text" maxlength="200" />
             </div>
           </div>
 
-          <label for="file">File upload *</label>
-          <input id="file" name="file" type="file" required />
-          <p id="file-preview" class="small">Selected file: none</p>
+          <div class="field">
+            <label for="file">File upload *</label>
+            <input id="file" name="file" type="file" required />
+            <p id="file-preview" class="file-hint">Selected file: none</p>
+          </div>
 
-          <label>Tags preview</label>
-          <p id="tags-preview" class="preview"></p>
+          <div class="field">
+            <label for="tags-preview">Tags preview</label>
+            <pre id="tags-preview" class="tags-preview" aria-live="polite"></pre>
+          </div>
 
-          <button type="submit">Submit</button>
+          <button type="submit" class="btn btn-primary btn-submit">Submit</button>
         </form>
-        <p id="status" class="status"></p>
+        <p id="status" class="status" role="status"></p>
       </section>
 
-      <nav class="bottom-nav">
-        <button type="button">🏠</button>
-        <button type="button">✉️</button>
-        <button type="button">🔔</button>
-        <button type="button">👤</button>
+      <nav class="bottom-nav" aria-label="Primary">
+        <button type="button" class="bottom-nav-btn" data-scroll="#find-resources" title="Find">⌕</button>
+        <button type="button" class="bottom-nav-btn" data-scroll="#browse-heading" title="Browse">▣</button>
+        <button type="button" class="bottom-nav-btn" data-scroll="#upload-section" title="Upload">↑</button>
+        <button type="button" class="bottom-nav-btn" title="Account (placeholder)">○</button>
       </nav>
     </main>
 
