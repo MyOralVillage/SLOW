@@ -2,7 +2,106 @@
 
 How to run this project locally.
 
-## Backend (BookStack)
+## Backend (OIM visual resource API)
+
+The current MVP is built around:
+- visual/icon resource uploads stored in **PostgreSQL** + **local disk**
+- lightweight sign-in with database-backed sessions
+- basic admin user listing for `admin`, `member`, and `guest`
+
+### Run Postgres + backend (Docker Compose)
+
+If you have Docker available:
+
+```bash
+export OIM_API_KEY=change-me
+export OIM_ADMIN_EMAILS=brett@example.com
+docker compose up -d postgres oim_backend
+```
+
+The API runs at `http://127.0.0.1:3001/api`.
+
+### Run backend locally (without Docker)
+
+1. Start Postgres (via Docker or your own installation).
+2. In `backend/`:
+
+```bash
+cp .env.example .env
+npm install
+npm run prisma:generate
+npm run prisma:migrate
+npm run dev
+```
+
+Set `ADMIN_EMAILS` in `backend/.env` to whichever emails should sign in as admins.
+
+## Web UI (sign in + icon uploads + admin)
+
+1. Create `web/config.local.json`:
+
+```bash
+cp web/config.local.json.example web/config.local.json
+```
+
+Set:
+- `backendBaseUrl` (default `http://127.0.0.1:3001/api`)
+
+2. Start the web server:
+
+```bash
+python3 web/server.py
+```
+
+3. Open `http://127.0.0.1:8080`
+
+4. Sign in with any email.
+If the email matches `ADMIN_EMAILS`, the app exposes the admin page.
+
+## Main API endpoints
+
+- `POST /api/auth/sign-in`
+- `GET /api/auth/session`
+- `POST /api/auth/sign-out`
+- `GET /api/users` (admin only)
+- `POST /api/resources/upload`
+- `GET /api/resources`
+- `GET /api/resources/search`
+- `GET /api/resources/:id`
+- `GET /api/resources/:id/file`
+
+## Deployment / sharing
+
+For fast testing this week:
+
+1. Run backend on a reachable host or tunnel:
+
+```bash
+ngrok http 3001
+```
+
+2. Update `web/config.local.json` so `backendBaseUrl` points to the shared backend URL plus `/api`.
+
+3. Serve `web/` from any static host or from:
+
+```bash
+python3 web/server.py
+```
+
+If you need a quick all-local demo, running the backend on `3001` and the web server on `8080` is enough.
+
+## Legacy API smoke test (optional)
+
+```bash
+chmod +x scripts/oim_backend_smoke_test.sh
+BASE_URL=http://127.0.0.1:3001/api API_KEY=change-me ./scripts/oim_backend_smoke_test.sh
+```
+
+---
+
+## Legacy backend (BookStack) (optional)
+
+If you still want to run BookStack (not required for uploads anymore):
 
 1. Copy the environment template and edit `.env`:
 
@@ -26,44 +125,12 @@ docker compose up -d
 
 `http://localhost:6875`
 
-## Web UI (uploads to BookStack)
-
-Browsers block cross-origin API calls. This project includes a small **proxy** so uploads work from `http://127.0.0.1:8080`.
-
-1. Copy the web config template and add your token + book id:
-
-```bash
-cp web/config.local.json.example web/config.local.json
-```
-
-Edit `web/config.local.json`:
-
-- `apiTokenId` / `apiTokenSecret` — from BookStack API tokens  
-- `defaultBookId` — id of the book where new pages should be created  
-- `useBookStackProxy` — keep `true` when using `web/server.py` below  
-- `bookStackPublicUrl` — usually `http://localhost:6875` (used for “open BookStack search” in the UI)
-
-`web/config.local.json` is gitignored so secrets are not committed.
-
-2. From the **repository root**, start the static server **with** the BookStack proxy:
-
-```bash
-export BOOKSTACK_URL=http://localhost:6875
-python3 web/server.py
-```
-
-3. Open **http://127.0.0.1:8080** and use **Submit** — resources should appear in BookStack under the book you configured.
-
-If you only run `python3 -m http.server` inside `web/`, the page loads but **Submit cannot reach BookStack** (CORS). Use `web/server.py` for full uploads.
-
-## API smoke test (optional)
+## BookStack smoke test (optional)
 
 ```bash
 chmod +x scripts/api_smoke_test.sh
 ./scripts/api_smoke_test.sh
 ```
-
-Requires a filled `.env` with valid API tokens.
 
 ## Android app (`android-webview/`)
 

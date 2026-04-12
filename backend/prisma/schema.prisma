@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FileStorage {
+  disk
+}
+
+enum UserRole {
+  admin
+  member
+  guest
+}
+
+enum UserStatus {
+  active
+  invited
+  disabled
+}
+
+model User {
+  id         String      @id @default(uuid())
+  name       String
+  email      String      @unique
+  role       UserRole    @default(member)
+  status     UserStatus  @default(active)
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  sessions   Session[]
+  resources  Resource[]  @relation("UploadedResources")
+
+  @@index([role])
+  @@index([status])
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  token      String   @unique
+  created_at DateTime @default(now())
+  expires_at DateTime
+
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+}
+
+model Resource {
+  id                String      @id @default(uuid())
+  title             String
+  description       String
+  country           String
+  category          String
+  type              String
+  keywords          String[]
+  created_at        DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
+
+  uploaded_by       String?
+  uploadedBy        User?       @relation("UploadedResources", fields: [uploaded_by], references: [id], onDelete: SetNull)
+
+  file_storage      FileStorage @default(disk)
+  storage_key       String?
+  file_path         String?
+  mime_type         String?
+  size_bytes        BigInt?
+  original_filename String?
+  sha256            String?
+
+  @@index([country])
+  @@index([category])
+  @@index([type])
+  @@index([uploaded_by])
+}

@@ -3,236 +3,223 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Salone OIM Library</title>
+    <title>SLOW Visual OIM Library</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Instrument+Serif:ital@0;1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="app-shell">
-      <div id="connection-banner" class="connection-banner" role="status"></div>
-
-      <header class="app-header">
-        <div class="header-top">
-          <div class="brand">
-            <div class="brand-row">
-              <h1 class="brand-title">Salone OIM Library</h1>
-              <span id="connection-badge" class="connection-badge" aria-live="polite">Local mode only</span>
-            </div>
-            <p class="brand-tagline">
-              Browse, search, and upload OIM resources such as templates, guides, icons, and audio support materials.
-            </p>
+      <header class="hero-shell">
+        <div class="hero-copy">
+          <p class="eyebrow">Salone OIM Library</p>
+          <h1 class="hero-title">A visual library for icons, templates, and image-first OIM resources.</h1>
+          <p class="hero-text">
+            Upload icons fast, browse resources as visual cards, and keep admin visibility light enough for this week’s MVP.
+          </p>
+        </div>
+        <div class="hero-aside">
+          <div class="hero-stat">
+            <span class="hero-stat-label">Focus</span>
+            <strong>Icon-first uploads</strong>
           </div>
-          <div class="header-search-block">
-            <label class="visually-hidden" for="search">Search keywords</label>
-            <div class="header-search" role="search">
-              <span class="search-icon" aria-hidden="true">⌕</span>
-              <input
-                id="search"
-                type="search"
-                placeholder="Search by keyword…"
-                autocomplete="off"
-              />
-            </div>
+          <div class="hero-stat">
+            <span class="hero-stat-label">MVP</span>
+            <strong>Auth + admin + backend storage</strong>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-label">Use case</span>
+            <strong>Brett can test the web flow quickly</strong>
           </div>
         </div>
       </header>
 
-      <div class="tab-bar" role="tablist" aria-label="Main sections">
-        <button type="button" class="tab-btn is-active" role="tab" aria-selected="true" data-tab="browse" id="tab-browse">
-          Browse
-        </button>
-        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="upload" id="tab-upload">
-          Upload
-        </button>
-        <button type="button" class="tab-btn" role="tab" aria-selected="false" data-tab="my-uploads" id="tab-my-uploads">
-          My uploads
-        </button>
-      </div>
+      <section class="topbar">
+        <nav class="nav-tabs" aria-label="Primary">
+          <button type="button" class="nav-tab is-active" data-route="browse">Library</button>
+          <button type="button" class="nav-tab" data-route="upload">Upload</button>
+          <button type="button" class="nav-tab" data-route="admin" id="nav-admin" hidden>Admin</button>
+          <button type="button" class="nav-tab" data-route="signin" id="nav-signin">Sign in</button>
+        </nav>
+        <div class="session-strip">
+          <span id="backend-badge" class="backend-badge">Connecting…</span>
+          <div id="session-pill" class="session-pill">Not signed in</div>
+          <button type="button" class="btn btn-secondary" id="btn-sign-out" hidden>Sign out</button>
+        </div>
+      </section>
 
-      <!-- Browse -->
-      <section
-        id="panel-browse"
-        class="tab-panel is-active"
-        role="tabpanel"
-        aria-labelledby="tab-browse"
-        data-tab-panel="browse"
-      >
-        <div class="panel-inner">
-          <h2 class="panel-heading">Find resources</h2>
-          <p class="panel-lede">Filter by metadata, then search the library. Results appear below.</p>
+      <section id="panel-browse" class="page-section is-active" data-route-panel="browse">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Visual Resource Library</p>
+            <h2 class="section-title">Browse OIM assets</h2>
+            <p class="section-copy">Search visual resources by keyword, country, category, or type. Results are shown as image-first cards.</p>
+          </div>
+        </div>
 
-          <div class="filter-grid filter-grid-browse">
-            <div class="field">
-              <label for="sf_country">Country</label>
-              <select id="sf_country"></select>
-            </div>
-            <div class="field">
-              <label for="sf_category">Category</label>
-              <select id="sf_category"></select>
-            </div>
-            <div class="field">
-              <label for="sf_type">Type</label>
-              <select id="sf_type"></select>
-            </div>
-            <div class="field">
-              <label for="sf_product">Product detail</label>
-              <select id="sf_product"></select>
-            </div>
-            <div class="field field-span">
-              <label for="sf_keywords">Keywords</label>
-              <input id="sf_keywords" type="text" maxlength="200" placeholder="e.g. withdrawal, savings, audio" />
-            </div>
+        <form id="browse-form" class="filter-panel" autocomplete="off">
+          <div class="filter-grid">
+            <label class="field">
+              <span>Search</span>
+              <input id="filter-query" type="search" placeholder="Search icons, topics, or keywords" />
+            </label>
+            <label class="field">
+              <span>Country</span>
+              <select id="filter-country"></select>
+            </label>
+            <label class="field">
+              <span>Category</span>
+              <select id="filter-category"></select>
+            </label>
+            <label class="field">
+              <span>Type</span>
+              <select id="filter-type"></select>
+            </label>
           </div>
           <div class="filter-actions">
-            <button type="button" class="btn btn-primary" id="btn-api-search">Search</button>
-            <button type="button" class="btn btn-secondary" id="btn-clear-filters">Clear filters</button>
-            <button type="button" class="btn btn-secondary" id="btn-apply-search">Open in BookStack</button>
+            <button type="submit" class="btn btn-primary">Search Library</button>
+            <button type="button" class="btn btn-secondary" id="btn-clear-filters">Clear</button>
           </div>
-          <p id="search-summary" class="search-summary" role="status" aria-live="polite"></p>
-          <div id="search-api-results" class="resource-grid" aria-live="polite"></div>
+        </form>
 
-          <h3 class="subsection-heading">Example resources</h3>
-          <p class="panel-hint">
-            Sample layouts. Upload your own files in the <strong>Upload</strong> tab—they will appear under <strong>My uploads</strong>.
-            <a
-              href="https://github.com/MyOralVillage/SLOW/wiki/Salone-OIM-Library-(SOL)-Core-Icons"
-              target="_blank"
-              rel="noopener noreferrer"
-              >SOL core icons (wiki)</a
-            >.
-          </p>
-          <div class="resource-grid" id="example-resources"></div>
+        <div class="section-head section-head-inline">
+          <p id="browse-status" class="status-text">Loading resources…</p>
         </div>
+        <div id="resource-grid" class="resource-grid" aria-live="polite"></div>
       </section>
 
-      <!-- Upload -->
-      <section
-        id="panel-upload"
-        class="tab-panel"
-        role="tabpanel"
-        aria-labelledby="tab-upload"
-        hidden
-        data-tab-panel="upload"
-      >
-        <div class="panel-inner">
-          <h2 class="panel-heading">Upload new resource</h2>
-          <p class="panel-lede">Add a title, description, and file. Metadata helps others find your resource.</p>
+      <section id="panel-upload" class="page-section" data-route-panel="upload" hidden>
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Icon-First Upload</p>
+            <h2 class="section-title">Add a new visual OIM resource</h2>
+            <p class="section-copy">Keep metadata lightweight, preview the image before upload, and save it directly to the shared backend.</p>
+          </div>
+        </div>
 
-          <form id="upload-form" class="upload-form" novalidate>
+        <div class="upload-layout">
+          <form id="upload-form" class="editor-card" novalidate>
             <div class="field">
-              <label for="title">Title *</label>
-              <input id="title" name="title" type="text" required maxlength="200" placeholder="e.g. Withdrawal slip" />
+              <label for="upload-title">Title</label>
+              <input id="upload-title" name="title" type="text" maxlength="200" required placeholder="e.g. Savings icon set" />
             </div>
             <div class="field">
-              <label for="description">Short description * (min 10 characters)</label>
+              <label for="upload-description">Short description</label>
               <textarea
-                id="description"
+                id="upload-description"
                 name="description"
                 rows="3"
-                required
                 maxlength="2000"
-                placeholder="What this resource is for and how to use it"
+                required
+                placeholder="Briefly describe what this icon or visual resource is for"
               ></textarea>
             </div>
-
-            <div class="filter-grid">
-              <div class="field">
-                <label for="country">Country *</label>
-                <select id="country" name="country" required>
-                  <option value="">Select country</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="category">Category *</label>
-                <select id="category" name="category" required>
-                  <option value="">Select category</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="type">Type *</label>
-                <select id="type" name="type" required>
-                  <option value="">Select type</option>
-                </select>
-              </div>
+            <div class="field-grid">
+              <label class="field">
+                <span>Country</span>
+                <select id="upload-country" name="country" required></select>
+              </label>
+              <label class="field">
+                <span>Category</span>
+                <select id="upload-category" name="category" required></select>
+              </label>
+              <label class="field">
+                <span>Type</span>
+                <select id="upload-type" name="type" required></select>
+              </label>
             </div>
-
-            <div class="filter-grid">
-              <div class="field">
-                <label for="product_detail">Product detail (optional)</label>
-                <select id="product_detail" name="product_detail">
-                  <option value="">—</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="cross_cutting">Cross-cutting category (optional)</label>
-                <input id="cross_cutting" name="cross_cutting" type="text" maxlength="120" />
-              </div>
-              <div class="field">
-                <label for="institution">Institution / NGO (optional)</label>
-                <input id="institution" name="institution" type="text" maxlength="120" />
-              </div>
-              <div class="field">
-                <label for="keywords">Keywords (optional)</label>
-                <input id="keywords" name="keywords" type="text" maxlength="200" />
-              </div>
-            </div>
-
             <div class="field">
-              <label for="file">File upload *</label>
-              <input id="file" name="file" type="file" required />
-              <div id="file-validation" class="file-validation" aria-live="polite"></div>
+              <label for="upload-keywords">Keywords</label>
+              <input id="upload-keywords" name="keywords" type="text" maxlength="200" placeholder="e.g. savings, cash, group, icon" />
             </div>
-
             <div class="field">
-              <span class="label-like">Metadata preview</span>
-              <div id="chips-preview" class="chips-preview" aria-live="polite"></div>
+              <label for="upload-file">File upload</label>
+              <input id="upload-file" name="file" type="file" accept="image/*,.svg,.pdf" required />
             </div>
-
-            <button type="submit" class="btn btn-primary btn-submit" id="btn-submit-upload">Submit</button>
+            <p id="upload-status" class="status-text"></p>
+            <button type="submit" class="btn btn-primary btn-wide" id="btn-upload-submit">Upload Resource</button>
           </form>
-          <p id="status" class="form-status" role="status"></p>
+
+          <aside class="preview-card">
+            <p class="preview-kicker">Preview</p>
+            <div id="upload-preview-frame" class="preview-frame">
+              <div class="preview-placeholder">
+                <span class="preview-placeholder-icon">◌</span>
+                <p>Choose an image, icon, or visual asset to preview it here.</p>
+              </div>
+            </div>
+            <div id="upload-preview-meta" class="preview-meta">
+              <p class="preview-meta-title">No file selected</p>
+              <p class="preview-meta-copy">Image-based resources will display inline after upload.</p>
+            </div>
+          </aside>
         </div>
       </section>
 
-      <!-- My uploads -->
-      <section
-        id="panel-my-uploads"
-        class="tab-panel"
-        role="tabpanel"
-        aria-labelledby="tab-my-uploads"
-        hidden
-        data-tab-panel="my-uploads"
-      >
-        <div class="panel-inner">
-          <h2 class="panel-heading">My uploads</h2>
-          <p class="panel-lede">Resources you added in this browser. Download or preview files saved locally.</p>
-          <div id="my-uploads-empty" class="empty-state" hidden>
-            <p class="empty-state-title">No uploads yet</p>
-            <p class="empty-state-text">Upload a resource to see it here.</p>
-            <button type="button" class="btn btn-primary" id="empty-goto-upload">Upload a resource</button>
+      <section id="panel-admin" class="page-section" data-route-panel="admin" hidden>
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Admin</p>
+            <h2 class="section-title">User management</h2>
+            <p class="section-copy">This MVP admin view is intentionally simple: it shows users, role, status, and created date so we can validate structure quickly.</p>
           </div>
-          <div id="my-uploads-grid" class="resource-grid"></div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-toolbar">
+            <p id="admin-status" class="status-text">Loading users…</p>
+            <button type="button" class="btn btn-secondary" id="btn-refresh-users">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
-      <nav class="bottom-tabs" aria-label="Quick navigation">
-        <button type="button" class="bottom-tab" data-tab="browse">Browse</button>
-        <button type="button" class="bottom-tab" data-tab="upload">Upload</button>
-        <button type="button" class="bottom-tab" data-tab="my-uploads">Mine</button>
-      </nav>
+      <section id="panel-signin" class="page-section" data-route-panel="signin" hidden>
+        <div class="signin-shell">
+          <form id="signin-form" class="signin-card" novalidate>
+            <p class="section-kicker">Sign In</p>
+            <h2 class="section-title">Access uploads and admin tools</h2>
+            <p class="section-copy">
+              Enter your name and email to start a session. Emails included in the backend `ADMIN_EMAILS` setting are signed in as admins.
+            </p>
+            <div class="field">
+              <label for="signin-name">Name</label>
+              <input id="signin-name" name="name" type="text" maxlength="120" placeholder="Your name" />
+            </div>
+            <div class="field">
+              <label for="signin-email">Email</label>
+              <input id="signin-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
+            </div>
+            <p id="signin-status" class="status-text"></p>
+            <button type="submit" class="btn btn-primary btn-wide">Sign In</button>
+          </form>
+        </div>
+      </section>
     </main>
 
-    <div id="modal-root" class="modal-root" aria-hidden="true" hidden>
-      <div class="modal-backdrop" data-modal-close></div>
-      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div class="modal-header">
-          <h2 id="modal-title" class="modal-title">Preview</h2>
-          <button type="button" class="modal-close" data-modal-close aria-label="Close">×</button>
+    <div id="modal-root" class="modal-root" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <div class="modal-card">
+        <div class="modal-top">
+          <h3 id="modal-title">Preview</h3>
+          <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
         </div>
         <div id="modal-body" class="modal-body"></div>
       </div>

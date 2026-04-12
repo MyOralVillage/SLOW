@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Serve the web/ folder and proxy BookStack under /bookstack-proxy/
-so API calls from the browser are same-origin (avoids CORS blocking uploads).
+Serve the web/ folder for local development.
 
-Prereq: BookStack running (e.g. docker compose), API token created in BookStack UI.
+The BookStack proxy remains available under /bookstack-proxy/ for legacy flows,
+but the current OIM upload UI talks directly to the backend API configured in
+web/config.local.json.
 
 From repo root:
-  export BOOKSTACK_URL=http://localhost:6875
   python3 web/server.py
 
-Then open http://127.0.0.1:8080 with config.local.json useBookStackProxy: true.
+Then open http://127.0.0.1:8080.
 """
 from __future__ import annotations
 

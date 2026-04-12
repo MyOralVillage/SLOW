@@ -4,6 +4,12 @@
 # Web — local BookStack API settings (never commit secrets)
 web/config.local.json
 
+# Backend
+backend/node_modules/
+backend/dist/
+backend/.env
+uploads/
+
 # Docker
 bookstack_data/
 bookstack_db_data/
