@@ -20,6 +20,19 @@ function assertValidCreateDto(dto: CreateResourceDto) {
   if (!dto.type?.trim()) throw new BadRequestException("Type is required.");
 }
 
+function resourceCreateData(dto: CreateResourceDto, uploadedByUserId?: string | null, originalFilename?: string | null) {
+  return {
+    title: dto.title.trim(),
+    description: dto.description.trim(),
+    country: dto.country.trim(),
+    category: dto.category.trim(),
+    type: dto.type.trim(),
+    keywords: normalizeKeywords(dto.keywords),
+    original_filename: originalFilename || dto.originalFilename?.trim() || null,
+    uploaded_by: uploadedByUserId || null,
+  };
+}
+
 @Injectable()
 export class ResourcesService {
   constructor(
@@ -73,16 +86,7 @@ export class ResourcesService {
   async create(dto: CreateResourceDto, uploadedByUserId?: string | null) {
     assertValidCreateDto(dto);
     const row = await this.prisma.resource.create({
-      data: {
-        title: dto.title.trim(),
-        description: dto.description.trim(),
-        country: dto.country.trim(),
-        category: dto.category.trim(),
-        type: dto.type.trim(),
-        keywords: normalizeKeywords(dto.keywords),
-        original_filename: dto.originalFilename?.trim() || null,
-        uploaded_by: uploadedByUserId || null,
-      },
+      data: resourceCreateData(dto, uploadedByUserId),
       include: this.resourceInclude(),
     });
     return this.toResourceResponse(row);
@@ -95,16 +99,7 @@ export class ResourcesService {
     }
 
     const created = await this.prisma.resource.create({
-      data: {
-        title: dto.title.trim(),
-        description: dto.description.trim(),
-        country: dto.country.trim(),
-        category: dto.category.trim(),
-        type: dto.type.trim(),
-        keywords: normalizeKeywords(dto.keywords),
-        original_filename: file?.originalname || dto.originalFilename?.trim() || null,
-        uploaded_by: uploadedByUserId || null,
-      },
+      data: resourceCreateData(dto, uploadedByUserId, file?.originalname || null),
     });
 
     const stored = await this.disk.writeResourceFile(created.id, file.originalname, file.buffer);

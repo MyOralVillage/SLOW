@@ -12,7 +12,6 @@ const state = {
   resources: [],
   users: [],
   previewUrl: null,
-  modalUrl: null,
 };
 
 const els = {
@@ -57,6 +56,8 @@ const els = {
 function apiBase() {
   return (config.backendBaseUrl || "").replace(/\/$/, "");
 }
+
+const metadataOptions = window.SLOW_UPLOAD_OPTIONS || { countries: [], categories: [], types: [] };
 
 function routeFromHash() {
   return (window.location.hash || "#browse").replace(/^#/, "") || "browse";
@@ -116,6 +117,15 @@ async function apiFetch(path, options = {}) {
   return res;
 }
 
+async function parseErrorMessage(res, fallback) {
+  try {
+    const text = (await res.text()).trim();
+    return text || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function fillSelect(selectEl, values, placeholder) {
   if (!selectEl) return;
   selectEl.innerHTML = "";
@@ -131,17 +141,24 @@ function fillSelect(selectEl, values, placeholder) {
   });
 }
 
-function initMetadataOptions() {
-  const options = window.SLOW_UPLOAD_OPTIONS || { countries: [], categories: [], types: [] };
-  fillSelect(els.filterCountry, options.countries, "Any country");
-  fillSelect(els.filterCategory, options.categories, "Any category");
-  fillSelect(els.filterType, options.types, "Any type");
-  fillSelect(els.uploadCountry, options.countries, "Select country");
-  fillSelect(els.uploadCategory, options.categories, "Select category");
-  fillSelect(els.uploadType, options.types, "Select type");
-  if (options.types.includes("Icon")) {
+function initBrowseFilters() {
+  fillSelect(els.filterCountry, metadataOptions.countries, "Any country");
+  fillSelect(els.filterCategory, metadataOptions.categories, "Any category");
+  fillSelect(els.filterType, metadataOptions.types, "Any type");
+}
+
+function initUploadFields() {
+  fillSelect(els.uploadCountry, metadataOptions.countries, "Select country");
+  fillSelect(els.uploadCategory, metadataOptions.categories, "Select category");
+  fillSelect(els.uploadType, metadataOptions.types, "Select type");
+  if (metadataOptions.types.includes("Icon")) {
     els.uploadType.value = "Icon";
   }
+}
+
+function initMetadataOptions() {
+  initBrowseFilters();
+  initUploadFields();
 }
 
 function isAdmin() {
@@ -315,7 +332,7 @@ async function loadResources() {
   const path = params.toString() ? `/resources/search?${params.toString()}` : "/resources?limit=48&offset=0";
   try {
     const res = await apiFetch(path);
-    if (!res.ok) throw new Error("Could not load resources.");
+    if (!res.ok) throw new Error(await parseErrorMessage(res, "Could not load resources."));
     const json = await res.json();
     state.backendReachable = true;
     state.resources = json.rows || [];
@@ -335,7 +352,7 @@ async function loadUsers() {
   setStatus(els.adminStatus, "Loading users…", true);
   const res = await apiFetch("/users");
   if (!res.ok) {
-    throw new Error("Could not load users.");
+    throw new Error(await parseErrorMessage(res, "Could not load users."));
   }
   const json = await res.json();
   state.users = json.rows || [];
@@ -364,8 +381,7 @@ async function handleSignIn(event) {
   });
 
   if (!res.ok) {
-    const message = await res.text();
-    setStatus(els.signInStatus, message || "Could not sign in.", false);
+    setStatus(els.signInStatus, await parseErrorMessage(res, "Could not sign in."), false);
     return;
   }
 
@@ -477,13 +493,13 @@ async function handleUpload(event) {
       body: formData,
     });
     if (!res.ok) {
-      throw new Error(await res.text() || "Upload failed.");
+      throw new Error(await parseErrorMessage(res, "Upload failed."));
     }
     await res.json();
     showToast("Visual resource uploaded.", true);
     setStatus(els.uploadStatus, "Upload complete.", true);
     els.uploadForm.reset();
-    initMetadataOptions();
+    initUploadFields();
     renderUploadPreview();
     await loadResources();
     setHash("browse");
@@ -558,7 +574,7 @@ function bindEvents() {
 
   els.clearFiltersBtn?.addEventListener("click", () => {
     els.browseForm.reset();
-    initMetadataOptions();
+    initBrowseFilters();
     loadResources().catch((error) => setStatus(els.browseStatus, error.message || "Could not load resources.", false));
   });
 
@@ -590,6 +606,7 @@ function bindEvents() {
   });
 
   window.addEventListener("hashchange", () => applyRoute(routeFromHash()));
+  window.addEventListener("beforeunload", clearPreview);
 }
 
 async function bootstrap() {
