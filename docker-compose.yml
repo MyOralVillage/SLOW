@@ -24,6 +24,7 @@ services:
       - DATABASE_URL=postgresql://slow:slow_password@postgres:5432/slow_oim?schema=public
       - PORT=3001
       - API_KEY=${OIM_API_KEY:-change-me}
+      - OWNER_EMAILS=${OIM_OWNER_EMAILS:-brett@example.com}
       - ADMIN_EMAILS=${OIM_ADMIN_EMAILS:-brett@example.com}
       - SESSION_TTL_DAYS=${OIM_SESSION_TTL_DAYS:-14}
       - UPLOAD_DIR=/data/uploads

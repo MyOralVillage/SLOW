@@ -1,9 +1,7 @@
 <resources>
     <string name="app_name">SLOW Library</string>
-    <string name="bookstack_base_url">http://10.0.2.2:6875</string>
-    <string name="bookstack_api_token_id"></string>
-    <string name="bookstack_api_token_secret"></string>
-    <string name="bookstack_default_book_id">1</string>
+    <string name="backend_base_url">http://10.0.2.2:3001/api</string>
+    <string name="backend_api_key"></string>
     <string name="nav_home">Home</string>
     <string name="nav_resources">Resources</string>
     <string name="nav_upload">Upload</string>
@@ -41,8 +39,8 @@
     <string name="upload_error_type">Choose a type.</string>
     <string name="upload_error_file">Choose a file to upload.</string>
     <string name="upload_error_product_detail">Product detail must be individual, group, both, or left blank.</string>
-    <string name="upload_page_no_id">Page created but BookStack did not return a page id; file was not attached.</string>
-    <string name="upload_page_and_attachment_ok">Page and file uploaded to BookStack.</string>
+    <string name="upload_resource_no_id">Resource created but the backend did not return an id; file was not uploaded.</string>
+    <string name="upload_backend_ok">Resource and file uploaded to the library.</string>
     <string name="upload_attachment_failed">Page created. Attachment failed: %1$s</string>
-    <string name="upload_mock_saved">Saved locally. Add API token values to enable BookStack upload.</string>
+    <string name="upload_mock_saved">Saved locally. Add backend API key to enable library upload.</string>
 </resources>

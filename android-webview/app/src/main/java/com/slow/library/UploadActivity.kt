@@ -236,12 +236,10 @@ class UploadActivity : AppCompatActivity() {
         )
         btnSubmit.isEnabled = false
 
-        val apiBaseUrl = getString(R.string.bookstack_base_url)
-        val tokenId = getString(R.string.bookstack_api_token_id)
-        val tokenSecret = getString(R.string.bookstack_api_token_secret)
-        val defaultBookId = getString(R.string.bookstack_default_book_id).toIntOrNull() ?: 1
+        val apiBaseUrl = getString(R.string.backend_base_url)
+        val apiKey = getString(R.string.backend_api_key)
 
-        if (tokenId.isBlank() || tokenSecret.isBlank()) {
+        if (apiKey.isBlank()) {
             btnSubmit.isEnabled = true
             Snackbar.make(btnSubmit, R.string.upload_mock_saved, Snackbar.LENGTH_LONG).show()
             return
@@ -251,20 +249,14 @@ class UploadActivity : AppCompatActivity() {
         val fileNameSafe = selectedFilename ?: "upload.bin"
 
         thread {
-            val client =
-                BookStackApiClient(
-                    baseUrl = apiBaseUrl,
-                    tokenId = tokenId,
-                    tokenSecret = tokenSecret,
-                )
+            val client = OimBackendClient(baseUrl = apiBaseUrl, apiKey = apiKey)
 
             val createResult =
                 try {
-                    client.createResourcePage(
-                        BookStackApiClient.CreateResourceRequest(
+                    client.createResource(
+                        OimBackendClient.CreateResourceRequest(
                             title = title,
                             description = description,
-                            bookId = defaultBookId,
                             country = country,
                             category = category,
                             type = type,
@@ -276,10 +268,10 @@ class UploadActivity : AppCompatActivity() {
                         ),
                     )
                 } catch (err: Exception) {
-                    BookStackApiClient.PageCreateResult(
+                    OimBackendClient.CreateResult(
                         success = false,
                         message = "Upload failed: ${err.message ?: "Unknown error"}",
-                        pageId = null,
+                        id = null,
                     )
                 }
 
@@ -295,13 +287,13 @@ class UploadActivity : AppCompatActivity() {
                 return@thread
             }
 
-            val pageId = createResult.pageId
-            if (pageId == null || fileUri == null) {
+            val resourceId = createResult.id
+            if (resourceId == null || fileUri == null) {
                 runOnUiThread {
                     btnSubmit.isEnabled = true
                     Snackbar.make(
                         btnSubmit,
-                        getString(R.string.upload_page_no_id),
+                        getString(R.string.upload_resource_no_id),
                         Snackbar.LENGTH_LONG,
                     ).show()
                 }
@@ -312,10 +304,10 @@ class UploadActivity : AppCompatActivity() {
                 try {
                     contentResolver.openInputStream(fileUri)?.use { stream ->
                         val mime = contentResolver.getType(fileUri) ?: "application/octet-stream"
-                        client.uploadFileAttachment(pageId, stream, fileNameSafe, mime)
-                    } ?: BookStackApiClient.ApiResult(false, "Could not open file.")
+                        client.uploadResourceFile(resourceId, stream, fileNameSafe, mime)
+                    } ?: OimBackendClient.ApiResult(false, "Could not open file.")
                 } catch (err: Exception) {
-                    BookStackApiClient.ApiResult(
+                    OimBackendClient.ApiResult(
                         success = false,
                         message = err.message ?: "Attachment error",
                     )
@@ -325,7 +317,7 @@ class UploadActivity : AppCompatActivity() {
                 btnSubmit.isEnabled = true
                 val msg =
                     if (attachResult.success) {
-                        getString(R.string.upload_page_and_attachment_ok)
+                        getString(R.string.upload_backend_ok)
                     } else {
                         getString(R.string.upload_attachment_failed, attachResult.message)
                     }
