@@ -12,9 +12,12 @@ enum FileStorage {
 }
 
 enum UserRole {
+  owner
   admin
+  vip
+  specialist
   member
-  guest
+  none
 }
 
 enum UserStatus {
@@ -29,6 +32,7 @@ model User {
   email      String      @unique
   role       UserRole    @default(member)
   status     UserStatus  @default(active)
+  permission_grants String[] @default([])
   created_at DateTime    @default(now())
   updated_at DateTime    @updatedAt
 

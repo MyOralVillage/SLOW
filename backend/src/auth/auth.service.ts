@@ -3,6 +3,7 @@ import { UserRole, UserStatus } from "@prisma/client";
 import * as crypto from "crypto";
 
 import { PrismaService } from "../prisma/prisma.service";
+import { effectivePermissions, normalizePermissionGrants } from "./permissions";
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS || "14");
 
@@ -12,6 +13,7 @@ export type AuthUser = {
   email: string;
   role: UserRole;
   status: UserStatus;
+  permission_grants: string[];
   created_at: Date;
 };
 
@@ -32,6 +34,15 @@ function adminEmailsFromEnv() {
   );
 }
 
+function ownerEmailsFromEnv() {
+  return new Set(
+    String(process.env.OWNER_EMAILS || "")
+      .split(",")
+      .map((value) => normalizeEmail(value))
+      .filter(Boolean),
+  );
+}
+
 @Injectable()
 export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
@@ -43,6 +54,8 @@ export class AuthService {
       email: user.email,
       role: user.role,
       status: user.status,
+      permission_grants: normalizePermissionGrants(user.permission_grants),
+      permissions: effectivePermissions(user.role, user.permission_grants),
       created_at: user.created_at,
     };
   }
@@ -53,22 +66,24 @@ export class AuthService {
       throw new UnauthorizedException("Enter a valid email address.");
     }
 
+    const ownerEmails = ownerEmailsFromEnv();
     const adminEmails = adminEmailsFromEnv();
-    const desiredRole = adminEmails.has(email) ? UserRole.admin : UserRole.member;
+    const envRole = ownerEmails.has(email) ? UserRole.owner : adminEmails.has(email) ? UserRole.admin : null;
     const trimmedName = String(name || "").trim();
 
     const user = await this.prisma.user.upsert({
       where: { email },
       update: {
         name: trimmedName || undefined,
-        role: desiredRole,
+        role: envRole || undefined,
         status: UserStatus.active,
       },
       create: {
         name: trimmedName || inferNameFromEmail(email),
         email,
-        role: desiredRole,
+        role: envRole || UserRole.member,
         status: UserStatus.active,
+        permission_grants: [],
       },
     });
 
@@ -123,7 +138,7 @@ export class AuthService {
 
   async requireAdmin(token: string | undefined) {
     const auth = await this.requireUser(token);
-    if (auth.user.role !== UserRole.admin) {
+    if (!auth.user.permissions.includes("manage_users")) {
       throw new ForbiddenException("Admin access required.");
     }
     return auth;

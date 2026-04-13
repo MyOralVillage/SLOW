@@ -1,35 +1,113 @@
-const SESSION_TOKEN_KEY = "slow_session_token_v3";
+const SESSION_TOKEN_KEY = "slow_session_token_v4";
+const PROFILE_STORE_KEY = "slow_profile_store_v1";
+const COMMENT_STORE_KEY = "slow_comment_store_v1";
+const RECOMMEND_STORE_KEY = "slow_recommend_store_v1";
 
 const config = {
   backendBaseUrl: "http://127.0.0.1:3001/api",
 };
 
+const metadata = window.SLOW_UPLOAD_OPTIONS || {
+  countries: [],
+  mainCategories: [],
+  crossCuttingCategories: [],
+  productDetails: [],
+  institutions: [],
+  types: [],
+  sampleResources: [],
+};
+
+const ROLE_OPTIONS = ["owner", "admin", "vip", "specialist", "member", "none"];
+const STATUS_OPTIONS = ["active", "invited", "disabled"];
+const ALL_PERMISSIONS = [
+  "view_content",
+  "search_resources",
+  "download_content",
+  "complete_profile",
+  "comment_resources",
+  "recommend_content",
+  "message_users",
+  "create_discussions",
+  "upload_resources",
+  "edit_resources",
+  "manage_categories",
+  "manage_users",
+  "manage_permissions",
+  "send_notifications",
+  "manage_site",
+];
+
 const state = {
-  route: "browse",
+  route: "home",
   backendReachable: false,
   token: localStorage.getItem(SESSION_TOKEN_KEY) || "",
   user: null,
   resources: [],
+  filteredResources: [],
   users: [],
-  previewUrl: null,
+  activeDetailId: null,
+  uploadPreviewUrl: null,
 };
 
 const els = {
   backendBadge: document.getElementById("backend-badge"),
-  sessionPill: document.getElementById("session-pill"),
-  signOutBtn: document.getElementById("btn-sign-out"),
-  navAdmin: document.getElementById("nav-admin"),
-  navSignin: document.getElementById("nav-signin"),
-  routeButtons: Array.from(document.querySelectorAll("[data-route]")),
-  routePanels: Array.from(document.querySelectorAll("[data-route-panel]")),
-  browseForm: document.getElementById("browse-form"),
-  filterQuery: document.getElementById("filter-query"),
+  btnOpenUpload: document.getElementById("btn-open-upload"),
+  btnHomeUpload: document.getElementById("btn-home-upload"),
+  btnTopSignin: document.getElementById("btn-top-signin"),
+  mainCategoryGrid: document.getElementById("main-category-grid"),
+  crossCategoryGrid: document.getElementById("cross-category-grid"),
+  searchForm: document.getElementById("search-form"),
+  searchQuery: document.getElementById("search-query"),
   filterCountry: document.getElementById("filter-country"),
-  filterCategory: document.getElementById("filter-category"),
-  filterType: document.getElementById("filter-type"),
-  clearFiltersBtn: document.getElementById("btn-clear-filters"),
+  filterProductDetail: document.getElementById("filter-product-detail"),
+  filterCrossCutting: document.getElementById("filter-cross-cutting"),
+  filterInstitution: document.getElementById("filter-institution"),
+  filterKeywords: document.getElementById("filter-keywords"),
+  btnClearSearch: document.getElementById("btn-clear-search"),
+  btnRefreshLibrary: document.getElementById("btn-refresh-library"),
   browseStatus: document.getElementById("browse-status"),
   resourceGrid: document.getElementById("resource-grid"),
+  routePanels: Array.from(document.querySelectorAll("[data-route-panel]")),
+  bottomNavButtons: Array.from(document.querySelectorAll(".bottom-nav-btn")),
+  messagesList: document.getElementById("messages-list"),
+  notificationsList: document.getElementById("notifications-list"),
+  authPanels: document.getElementById("auth-panels"),
+  signInForm: document.getElementById("signin-form"),
+  signInName: document.getElementById("signin-name"),
+  signInEmail: document.getElementById("signin-email"),
+  signInStatus: document.getElementById("signin-status"),
+  signupForm: document.getElementById("signup-form"),
+  signupName: document.getElementById("signup-name"),
+  signupEmail: document.getElementById("signup-email"),
+  signupCountry: document.getElementById("signup-country"),
+  signupInterest: document.getElementById("signup-interest"),
+  signupStatus: document.getElementById("signup-status"),
+  profileEditor: document.getElementById("profile-editor"),
+  profileForm: document.getElementById("profile-form"),
+  profileSummary: document.getElementById("profile-summary"),
+  profilePermissionSummary: document.getElementById("profile-permission-summary"),
+  profileName: document.getElementById("profile-name"),
+  profileEmail: document.getElementById("profile-email"),
+  profileAvatar: document.getElementById("profile-avatar"),
+  profileWhatsapp: document.getElementById("profile-whatsapp"),
+  profileBiodata: document.getElementById("profile-biodata"),
+  profileCountry: document.getElementById("profile-country"),
+  profileInterest: document.getElementById("profile-interest"),
+  profileSocials: document.getElementById("profile-socials"),
+  profileStatus: document.getElementById("profile-status"),
+  btnSignout: document.getElementById("btn-signout"),
+  adminPanel: document.getElementById("admin-panel"),
+  adminStatus: document.getElementById("admin-status"),
+  btnRefreshUsers: document.getElementById("btn-refresh-users"),
+  usersPermissionList: document.getElementById("users-permission-list"),
+  adminRoleList: document.getElementById("admin-role-list"),
+  adminPermissionList: document.getElementById("admin-permission-list"),
+  adminCategoryList: document.getElementById("admin-category-list"),
+  adminResourceList: document.getElementById("admin-resource-list"),
+  detailModal: document.getElementById("detail-modal"),
+  detailTitle: document.getElementById("detail-title"),
+  detailBody: document.getElementById("detail-body"),
+  uploadModal: document.getElementById("upload-modal"),
   uploadForm: document.getElementById("upload-form"),
   uploadTitle: document.getElementById("upload-title"),
   uploadDescription: document.getElementById("upload-description"),
@@ -39,41 +117,14 @@ const els = {
   uploadKeywords: document.getElementById("upload-keywords"),
   uploadFile: document.getElementById("upload-file"),
   uploadStatus: document.getElementById("upload-status"),
+  uploadPreviewFrame: document.getElementById("upload-preview-frame"),
+  uploadPreviewMeta: document.getElementById("upload-preview-meta"),
   uploadSubmit: document.getElementById("btn-upload-submit"),
-  previewFrame: document.getElementById("upload-preview-frame"),
-  previewMeta: document.getElementById("upload-preview-meta"),
-  signInForm: document.getElementById("signin-form"),
-  signInStatus: document.getElementById("signin-status"),
-  adminStatus: document.getElementById("admin-status"),
-  usersTableBody: document.getElementById("users-table-body"),
-  refreshUsersBtn: document.getElementById("btn-refresh-users"),
-  modalRoot: document.getElementById("modal-root"),
-  modalTitle: document.getElementById("modal-title"),
-  modalBody: document.getElementById("modal-body"),
   toastRoot: document.getElementById("toast-root"),
 };
 
 function apiBase() {
   return (config.backendBaseUrl || "").replace(/\/$/, "");
-}
-
-const metadataOptions = window.SLOW_UPLOAD_OPTIONS || { countries: [], categories: [], types: [] };
-
-function routeFromHash() {
-  return (window.location.hash || "#browse").replace(/^#/, "") || "browse";
-}
-
-function setHash(route) {
-  if (routeFromHash() === route) {
-    applyRoute(route);
-    return;
-  }
-  window.location.hash = route;
-}
-
-function backendAssetUrl(path) {
-  if (!path) return "";
-  return new URL(path, `${apiBase()}/`).toString();
 }
 
 function escapeHtml(value) {
@@ -83,28 +134,110 @@ function escapeHtml(value) {
 }
 
 function formatDate(value) {
-  if (!value) return "—";
+  if (!value) return "No date";
   try {
     return new Date(value).toLocaleDateString();
   } catch {
-    return "—";
+    return "No date";
   }
 }
 
 function showToast(message, ok = true) {
   if (!els.toastRoot) return;
-  const item = document.createElement("div");
-  item.className = `toast ${ok ? "ok" : "err"}`;
-  item.textContent = message;
-  els.toastRoot.appendChild(item);
-  setTimeout(() => item.remove(), 3600);
+  const node = document.createElement("div");
+  node.className = `toast ${ok ? "ok" : "err"}`;
+  node.textContent = message;
+  els.toastRoot.appendChild(node);
+  setTimeout(() => node.remove(), 3200);
+}
+
+function showStatus(target, message, ok = true) {
+  if (!target) return;
+  target.textContent = message || "";
+  target.className = `small-note ${message ? (ok ? "ok" : "err") : ""}`;
+}
+
+function routeFromHash() {
+  return (window.location.hash || "#home").replace(/^#/, "") || "home";
+}
+
+function setRoute(route) {
+  if (routeFromHash() !== route) {
+    window.location.hash = route;
+    return;
+  }
+  applyRoute(route);
+}
+
+function readJsonStore(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeJsonStore(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function profileStore() {
+  return readJsonStore(PROFILE_STORE_KEY);
+}
+
+function saveProfile(email, data) {
+  const store = profileStore();
+  store[email.toLowerCase()] = data;
+  writeJsonStore(PROFILE_STORE_KEY, store);
+}
+
+function getSavedProfile(email) {
+  if (!email) return null;
+  const store = profileStore();
+  return store[email.toLowerCase()] || null;
+}
+
+function commentsStore() {
+  return readJsonStore(COMMENT_STORE_KEY);
+}
+
+function recommendationsStore() {
+  return readJsonStore(RECOMMEND_STORE_KEY);
+}
+
+function commentsForResource(id) {
+  return commentsStore()[id] || [];
+}
+
+function saveComment(resourceId, comment) {
+  const store = commentsStore();
+  store[resourceId] = [...(store[resourceId] || []), comment];
+  writeJsonStore(COMMENT_STORE_KEY, store);
+}
+
+function recommendResource(resourceId) {
+  const store = recommendationsStore();
+  store[resourceId] = Number(store[resourceId] || 0) + 1;
+  writeJsonStore(RECOMMEND_STORE_KEY, store);
+}
+
+function recommendationCount(resourceId) {
+  return Number(recommendationsStore()[resourceId] || 0);
+}
+
+function userPermissions(user = state.user) {
+  return Array.isArray(user?.permissions) ? user.permissions : [];
+}
+
+function hasPermission(permission, user = state.user) {
+  return userPermissions(user).includes(permission);
 }
 
 async function loadConfig() {
   try {
     const res = await fetch("config.local.json", { cache: "no-store" });
-    if (!res.ok) return;
-    Object.assign(config, await res.json());
+    if (res.ok) Object.assign(config, await res.json());
   } catch {
     /* optional */
   }
@@ -113,11 +246,10 @@ async function loadConfig() {
 async function apiFetch(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (state.token) headers.set("Authorization", `Bearer ${state.token}`);
-  const res = await fetch(`${apiBase()}${path}`, { ...options, headers });
-  return res;
+  return await fetch(`${apiBase()}${path}`, { ...options, headers });
 }
 
-async function parseErrorMessage(res, fallback) {
+async function errorText(res, fallback) {
   try {
     const text = (await res.text()).trim();
     return text || fallback;
@@ -129,10 +261,10 @@ async function parseErrorMessage(res, fallback) {
 function fillSelect(selectEl, values, placeholder) {
   if (!selectEl) return;
   selectEl.innerHTML = "";
-  const placeholderOption = document.createElement("option");
-  placeholderOption.value = "";
-  placeholderOption.textContent = placeholder;
-  selectEl.appendChild(placeholderOption);
+  const first = document.createElement("option");
+  first.value = "";
+  first.textContent = placeholder;
+  selectEl.appendChild(first);
   values.forEach((value) => {
     const option = document.createElement("option");
     option.value = value;
@@ -141,170 +273,354 @@ function fillSelect(selectEl, values, placeholder) {
   });
 }
 
-function initBrowseFilters() {
-  fillSelect(els.filterCountry, metadataOptions.countries, "Any country");
-  fillSelect(els.filterCategory, metadataOptions.categories, "Any category");
-  fillSelect(els.filterType, metadataOptions.types, "Any type");
-}
-
-function initUploadFields() {
-  fillSelect(els.uploadCountry, metadataOptions.countries, "Select country");
-  fillSelect(els.uploadCategory, metadataOptions.categories, "Select category");
-  fillSelect(els.uploadType, metadataOptions.types, "Select type");
-  if (metadataOptions.types.includes("Icon")) {
+function initFields() {
+  fillSelect(els.filterCountry, metadata.countries, "All countries");
+  fillSelect(els.filterProductDetail, metadata.productDetails, "All product details");
+  fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All cross-cutting");
+  fillSelect(els.filterInstitution, metadata.institutions, "All institutions");
+  fillSelect(els.signupCountry, metadata.countries, "Choose country");
+  fillSelect(els.profileCountry, metadata.countries, "Choose country");
+  fillSelect(els.uploadCountry, metadata.countries, "Choose country");
+  fillSelect(els.uploadCategory, [...metadata.mainCategories, ...metadata.crossCuttingCategories], "Choose category");
+  fillSelect(els.uploadType, metadata.types, "Choose type");
+  if (metadata.types.includes("Icon")) {
     els.uploadType.value = "Icon";
   }
 }
 
-function initMetadataOptions() {
-  initBrowseFilters();
-  initUploadFields();
+function tileButtonHtml(label, kind) {
+  return `<button type="button" class="category-tile" data-category-kind="${escapeHtml(kind)}" data-category-value="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
 }
 
-function isAdmin() {
-  return state.user?.role === "admin";
-}
-
-function canUpload() {
-  return Boolean(state.user && state.user.status !== "disabled" && state.user.role !== "guest");
-}
-
-function updateSessionUi() {
-  if (els.backendBadge) {
-    els.backendBadge.textContent = state.backendReachable ? "Backend connected" : "Backend offline";
-    els.backendBadge.classList.toggle("is-live", state.backendReachable);
+function renderCategoryTiles() {
+  if (els.mainCategoryGrid) {
+    els.mainCategoryGrid.innerHTML = metadata.mainCategories.map((label) => tileButtonHtml(label, "main")).join("");
   }
-
-  if (els.sessionPill) {
-    els.sessionPill.textContent = state.user
-      ? `${state.user.name} · ${state.user.role}`
-      : "Not signed in";
+  if (els.crossCategoryGrid) {
+    els.crossCategoryGrid.innerHTML = metadata.crossCuttingCategories.map((label) => tileButtonHtml(label, "cross")).join("");
   }
-
-  if (els.signOutBtn) els.signOutBtn.hidden = !state.user;
-  if (els.navSignin) els.navSignin.hidden = Boolean(state.user);
-  if (els.navAdmin) els.navAdmin.hidden = !isAdmin();
 }
 
-function applyRoute(rawRoute) {
-  const route = rawRoute || "browse";
-  let safeRoute = route;
-  if (safeRoute === "admin" && !isAdmin()) safeRoute = state.user ? "browse" : "signin";
-  if (safeRoute === "upload" && !canUpload()) safeRoute = state.user ? "browse" : "signin";
-  if (!["browse", "upload", "admin", "signin"].includes(safeRoute)) safeRoute = "browse";
-  state.route = safeRoute;
+function colorForText(text) {
+  const colors = ["#e7f3ea", "#f7eadf", "#e6eef8", "#f7e5e9", "#ece7f6", "#edf3de"];
+  let total = 0;
+  for (const char of String(text || "")) total += char.charCodeAt(0);
+  return colors[total % colors.length];
+}
 
-  els.routeButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.route === safeRoute));
-  els.routePanels.forEach((panel) => {
-    const on = panel.dataset.routePanel === safeRoute;
-    panel.hidden = !on;
-    panel.classList.toggle("is-active", on);
-  });
+function fallbackThumb(resource) {
+  return `
+    <div class="thumb-fallback" style="background:${colorForText(resource.category || resource.title)}">
+      <span>${escapeHtml((resource.type || "Item").slice(0, 1))}</span>
+      <p>${escapeHtml(resource.title)}</p>
+    </div>
+  `;
+}
 
-  if (safeRoute === "admin" && isAdmin()) {
-    loadUsers().catch((error) => {
-      setStatus(els.adminStatus, error.message || "Could not load users.", false);
-    });
-  }
+function backendAssetUrl(path) {
+  if (!path) return "";
+  return new URL(path, `${apiBase()}/`).toString();
 }
 
 function resourceImageUrl(resource) {
   return resource?.file?.thumbnailUrl ? backendAssetUrl(resource.file.thumbnailUrl) : "";
 }
 
-function resourceFileUrl(resource, download = false) {
+function resourceDownloadUrl(resource) {
   if (!resource?.file?.url) return "";
-  const url = backendAssetUrl(resource.file.url);
-  return download ? `${url}?download=1` : url;
+  return `${backendAssetUrl(resource.file.url)}?download=1`;
 }
 
-function tagsHtml(resource) {
-  const tags = [resource.country, resource.category, resource.type].filter(Boolean);
-  return tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+function normalizeResource(resource) {
+  return {
+    id: resource.id,
+    title: resource.title || "Untitled",
+    description: resource.description || "",
+    country: resource.country || "",
+    category: resource.category || "",
+    type: resource.type || "",
+    keywords: Array.isArray(resource.keywords) ? resource.keywords : [],
+    productDetail: resource.productDetail || resource.product_detail || "",
+    crossCutting: resource.crossCutting || resource.cross_cutting || "",
+    institution: resource.institution || "",
+    created_at: resource.created_at || new Date().toISOString(),
+    uploaded_by: resource.uploaded_by || null,
+    file: resource.file || null,
+  };
+}
+
+function cardTags(resource) {
+  return [resource.category, resource.country, resource.type].filter(Boolean).slice(0, 3);
 }
 
 function resourceCardHtml(resource) {
   const imageUrl = resourceImageUrl(resource);
-  const uploader = resource.uploaded_by?.name ? `<span class="card-owner">By ${escapeHtml(resource.uploaded_by.name)}</span>` : "";
   return `
-    <article class="resource-card" data-resource-id="${escapeHtml(resource.id)}">
-      <button type="button" class="resource-card-hit" data-action="open-preview" data-id="${escapeHtml(resource.id)}">
+    <article class="resource-card">
+      <button type="button" class="resource-card-hit" data-open-detail="${escapeHtml(resource.id)}">
         <div class="resource-thumb">
-          ${
-            imageUrl
-              ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" loading="lazy" />`
-              : `<div class="thumb-fallback"><span>Visual</span></div>`
-          }
+          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" loading="lazy" />` : fallbackThumb(resource)}
         </div>
-        <div class="resource-body">
-          <div class="resource-meta">${tagsHtml(resource)}</div>
+        <div class="resource-card-body">
           <h3>${escapeHtml(resource.title)}</h3>
-          <p>${escapeHtml(resource.description || "")}</p>
-          <div class="resource-footer">
-            ${uploader}
-            <span class="card-date">${escapeHtml(formatDate(resource.created_at))}</span>
+          <p class="resource-type">${escapeHtml(resource.type || "Resource")}</p>
+          <div class="tag-row">
+            ${cardTags(resource)
+              .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
+              .join("")}
           </div>
         </div>
       </button>
-      <div class="resource-actions">
-        <button type="button" class="btn btn-ghost" data-action="open-preview" data-id="${escapeHtml(resource.id)}">Preview</button>
-        <button type="button" class="btn btn-ghost" data-action="download-resource" data-id="${escapeHtml(resource.id)}">Download</button>
-      </div>
     </article>
   `;
 }
 
+function filterResources(resources) {
+  const query = (els.searchQuery?.value || "").trim().toLowerCase();
+  const country = els.filterCountry?.value || "";
+  const productDetail = els.filterProductDetail?.value || "";
+  const crossCutting = els.filterCrossCutting?.value || "";
+  const institution = els.filterInstitution?.value || "";
+  const keywords = (els.filterKeywords?.value || "").trim().toLowerCase();
+
+  return resources.filter((resource) => {
+    const textBlob = [
+      resource.title,
+      resource.description,
+      resource.category,
+      resource.type,
+      resource.country,
+      resource.productDetail,
+      resource.crossCutting,
+      resource.institution,
+      ...(resource.keywords || []),
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    if (query && !textBlob.includes(query)) return false;
+    if (country && resource.country !== country) return false;
+    if (productDetail && resource.productDetail !== productDetail) return false;
+    if (crossCutting && resource.crossCutting !== crossCutting) return false;
+    if (institution && resource.institution !== institution) return false;
+    if (keywords) {
+      const bits = keywords.split(/[,\s]+/).filter(Boolean);
+      if (!bits.every((bit) => textBlob.includes(bit))) return false;
+    }
+    return true;
+  });
+}
+
 function renderResources() {
+  const resources = state.filteredResources;
   if (!els.resourceGrid) return;
-  if (!state.resources.length) {
+  if (!resources.length) {
     els.resourceGrid.innerHTML = `
       <div class="empty-card">
-        <p class="empty-card-title">No resources yet</p>
-        <p class="empty-card-copy">Upload the first icon or visual template to populate the library.</p>
+        <p class="empty-card-title">No resource found</p>
+        <p class="small-note">Try another category or clear the search.</p>
       </div>
     `;
     return;
   }
-  els.resourceGrid.innerHTML = state.resources.map(resourceCardHtml).join("");
+  els.resourceGrid.innerHTML = resources.map(resourceCardHtml).join("");
+}
+
+function renderAdmin() {
+  if (!els.adminCategoryList) return;
+  if (els.adminRoleList) {
+    els.adminRoleList.innerHTML = ["Owner", "Admin", "VIP", "Specialist", "Member", "None"]
+      .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+      .join("");
+  }
+  if (els.adminPermissionList) {
+    els.adminPermissionList.innerHTML = ALL_PERMISSIONS.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("");
+  }
+  els.adminCategoryList.innerHTML = [...metadata.mainCategories, ...metadata.crossCuttingCategories]
+    .map((item) => `<span class="chip">${escapeHtml(item)}</span>`)
+    .join("");
+
+  if (els.adminResourceList) {
+    const rows = state.resources.slice(0, 8);
+    els.adminResourceList.innerHTML = rows.length
+      ? rows
+          .map(
+            (resource) => `
+              <div class="simple-item">
+                <strong>${escapeHtml(resource.title)}</strong>
+                <span>${escapeHtml(resource.category || resource.type || "Resource")}</span>
+              </div>
+            `,
+          )
+          .join("")
+      : `<div class="simple-item"><span>No resources yet</span></div>`;
+  }
 }
 
 function renderUsers() {
-  if (!els.usersTableBody) return;
+  if (!els.usersPermissionList) return;
+  const canManagePermissions = hasPermission("manage_permissions");
+  const isOwner = state.user?.role === "owner";
   if (!state.users.length) {
-    els.usersTableBody.innerHTML = `
-      <tr>
-        <td colspan="5" class="table-empty">No users found.</td>
-      </tr>
-    `;
+    els.usersPermissionList.innerHTML = `<div class="simple-item"><span>No users found</span></div>`;
     return;
   }
-
-  els.usersTableBody.innerHTML = state.users
+  els.usersPermissionList.innerHTML = state.users
     .map(
-      (user) => `
-        <tr>
-          <td>${escapeHtml(user.name)}</td>
-          <td>${escapeHtml(user.email)}</td>
-          <td><span class="role-pill role-${escapeHtml(user.role)}">${escapeHtml(user.role)}</span></td>
-          <td>${escapeHtml(user.status)}</td>
-          <td>${escapeHtml(formatDate(user.created_at))}</td>
-        </tr>
-      `,
+      (user) => {
+        const ownerLocked = !isOwner && user.role === "owner";
+        return `
+        <article class="user-permission-card" data-user-card="${escapeHtml(user.id)}" ${ownerLocked ? `data-owner-locked="1"` : ""}>
+          <div class="user-permission-head">
+            <div>
+              <strong>${escapeHtml(user.name)}</strong>
+              <p>${escapeHtml(user.email)}</p>
+            </div>
+            <div class="tag-row">
+              <span class="tag">${escapeHtml(user.role)}</span>
+              <span class="tag">${escapeHtml(user.status)}</span>
+            </div>
+          </div>
+          <div class="user-permission-grid">
+            <label class="field">
+              <span>Role</span>
+              <select data-user-role="${escapeHtml(user.id)}" ${!canManagePermissions || ownerLocked ? "disabled" : ""}>
+                ${ROLE_OPTIONS.map((role) => `<option value="${escapeHtml(role)}" ${user.role === role ? "selected" : ""} ${!isOwner && role === "owner" ? "disabled" : ""}>${escapeHtml(role)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field">
+              <span>Status</span>
+              <select data-user-status="${escapeHtml(user.id)}" ${!canManagePermissions || ownerLocked ? "disabled" : ""}>
+                ${STATUS_OPTIONS.map((status) => `<option value="${escapeHtml(status)}" ${user.status === status ? "selected" : ""}>${escapeHtml(status)}</option>`).join("")}
+              </select>
+            </label>
+          </div>
+          <div class="permission-checklist">
+            ${ALL_PERMISSIONS.map((permission) => `
+              <label class="permission-option">
+                <input type="checkbox" data-user-permission="${escapeHtml(user.id)}" value="${escapeHtml(permission)}" ${Array.isArray(user.permission_grants) && user.permission_grants.includes(permission) ? "checked" : ""} ${!canManagePermissions || ownerLocked || (!isOwner && permission === "manage_site") ? "disabled" : ""} />
+                <span>${escapeHtml(permission)}</span>
+              </label>
+            `).join("")}
+          </div>
+          <div class="user-permission-actions">
+            <button type="button" class="primary-btn" data-save-user="${escapeHtml(user.id)}" ${!canManagePermissions || ownerLocked ? "disabled" : ""}>Save user</button>
+            <p class="small-note">Effective permissions: ${escapeHtml((user.permissions || []).join(", "))}</p>
+            ${ownerLocked ? `<p class="small-note">Only an owner can change this user.</p>` : ""}
+          </div>
+        </article>
+      `;
+      },
     )
     .join("");
 }
 
-function setStatus(target, message, ok = true) {
-  if (!target) return;
-  target.textContent = message || "";
-  target.className = `status-text ${message ? (ok ? "ok" : "err") : ""}`;
+function renderMessages() {
+  if (!hasPermission("message_users")) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>You do not have permission to use messages.</span></div>`;
+    return;
+  }
+  const allComments = Object.values(commentsStore()).flat();
+  els.messagesList.innerHTML = allComments.length
+    ? allComments
+        .slice()
+        .reverse()
+        .slice(0, 8)
+        .map(
+          (comment) => `
+            <div class="simple-item">
+              <strong>${escapeHtml(comment.name)}</strong>
+              <span>${escapeHtml(comment.message)}</span>
+            </div>
+          `,
+        )
+        .join("")
+    : `<div class="simple-item"><span>No messages yet</span></div>`;
+}
+
+function renderNotifications() {
+  if (!hasPermission("send_notifications") && !hasPermission("recommend_content")) {
+    els.notificationsList.innerHTML = `<div class="simple-item"><span>You do not have permission to use notifications.</span></div>`;
+    return;
+  }
+  const items = state.resources
+    .map((resource) => ({
+      title: resource.title,
+      count: recommendationCount(resource.id),
+    }))
+    .filter((item) => item.count > 0)
+    .slice(0, 8);
+
+  els.notificationsList.innerHTML = items.length
+    ? items
+        .map(
+          (item) => `
+            <div class="simple-item">
+              <strong>${escapeHtml(item.title)}</strong>
+              <span>${escapeHtml(String(item.count))} recommendations</span>
+            </div>
+          `,
+        )
+        .join("")
+    : `<div class="simple-item"><span>No notifications yet</span></div>`;
+}
+
+function applyRoute(route) {
+  const next = ["home", "messages", "notifications", "profile"].includes(route) ? route : "home";
+  state.route = next;
+  els.routePanels.forEach((panel) => {
+    const on = panel.dataset.routePanel === next;
+    panel.hidden = !on;
+    panel.classList.toggle("is-active", on);
+  });
+  els.bottomNavButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.route === next));
+}
+
+function updateTopButtons() {
+  if (els.btnTopSignin) {
+    els.btnTopSignin.textContent = state.user ? "Profile" : "Sign in";
+  }
+  if (els.btnOpenUpload) els.btnOpenUpload.hidden = !hasPermission("upload_resources");
+  if (els.btnHomeUpload) els.btnHomeUpload.hidden = !hasPermission("upload_resources");
+  if (els.backendBadge) {
+    els.backendBadge.textContent = state.backendReachable ? "Library connected" : "Offline sample library";
+    els.backendBadge.classList.toggle("ok", state.backendReachable);
+  }
+}
+
+function updateProfileUi() {
+  const profile = getSavedProfile(state.user?.email || "");
+  const signedIn = Boolean(state.user);
+
+  if (els.authPanels) els.authPanels.hidden = signedIn;
+  if (els.profileEditor) els.profileEditor.hidden = !signedIn;
+  if (els.btnSignout) els.btnSignout.hidden = !signedIn;
+  if (els.adminPanel) els.adminPanel.hidden = !hasPermission("manage_users");
+
+  if (!signedIn) {
+    if (els.profileSummary) els.profileSummary.textContent = "";
+    if (els.profilePermissionSummary) els.profilePermissionSummary.textContent = "";
+    return;
+  }
+
+  els.profileSummary.textContent = `${state.user.name} · ${state.user.role}`;
+  if (els.profilePermissionSummary) {
+    els.profilePermissionSummary.textContent = `Permissions: ${userPermissions().join(", ") || "none"}`;
+  }
+  els.profileName.value = profile?.name || state.user.name || "";
+  els.profileEmail.value = profile?.email || state.user.email || "";
+  els.profileWhatsapp.value = profile?.whatsapp || "";
+  els.profileBiodata.value = profile?.biodata || "";
+  els.profileCountry.value = profile?.country || "";
+  els.profileInterest.value = profile?.interest || "";
+  els.profileSocials.value = profile?.socials || "";
 }
 
 async function restoreSession() {
   if (!state.token) return;
   try {
     const res = await apiFetch("/auth/session");
-    if (!res.ok) throw new Error("Session expired.");
+    if (!res.ok) throw new Error("Session ended");
     const json = await res.json();
     state.user = json.user;
   } catch {
@@ -315,84 +631,276 @@ async function restoreSession() {
 }
 
 async function loadResources() {
-  const params = new URLSearchParams();
-  const query = (els.filterQuery?.value || "").trim();
-  const country = els.filterCountry?.value || "";
-  const category = els.filterCategory?.value || "";
-  const type = els.filterType?.value || "";
-
-  if (query) {
-    params.set("query", query);
-    params.set("keywords", query);
-  }
-  if (country) params.set("country", country);
-  if (category) params.set("category", category);
-  if (type) params.set("type", type);
-
-  const path = params.toString() ? `/resources/search?${params.toString()}` : "/resources?limit=48&offset=0";
   try {
-    const res = await apiFetch(path);
-    if (!res.ok) throw new Error(await parseErrorMessage(res, "Could not load resources."));
+    const res = await apiFetch("/resources?limit=100&offset=0");
+    if (!res.ok) throw new Error(await errorText(res, "Could not load resources"));
     const json = await res.json();
+    const rows = Array.isArray(json.rows) ? json.rows.map(normalizeResource) : [];
+    state.resources = rows.length ? rows : metadata.sampleResources.map(normalizeResource);
     state.backendReachable = true;
-    state.resources = json.rows || [];
-    setStatus(els.browseStatus, `${state.resources.length} resource${state.resources.length === 1 ? "" : "s"} loaded`, true);
-  } catch (error) {
+  } catch {
+    state.resources = metadata.sampleResources.map(normalizeResource);
     state.backendReachable = false;
-    state.resources = [];
-    setStatus(els.browseStatus, error.message || "Backend unavailable.", false);
   }
-
-  updateSessionUi();
+  state.filteredResources = filterResources(state.resources);
+  showStatus(els.browseStatus, `${state.filteredResources.length} resources`, true);
+  updateTopButtons();
   renderResources();
+  renderNotifications();
+  renderAdmin();
 }
 
 async function loadUsers() {
-  if (!isAdmin()) return;
-  setStatus(els.adminStatus, "Loading users…", true);
+  if (!hasPermission("manage_users")) return;
+  showStatus(els.adminStatus, "Loading users", true);
   const res = await apiFetch("/users");
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res, "Could not load users."));
+    showStatus(els.adminStatus, await errorText(res, "Could not load users"), false);
+    return;
   }
   const json = await res.json();
   state.users = json.rows || [];
   renderUsers();
-  setStatus(els.adminStatus, `${state.users.length} user${state.users.length === 1 ? "" : "s"} loaded`, true);
+  showStatus(els.adminStatus, `${state.users.length} users`, true);
 }
 
-async function handleSignIn(event) {
-  event.preventDefault();
-  const form = new FormData(els.signInForm);
-  const payload = {
-    name: String(form.get("name") || "").trim(),
-    email: String(form.get("email") || "").trim(),
-  };
+function openUploadModal() {
+  if (!hasPermission("upload_resources")) {
+    showToast("You do not have permission to upload.", false);
+    return;
+  }
+  els.uploadModal.hidden = false;
+}
 
-  if (!payload.email) {
-    setStatus(els.signInStatus, "Enter your email address.", false);
+function closeUploadModal() {
+  els.uploadModal.hidden = true;
+}
+
+function closeDetailModal() {
+  els.detailModal.hidden = true;
+  state.activeDetailId = null;
+}
+
+function clearUploadPreview() {
+  if (state.uploadPreviewUrl) {
+    URL.revokeObjectURL(state.uploadPreviewUrl);
+    state.uploadPreviewUrl = null;
+  }
+}
+
+function renderUploadPreview() {
+  clearUploadPreview();
+  const file = els.uploadFile?.files?.[0];
+  if (!file) {
+    els.uploadPreviewFrame.innerHTML = `<div class="preview-placeholder"><p>Select a file to preview.</p></div>`;
+    els.uploadPreviewMeta.textContent = "No file selected";
     return;
   }
 
-  setStatus(els.signInStatus, "Signing in…", true);
+  const canPreview = file.type.startsWith("image/") || /\.svg$/i.test(file.name);
+  if (canPreview) {
+    state.uploadPreviewUrl = URL.createObjectURL(file);
+    els.uploadPreviewFrame.innerHTML = `<img src="${escapeHtml(state.uploadPreviewUrl)}" alt="Upload preview" class="preview-image" />`;
+  } else {
+    els.uploadPreviewFrame.innerHTML = `<div class="preview-placeholder"><p>Preview not available for this file.</p></div>`;
+  }
+  els.uploadPreviewMeta.textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
+}
+
+function detailHtml(resource) {
+  const imageUrl = resourceImageUrl(resource);
+  const comments = commentsForResource(resource.id);
+  const canDownload = hasPermission("download_content");
+  const canUpload = hasPermission("upload_resources");
+  const canRecommend = hasPermission("recommend_content");
+  const canComment = hasPermission("comment_resources");
+  return `
+    <div class="detail-hero">
+      <div class="detail-side">
+        <div class="detail-category">${escapeHtml(resource.category || "Resource")}</div>
+        <div class="detail-side-actions">
+          <button type="button" class="secondary-btn detail-side-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download</button>
+          <button type="button" class="secondary-btn detail-side-btn" data-open-upload-inline="1" ${canUpload ? "" : "disabled"}>Upload</button>
+          <button type="button" class="secondary-btn detail-side-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend</button>
+        </div>
+      </div>
+      <div class="detail-preview-wrap">
+        <div class="detail-search-mark" aria-hidden="true">Search</div>
+        <div class="detail-preview">
+          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" />` : fallbackThumb(resource)}
+        </div>
+      </div>
+      <div class="detail-copy">
+        <p class="detail-type">${escapeHtml(resource.type || "Resource")}</p>
+        <h3>${escapeHtml(resource.title)}</h3>
+        <p class="detail-text">${escapeHtml(resource.description || "")}</p>
+        <div class="tag-row">
+          ${cardTags(resource)
+            .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
+            .join("")}
+        </div>
+        <div class="detail-actions">
+          <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download</button>
+          <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend (${recommendationCount(resource.id)})</button>
+          <button type="button" class="secondary-btn" data-open-upload-inline="1" ${canUpload ? "" : "disabled"}>Upload similar</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="discussion-section">
+      <div class="section-head">
+        <h3>Comments</h3>
+      </div>
+      <div class="simple-list">
+        ${
+          comments.length
+            ? comments
+                .map(
+                  (comment) => `
+                    <div class="simple-item">
+                      <strong>${escapeHtml(comment.name)}</strong>
+                      <span>${escapeHtml(comment.message)}</span>
+                    </div>
+                  `,
+                )
+                .join("")
+            : `<div class="simple-item"><span>No comments yet</span></div>`
+        }
+      </div>
+      <form class="comment-form" data-comment-form="${escapeHtml(resource.id)}">
+        <label class="field">
+          <span>Add comment</span>
+          <textarea name="message" rows="3" placeholder="${canComment ? "Write a short comment" : "You do not have permission to comment"}" ${canComment ? "" : "disabled"}></textarea>
+        </label>
+        <button type="submit" class="primary-btn" ${canComment ? "" : "disabled"}>Post comment</button>
+      </form>
+    </section>
+  `;
+}
+
+function openDetail(resourceId) {
+  const resource = state.resources.find((item) => item.id === resourceId);
+  if (!resource) return;
+  state.activeDetailId = resourceId;
+  els.detailTitle.textContent = resource.title;
+  els.detailBody.innerHTML = detailHtml(resource);
+  els.detailModal.hidden = false;
+}
+
+function applySearch() {
+  state.filteredResources = filterResources(state.resources);
+  showStatus(els.browseStatus, `${state.filteredResources.length} resources`, true);
+  renderResources();
+}
+
+function clearSearch() {
+  els.searchForm.reset();
+  fillSelect(els.filterCountry, metadata.countries, "All countries");
+  fillSelect(els.filterProductDetail, metadata.productDetails, "All product details");
+  fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All cross-cutting");
+  fillSelect(els.filterInstitution, metadata.institutions, "All institutions");
+  applySearch();
+}
+
+async function doAuth(name, email, statusEl) {
   const res = await apiFetch("/auth/sign-in", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ name, email }),
   });
-
   if (!res.ok) {
-    setStatus(els.signInStatus, await parseErrorMessage(res, "Could not sign in."), false);
-    return;
+    showStatus(statusEl, await errorText(res, "Could not sign in"), false);
+    return null;
   }
-
   const json = await res.json();
   state.token = json.token;
   state.user = json.user;
   localStorage.setItem(SESSION_TOKEN_KEY, state.token);
-  updateSessionUi();
-  setStatus(els.signInStatus, "Signed in successfully.", true);
-  showToast(`Signed in as ${state.user.name}`, true);
-  setHash(canUpload() ? "upload" : "browse");
+  updateTopButtons();
+  updateProfileUi();
+  await loadUsers();
+  return json;
+}
+
+async function saveUserPermissions(userId) {
+  if (!hasPermission("manage_permissions")) {
+    showToast("You do not have permission to change user access.", false);
+    return;
+  }
+  const roleEl = document.querySelector(`[data-user-role="${userId}"]`);
+  const statusEl = document.querySelector(`[data-user-status="${userId}"]`);
+  const permissionEls = Array.from(document.querySelectorAll(`[data-user-permission="${userId}"]`));
+  const permission_grants = permissionEls.filter((el) => el.checked).map((el) => el.value);
+
+  const res = await apiFetch(`/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      role: roleEl?.value,
+      status: statusEl?.value,
+      permission_grants,
+    }),
+  });
+
+  if (!res.ok) {
+    showToast(await errorText(res, "Could not save user"), false);
+    return;
+  }
+
+  await loadUsers();
+  if (state.user?.id === userId) {
+    await restoreSession();
+    updateTopButtons();
+    updateProfileUi();
+    renderMessages();
+    renderNotifications();
+  }
+  showToast("User permissions updated", true);
+}
+
+async function handleSignIn(event) {
+  event.preventDefault();
+  const name = els.signInName.value.trim();
+  const email = els.signInEmail.value.trim();
+  if (!email) {
+    showStatus(els.signInStatus, "Enter your email", false);
+    return;
+  }
+  showStatus(els.signInStatus, "Signing in", true);
+  const result = await doAuth(name, email, els.signInStatus);
+  if (!result) return;
+  showStatus(els.signInStatus, "Signed in", true);
+  showToast("Signed in", true);
+  setRoute("profile");
+}
+
+async function handleSignUp(event) {
+  event.preventDefault();
+  const name = els.signupName.value.trim();
+  const email = els.signupEmail.value.trim();
+  const country = els.signupCountry.value;
+  const interest = els.signupInterest.value.trim();
+  if (!name || !email) {
+    showStatus(els.signupStatus, "Enter name and email", false);
+    return;
+  }
+  showStatus(els.signupStatus, "Creating account", true);
+  const result = await doAuth(name, email, els.signupStatus);
+  if (!result) return;
+  saveProfile(email, {
+    name,
+    email,
+    country,
+    interest,
+    biodata: "",
+    whatsapp: "",
+    socials: "",
+    avatarName: "",
+  });
+  updateProfileUi();
+  showStatus(els.signupStatus, "Account created", true);
+  showToast("Account created", true);
+  setRoute("profile");
 }
 
 async function handleSignOut() {
@@ -404,76 +912,61 @@ async function handleSignOut() {
   state.token = "";
   state.user = null;
   localStorage.removeItem(SESSION_TOKEN_KEY);
-  updateSessionUi();
-  showToast("Signed out.", true);
-  setHash("browse");
+  updateTopButtons();
+  updateProfileUi();
+  showToast("Signed out", true);
 }
 
-function clearPreview() {
-  if (state.previewUrl) {
-    URL.revokeObjectURL(state.previewUrl);
-    state.previewUrl = null;
-  }
-}
-
-function renderUploadPreview() {
-  if (!els.previewFrame || !els.previewMeta) return;
-  const file = els.uploadFile?.files?.[0];
-  clearPreview();
-
-  if (!file) {
-    els.previewFrame.innerHTML = `
-      <div class="preview-placeholder">
-        <span class="preview-placeholder-icon">◌</span>
-        <p>Choose an image, icon, or visual asset to preview it here.</p>
-      </div>
-    `;
-    els.previewMeta.innerHTML = `
-      <p class="preview-meta-title">No file selected</p>
-      <p class="preview-meta-copy">Image-based resources will display inline after upload.</p>
-    `;
+function handleProfileSave(event) {
+  event.preventDefault();
+  const email = (els.profileEmail.value || state.user?.email || "").trim();
+  if (!email) {
+    showStatus(els.profileStatus, "Email is required", false);
     return;
   }
-
-  const imageLike = file.type.startsWith("image/") || /\.svg$/i.test(file.name);
-  if (imageLike) {
-    state.previewUrl = URL.createObjectURL(file);
-    els.previewFrame.innerHTML = `<img src="${escapeHtml(state.previewUrl)}" alt="Upload preview" class="preview-image" />`;
-  } else {
-    els.previewFrame.innerHTML = `
-      <div class="preview-placeholder">
-        <span class="preview-placeholder-icon">FILE</span>
-        <p>This file type will upload correctly, but it does not have an inline image preview.</p>
-      </div>
-    `;
+  saveProfile(email, {
+    name: els.profileName.value.trim(),
+    email,
+    whatsapp: els.profileWhatsapp.value.trim(),
+    biodata: els.profileBiodata.value.trim(),
+    country: els.profileCountry.value,
+    interest: els.profileInterest.value.trim(),
+    socials: els.profileSocials.value.trim(),
+    avatarName: els.profileAvatar.files?.[0]?.name || getSavedProfile(email)?.avatarName || "",
+  });
+  if (state.user) {
+    state.user = {
+      ...state.user,
+      name: els.profileName.value.trim() || state.user.name,
+      email,
+    };
   }
-
-  els.previewMeta.innerHTML = `
-    <p class="preview-meta-title">${escapeHtml(file.name)}</p>
-    <p class="preview-meta-copy">${escapeHtml((file.type || "Unknown type"))} · ${escapeHtml((file.size / 1024).toFixed(1))} KB</p>
-  `;
+  showStatus(els.profileStatus, "Profile saved", true);
+  updateTopButtons();
+  updateProfileUi();
+  showToast("Profile saved", true);
 }
 
 async function handleUpload(event) {
   event.preventDefault();
-  if (!canUpload()) {
-    showToast("Sign in before uploading.", false);
-    setHash("signin");
+  if (!hasPermission("upload_resources")) {
+    showStatus(els.uploadStatus, "You do not have upload permission", false);
+    setRoute("profile");
     return;
   }
 
-  const file = els.uploadFile?.files?.[0];
+  const file = els.uploadFile.files?.[0];
   const payload = {
-    title: String(els.uploadTitle?.value || "").trim(),
-    description: String(els.uploadDescription?.value || "").trim(),
-    country: String(els.uploadCountry?.value || "").trim(),
-    category: String(els.uploadCategory?.value || "").trim(),
-    type: String(els.uploadType?.value || "").trim(),
-    keywords: String(els.uploadKeywords?.value || "").trim(),
+    title: els.uploadTitle.value.trim(),
+    description: els.uploadDescription.value.trim(),
+    country: els.uploadCountry.value,
+    category: els.uploadCategory.value,
+    type: els.uploadType.value,
+    keywords: els.uploadKeywords.value.trim(),
   };
 
   if (!payload.title || !payload.description || !payload.country || !payload.category || !payload.type || !file) {
-    setStatus(els.uploadStatus, "Complete all required fields and choose a file.", false);
+    showStatus(els.uploadStatus, "Complete all fields and choose a file", false);
     return;
   }
 
@@ -481,146 +974,161 @@ async function handleUpload(event) {
   Object.entries(payload).forEach(([key, value]) => formData.append(key, value));
   formData.append("file", file, file.name);
 
-  if (els.uploadSubmit) {
-    els.uploadSubmit.disabled = true;
-    els.uploadSubmit.textContent = "Uploading…";
-  }
-  setStatus(els.uploadStatus, "Uploading resource…", true);
+  els.uploadSubmit.disabled = true;
+  showStatus(els.uploadStatus, "Uploading", true);
 
   try {
-    const res = await apiFetch("/resources/upload", {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) {
-      throw new Error(await parseErrorMessage(res, "Upload failed."));
-    }
-    await res.json();
-    showToast("Visual resource uploaded.", true);
-    setStatus(els.uploadStatus, "Upload complete.", true);
+    const res = await apiFetch("/resources/upload", { method: "POST", body: formData });
+    if (!res.ok) throw new Error(await errorText(res, "Upload failed"));
+    closeUploadModal();
     els.uploadForm.reset();
-    initUploadFields();
     renderUploadPreview();
     await loadResources();
-    setHash("browse");
+    showToast("Resource uploaded", true);
   } catch (error) {
-    setStatus(els.uploadStatus, error.message || "Upload failed.", false);
+    showStatus(els.uploadStatus, error.message || "Upload failed", false);
   } finally {
-    if (els.uploadSubmit) {
-      els.uploadSubmit.disabled = false;
-      els.uploadSubmit.textContent = "Upload Resource";
-    }
+    els.uploadSubmit.disabled = false;
   }
-}
-
-function openModal(title, html) {
-  if (!els.modalRoot || !els.modalBody || !els.modalTitle) return;
-  els.modalTitle.textContent = title;
-  els.modalBody.innerHTML = html;
-  els.modalRoot.hidden = false;
-}
-
-function closeModal() {
-  if (!els.modalRoot || !els.modalBody) return;
-  els.modalRoot.hidden = true;
-  els.modalBody.innerHTML = "";
-}
-
-function previewResource(id) {
-  const resource = state.resources.find((item) => item.id === id);
-  if (!resource) return;
-  const imageUrl = resourceImageUrl(resource);
-  if (imageUrl) {
-    openModal(
-      resource.title,
-      `
-        <div class="modal-visual">
-          <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" />
-          <div class="modal-copy">
-            <p>${escapeHtml(resource.description || "")}</p>
-            <div class="modal-tags">${tagsHtml(resource)}</div>
-          </div>
-        </div>
-      `,
-    );
-    return;
-  }
-
-  const fileUrl = resourceFileUrl(resource, false);
-  openModal(
-    resource.title,
-    `
-      <div class="modal-copy">
-        <p>${escapeHtml(resource.description || "")}</p>
-        <div class="modal-tags">${tagsHtml(resource)}</div>
-        <p><a class="btn btn-primary" href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener">Open file</a></p>
-      </div>
-    `,
-  );
-}
-
-function downloadResource(id) {
-  const resource = state.resources.find((item) => item.id === id);
-  if (!resource) return;
-  const url = resourceFileUrl(resource, true);
-  if (!url) return;
-  window.open(url, "_blank", "noopener");
 }
 
 function bindEvents() {
-  els.routeButtons.forEach((button) => {
-    button.addEventListener("click", () => setHash(button.dataset.route || "browse"));
+  els.bottomNavButtons.forEach((button) => {
+    button.addEventListener("click", () => setRoute(button.dataset.route || "home"));
   });
 
-  els.clearFiltersBtn?.addEventListener("click", () => {
-    els.browseForm.reset();
-    initBrowseFilters();
-    loadResources().catch((error) => setStatus(els.browseStatus, error.message || "Could not load resources.", false));
-  });
-
-  els.browseForm?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    loadResources().catch((error) => setStatus(els.browseStatus, error.message || "Could not load resources.", false));
-  });
-
+  els.btnOpenUpload?.addEventListener("click", () => openUploadModal());
+  els.btnHomeUpload?.addEventListener("click", () => openUploadModal());
+  els.btnTopSignin?.addEventListener("click", () => setRoute(state.user ? "profile" : "profile"));
+  els.btnClearSearch?.addEventListener("click", clearSearch);
+  els.btnRefreshLibrary?.addEventListener("click", () => loadResources().catch(() => undefined));
+  els.btnRefreshUsers?.addEventListener("click", () => loadUsers().catch(() => undefined));
   els.signInForm?.addEventListener("submit", handleSignIn);
-  els.signOutBtn?.addEventListener("click", handleSignOut);
-  els.uploadFile?.addEventListener("change", renderUploadPreview);
-  els.uploadForm?.addEventListener("submit", handleUpload);
-  els.refreshUsersBtn?.addEventListener("click", () => {
-    loadUsers().catch((error) => setStatus(els.adminStatus, error.message || "Could not load users.", false));
+  els.signupForm?.addEventListener("submit", handleSignUp);
+  els.profileForm?.addEventListener("submit", handleProfileSave);
+  els.btnSignout?.addEventListener("click", handleSignOut);
+  els.searchForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    applySearch();
   });
+  els.uploadForm?.addEventListener("submit", handleUpload);
+  els.uploadFile?.addEventListener("change", renderUploadPreview);
 
   document.addEventListener("click", (event) => {
-    const actionEl = event.target.closest("[data-action]");
-    if (actionEl) {
-      const id = actionEl.getAttribute("data-id");
-      const action = actionEl.getAttribute("data-action");
-      if (action === "open-preview" && id) previewResource(id);
-      if (action === "download-resource" && id) downloadResource(id);
+      const categoryButton = event.target.closest("[data-category-value]");
+    if (categoryButton) {
+      const kind = categoryButton.getAttribute("data-category-kind");
+      const value = categoryButton.getAttribute("data-category-value") || "";
+      if (kind === "main") {
+        els.searchQuery.value = "";
+        state.filteredResources = filterResources(
+          state.resources.filter((resource) => resource.category === value),
+        );
+      } else {
+        els.filterCrossCutting.value = value;
+        state.filteredResources = filterResources(state.resources);
+      }
+      showStatus(els.browseStatus, `${state.filteredResources.length} resources`, true);
+      renderResources();
+      return;
     }
 
-    if (event.target.closest("[data-close-modal]")) {
-      closeModal();
+    const detailButton = event.target.closest("[data-open-detail]");
+    if (detailButton) {
+      openDetail(detailButton.getAttribute("data-open-detail"));
+      return;
     }
+
+    if (event.target.closest("[data-close-detail]")) {
+      closeDetailModal();
+      return;
+    }
+
+    if (event.target.closest("[data-close-upload]")) {
+      closeUploadModal();
+      return;
+    }
+
+    const recommendButton = event.target.closest("[data-recommend-resource]");
+    if (recommendButton) {
+      if (!hasPermission("recommend_content")) {
+        showToast("You do not have permission to recommend.", false);
+        return;
+      }
+      const id = recommendButton.getAttribute("data-recommend-resource");
+      recommendResource(id);
+      openDetail(id);
+      renderNotifications();
+      showToast("Recommendation saved", true);
+      return;
+    }
+
+    const downloadButton = event.target.closest("[data-download-resource]");
+    if (downloadButton) {
+      if (!hasPermission("download_content")) {
+        showToast("You do not have permission to download.", false);
+        return;
+      }
+      const id = downloadButton.getAttribute("data-download-resource");
+      const resource = state.resources.find((item) => item.id === id);
+      const url = resourceDownloadUrl(resource);
+      if (url) window.open(url, "_blank", "noopener");
+      return;
+    }
+
+    if (event.target.closest("[data-open-upload-inline]")) {
+      closeDetailModal();
+      openUploadModal();
+      return;
+    }
+
+    const saveUserButton = event.target.closest("[data-save-user]");
+    if (saveUserButton) {
+      saveUserPermissions(saveUserButton.getAttribute("data-save-user"));
+    }
+  });
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-comment-form]");
+    if (!form) return;
+    event.preventDefault();
+    if (!hasPermission("comment_resources")) return;
+    const resourceId = form.getAttribute("data-comment-form");
+    const messageEl = form.querySelector("textarea[name='message']");
+    const message = messageEl.value.trim();
+    if (!message) return;
+    saveComment(resourceId, {
+      name: state.user.name,
+      message,
+      created_at: new Date().toISOString(),
+    });
+    messageEl.value = "";
+    openDetail(resourceId);
+    renderMessages();
+    showToast("Comment added", true);
   });
 
   window.addEventListener("hashchange", () => applyRoute(routeFromHash()));
-  window.addEventListener("beforeunload", clearPreview);
+  window.addEventListener("beforeunload", clearUploadPreview);
 }
 
 async function bootstrap() {
   await loadConfig();
-  initMetadataOptions();
+  initFields();
+  renderCategoryTiles();
   bindEvents();
   await restoreSession();
-  updateSessionUi();
-  applyRoute(routeFromHash());
-  renderUploadPreview();
+  updateTopButtons();
+  updateProfileUi();
   await loadResources();
+  await loadUsers();
+  renderMessages();
+  renderNotifications();
+  renderAdmin();
+  applyRoute(routeFromHash());
 }
 
 bootstrap().catch((error) => {
   console.error(error);
-  showToast(error.message || "Failed to load app.", false);
+  showToast(error.message || "Could not load page", false);
 });

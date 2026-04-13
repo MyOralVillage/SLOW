@@ -26,6 +26,7 @@ type AuthenticatedRequest = Request & {
   authUser?: {
     id: string;
     role: string;
+    permissions?: string[];
   };
 };
 
@@ -56,8 +57,8 @@ export class ResourcesController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!req.authUser) throw new UnauthorizedException("Please sign in.");
-    if (req.authUser.role === "guest") {
-      throw new ForbiddenException("Guest accounts cannot upload resources.");
+    if (!req.authUser.permissions?.includes("upload_resources")) {
+      throw new ForbiddenException("This user cannot upload resources.");
     }
     const dto: CreateResourceDto = {
       title: String(body?.title || ""),
