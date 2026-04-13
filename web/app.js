@@ -331,9 +331,10 @@ function colorForText(text) {
 }
 
 function fallbackThumb(resource) {
+  const typeInitial = escapeHtml((resource.type || "Item").slice(0, 1).toUpperCase());
   return `
     <div class="thumb-fallback" style="background:${colorForText(resource.category || resource.title)}">
-      <span>${escapeHtml((resource.type || "Item").slice(0, 1))}</span>
+      <span>${typeInitial}</span>
       <p>${escapeHtml(resource.title)}</p>
     </div>
   `;
@@ -437,10 +438,13 @@ function renderResources() {
   const resources = state.filteredResources;
   if (!els.resourceGrid) return;
   if (!resources.length) {
+    const canUpload = hasPermission("upload_resources");
     els.resourceGrid.innerHTML = `
       <div class="empty-card">
-        <p class="empty-card-title">No resource found</p>
-        <p class="small-note">Try another category or clear the search.</p>
+        <div class="empty-card-icon" aria-hidden="true">📂</div>
+        <p class="empty-card-title">No resources yet</p>
+        <p>Choose a category above or upload the first icon or template.</p>
+        ${canUpload ? `<button type="button" class="primary-btn" onclick="document.getElementById('btn-home-upload')?.click()">Upload a resource</button>` : ""}
       </div>
     `;
     return;
@@ -734,7 +738,7 @@ function renderUploadPreview() {
   clearUploadPreview();
   const file = els.uploadFile?.files?.[0];
   if (!file) {
-    els.uploadPreviewFrame.innerHTML = `<div class="preview-placeholder"><p>Select a file to preview.</p></div>`;
+    els.uploadPreviewFrame.innerHTML = `<div class="preview-placeholder"><p>Select an image or file to see a preview here</p></div>`;
     els.uploadPreviewMeta.textContent = "No file selected";
     return;
   }
@@ -744,7 +748,7 @@ function renderUploadPreview() {
     state.uploadPreviewUrl = URL.createObjectURL(file);
     els.uploadPreviewFrame.innerHTML = `<img src="${escapeHtml(state.uploadPreviewUrl)}" alt="Upload preview" class="preview-image" />`;
   } else {
-    els.uploadPreviewFrame.innerHTML = `<div class="preview-placeholder"><p>Preview not available for this file.</p></div>`;
+    els.uploadPreviewFrame.innerHTML = `<div class="preview-placeholder"><p>Preview not available for this file type</p></div>`;
   }
   els.uploadPreviewMeta.textContent = `${file.name} · ${(file.size / 1024).toFixed(1)} KB`;
 }
