@@ -611,8 +611,8 @@ function updateTopButtons() {
   if (els.btnTopSignin) {
     els.btnTopSignin.textContent = state.user ? "Profile" : "Sign in";
   }
-  if (els.btnOpenUpload) els.btnOpenUpload.hidden = !hasPermission("upload_resources");
-  if (els.btnHomeUpload) els.btnHomeUpload.hidden = !hasPermission("upload_resources");
+  if (els.btnOpenUpload) els.btnOpenUpload.hidden = state.user ? !hasPermission("upload_resources") : true;
+  if (els.btnHomeUpload) els.btnHomeUpload.hidden = false;
   if (els.backendBadge) {
     els.backendBadge.textContent = state.backendReachable ? "Library connected" : "Offline sample library";
     els.backendBadge.classList.toggle("ok", state.backendReachable);
@@ -759,10 +759,10 @@ function renderUploadPreview() {
 function detailHtml(resource) {
   const imageUrl = resourceImageUrl(resource);
   const comments = commentsForResource(resource.id);
-  const canDownload = hasPermission("download_content");
+  const canDownload = true;
   const canUpload = hasPermission("upload_resources");
-  const canRecommend = hasPermission("recommend_content");
-  const canComment = hasPermission("comment_resources");
+  const canRecommend = state.user ? hasPermission("recommend_content") : false;
+  const canComment = state.user ? hasPermission("comment_resources") : false;
   const canEditResource = Boolean(state.user && (resource.uploaded_by?.id === state.user.id || hasPermission("edit_resources")));
   return `
     <div class="detail-hero">
@@ -1200,14 +1200,14 @@ function bindEvents() {
 
     const downloadButton = event.target.closest("[data-download-resource]");
     if (downloadButton) {
-      if (!hasPermission("download_content")) {
-        showToast("You do not have permission to download.", false);
-        return;
-      }
       const id = downloadButton.getAttribute("data-download-resource");
       const resource = state.resources.find((item) => item.id === id);
       const url = resourceDownloadUrl(resource);
-      if (url) window.open(url, "_blank", "noopener");
+      if (url) {
+        window.open(url, "_blank", "noopener");
+      } else {
+        showToast("No file available for this resource.", false);
+      }
       return;
     }
 
