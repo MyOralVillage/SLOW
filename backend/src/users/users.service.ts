@@ -23,12 +23,20 @@ export class UsersService {
         email: true,
         role: true,
         status: true,
+        country: true,
+        why_interested: true,
         permission_grants: true,
         created_at: true,
+        _count: {
+          select: {
+            resources: true,
+          },
+        },
       },
     });
     return rows.map((row) => ({
       ...row,
+      uploaded_resource_count: row._count.resources,
       permission_grants: normalizePermissionGrants(row.permission_grants),
       permissions: effectivePermissions(row.role, row.permission_grants),
     }));
@@ -71,7 +79,7 @@ export class UsersService {
       data: {
         role: input.role,
         status: input.status,
-        permission_grants: input.permission_grants ? nextGrants : undefined,
+        permission_grants: input.permission_grants !== undefined ? nextGrants : undefined,
       },
       select: {
         id: true,
@@ -79,13 +87,21 @@ export class UsersService {
         email: true,
         role: true,
         status: true,
+        country: true,
+        why_interested: true,
         permission_grants: true,
         created_at: true,
+        _count: {
+          select: {
+            resources: true,
+          },
+        },
       },
     });
 
     return {
       ...row,
+      uploaded_resource_count: row._count.resources,
       permission_grants: normalizePermissionGrants(row.permission_grants),
       permissions: effectivePermissions(row.role, row.permission_grants),
     };

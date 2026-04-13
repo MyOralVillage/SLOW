@@ -3,225 +3,341 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SLOW Visual OIM Library</title>
+    <title>Salone OIM Library</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="app-shell">
-      <header class="hero-shell">
-        <div class="hero-copy">
-          <p class="eyebrow">Salone OIM Library</p>
-          <h1 class="hero-title">A visual library for icons, templates, and image-first OIM resources.</h1>
-          <p class="hero-text">
-            Upload icons fast, browse resources as visual cards, and keep admin visibility light enough for this week’s MVP.
-          </p>
+      <header class="app-header">
+        <div class="app-title-wrap">
+          <h1 class="app-title">Salone OIM Library</h1>
+          <p class="app-subtitle">Icons, templates, and OIM resources.</p>
         </div>
-        <div class="hero-aside">
-          <div class="hero-stat">
-            <span class="hero-stat-label">Focus</span>
-            <strong>Icon-first uploads</strong>
-          </div>
-          <div class="hero-stat">
-            <span class="hero-stat-label">MVP</span>
-            <strong>Auth + admin + backend storage</strong>
-          </div>
-          <div class="hero-stat">
-            <span class="hero-stat-label">Use case</span>
-            <strong>Brett can test the web flow quickly</strong>
-          </div>
+        <div class="top-status">
+          <span id="backend-badge" class="status-pill">Checking connection</span>
+          <button type="button" class="top-action" id="btn-open-upload">Upload</button>
+          <button type="button" class="top-action" id="btn-top-signin">Sign in</button>
         </div>
       </header>
 
-      <section class="topbar">
-        <nav class="nav-tabs" aria-label="Primary">
-          <button type="button" class="nav-tab is-active" data-route="browse">Library</button>
-          <button type="button" class="nav-tab" data-route="upload">Upload</button>
-          <button type="button" class="nav-tab" data-route="admin" id="nav-admin" hidden>Admin</button>
-          <button type="button" class="nav-tab" data-route="signin" id="nav-signin">Sign in</button>
-        </nav>
-        <div class="session-strip">
-          <span id="backend-badge" class="backend-badge">Connecting…</span>
-          <div id="session-pill" class="session-pill">Not signed in</div>
-          <button type="button" class="btn btn-secondary" id="btn-sign-out" hidden>Sign out</button>
-        </div>
+      <section class="route-panel is-active" data-route-panel="home">
+        <section class="section-block">
+          <div class="section-head">
+            <h2>Browse by category</h2>
+          </div>
+          <div class="tile-group">
+            <p class="tile-group-title">Main categories</p>
+            <div id="main-category-grid" class="tile-grid"></div>
+          </div>
+          <div class="tile-group">
+            <p class="tile-group-title">Cross-cutting</p>
+            <div id="cross-category-grid" class="tile-grid tile-grid-small"></div>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-head">
+            <h2>Search</h2>
+          </div>
+          <form id="search-form" class="search-panel" autocomplete="off">
+            <div class="search-grid">
+              <label class="field">
+                <span>Search</span>
+                <input id="search-query" type="search" placeholder="Type a word" />
+              </label>
+              <label class="field">
+                <span>Country</span>
+                <select id="filter-country"></select>
+              </label>
+              <label class="field">
+                <span>Product detail</span>
+                <select id="filter-product-detail"></select>
+              </label>
+              <label class="field">
+                <span>Cross-cutting</span>
+                <select id="filter-cross-cutting"></select>
+              </label>
+              <label class="field">
+                <span>Institution / NGO</span>
+                <select id="filter-institution"></select>
+              </label>
+              <label class="field">
+                <span>Keywords</span>
+                <input id="filter-keywords" type="text" placeholder="Type keywords" />
+              </label>
+            </div>
+            <div class="search-actions">
+              <button type="submit" class="primary-btn">Search</button>
+              <button type="button" class="secondary-btn" id="btn-clear-search">Clear</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="section-block">
+          <div class="section-head section-head-stack">
+            <div>
+              <h2>Resources</h2>
+              <p id="browse-status" class="small-note">Loading resources</p>
+            </div>
+            <div class="section-actions">
+              <button type="button" class="secondary-btn" id="btn-refresh-library">Refresh</button>
+              <button type="button" class="primary-btn" id="btn-home-upload">Upload resource</button>
+            </div>
+          </div>
+          <div id="resource-grid" class="resource-grid" aria-live="polite"></div>
+        </section>
       </section>
 
-      <section id="panel-browse" class="page-section is-active" data-route-panel="browse">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">Visual Resource Library</p>
-            <h2 class="section-title">Browse OIM assets</h2>
-            <p class="section-copy">Search visual resources by keyword, country, category, or type. Results are shown as image-first cards.</p>
+      <section class="route-panel" data-route-panel="messages" hidden>
+        <section class="section-block">
+          <div class="section-head">
+            <h2>Messages</h2>
           </div>
-        </div>
+          <div id="messages-list" class="simple-list"></div>
+        </section>
+      </section>
 
-        <form id="browse-form" class="filter-panel" autocomplete="off">
-          <div class="filter-grid">
+      <section class="route-panel" data-route-panel="notifications" hidden>
+        <section class="section-block">
+          <div class="section-head">
+            <h2>Notifications</h2>
+          </div>
+          <div id="notifications-list" class="simple-list"></div>
+        </section>
+      </section>
+
+      <section class="route-panel" data-route-panel="profile" hidden>
+        <section class="section-block">
+          <div class="section-head">
+            <h2>Profile</h2>
+          </div>
+
+          <div id="auth-panels" class="profile-grid">
+            <form id="signin-form" class="card-panel" novalidate>
+              <h3 class="panel-title">Sign in</h3>
+              <label class="field">
+                <span>Name</span>
+                <input id="signin-name" name="name" type="text" maxlength="120" placeholder="Your name" />
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <input id="signin-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="signin-password" name="password" type="password" maxlength="120" required placeholder="Your password" />
+              </label>
+              <p id="signin-status" class="small-note"></p>
+              <button type="submit" class="primary-btn wide-btn">Sign in</button>
+            </form>
+
+            <form id="signup-form" class="card-panel" novalidate>
+              <h3 class="panel-title">Sign up</h3>
+              <label class="field">
+                <span>Name</span>
+                <input id="signup-name" name="name" type="text" maxlength="120" required placeholder="Your name" />
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <input id="signup-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="signup-password" name="password" type="password" maxlength="120" required placeholder="Create password" />
+              </label>
+              <label class="field">
+                <span>Country</span>
+                <select id="signup-country" name="country"></select>
+              </label>
+              <label class="field">
+                <span>Why interested in wiki</span>
+                <textarea id="signup-interest" name="interest" rows="3" placeholder="Short answer"></textarea>
+              </label>
+              <p id="signup-status" class="small-note"></p>
+              <button type="submit" class="primary-btn wide-btn">Create account</button>
+            </form>
+          </div>
+
+          <div id="profile-editor" class="card-panel" hidden>
+            <div class="profile-top">
+              <div>
+                <h3 class="panel-title">Edit profile</h3>
+                <p id="profile-summary" class="small-note"></p>
+                <p id="profile-permission-summary" class="small-note"></p>
+              </div>
+              <button type="button" class="secondary-btn" id="btn-signout" hidden>Sign out</button>
+            </div>
+            <form id="profile-form" class="profile-form" novalidate>
+              <div class="profile-grid">
+                <label class="field">
+                  <span>User name</span>
+                  <input id="profile-name" name="name" type="text" maxlength="120" />
+                </label>
+                <label class="field">
+                  <span>Verifiable email</span>
+                  <input id="profile-email" name="email" type="email" maxlength="160" />
+                </label>
+                <label class="field">
+                  <span>Photo / avatar</span>
+                  <input id="profile-avatar" name="avatar" type="file" accept="image/*" />
+                </label>
+                <label class="field">
+                  <span>WhatsApp phone</span>
+                  <input id="profile-whatsapp" name="whatsapp" type="text" maxlength="40" placeholder="+232..." />
+                </label>
+                <label class="field field-wide">
+                  <span>Biodata</span>
+                  <textarea id="profile-biodata" name="biodata" rows="3" placeholder="Short biodata"></textarea>
+                </label>
+                <label class="field">
+                  <span>Country affiliation</span>
+                  <select id="profile-country" name="country"></select>
+                </label>
+                <label class="field field-wide">
+                  <span>Why interested in wiki</span>
+                  <textarea id="profile-interest" name="interest" rows="3" placeholder="Short answer"></textarea>
+                </label>
+                <label class="field field-wide">
+                  <span>Social handles</span>
+                  <input id="profile-socials" name="socials" type="text" maxlength="240" placeholder="@name, Facebook, X, Instagram" />
+                </label>
+              </div>
+              <div class="profile-actions">
+                <p id="profile-status" class="small-note"></p>
+                <button type="submit" class="primary-btn">Save profile</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="admin-panel" class="section-block nested-block" hidden>
+            <div class="section-head">
+              <h2>Admin</h2>
+            </div>
+            <div class="admin-grid">
+              <div class="card-panel">
+                <h3 class="panel-title">Trust levels</h3>
+                <p class="small-note">Higher-trust roles need owner or admin approval.</p>
+                <div id="admin-role-list" class="chip-list"></div>
+              </div>
+
+              <div class="card-panel">
+                <div class="panel-head-inline">
+                  <h3 class="panel-title">Users</h3>
+                  <button type="button" class="secondary-btn" id="btn-refresh-users">Refresh</button>
+                </div>
+                <p id="admin-status" class="small-note">Loading users</p>
+                <div id="users-permission-list" class="user-permission-list"></div>
+              </div>
+
+              <div class="card-panel">
+                <h3 class="panel-title">Categories and tags</h3>
+                <div id="admin-category-list" class="chip-list"></div>
+              </div>
+
+              <div class="card-panel">
+                <h3 class="panel-title">Permission set</h3>
+                <div id="admin-permission-list" class="chip-list"></div>
+              </div>
+
+              <div class="card-panel">
+                <h3 class="panel-title">Resources</h3>
+                <div id="admin-resource-list" class="simple-list compact-list"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <nav class="bottom-nav" aria-label="Main navigation">
+        <button type="button" class="bottom-nav-btn is-active" data-route="home">Home</button>
+        <button type="button" class="bottom-nav-btn" data-route="messages">Messages</button>
+        <button type="button" class="bottom-nav-btn" data-route="notifications">Notifications</button>
+        <button type="button" class="bottom-nav-btn" data-route="profile">Profile</button>
+      </nav>
+    </main>
+
+    <div id="detail-modal" class="modal-shell" hidden>
+      <div class="modal-backdrop" data-close-detail></div>
+      <div class="detail-panel">
+        <div class="detail-top">
+          <h2 id="detail-title">Resource</h2>
+          <button type="button" class="close-btn" data-close-detail aria-label="Close">x</button>
+        </div>
+        <div id="detail-body" class="detail-body"></div>
+      </div>
+    </div>
+
+    <div id="upload-modal" class="modal-shell" hidden>
+      <div class="modal-backdrop" data-close-upload></div>
+      <div class="upload-panel">
+        <div class="detail-top">
+          <h2>Upload resource</h2>
+          <button type="button" class="close-btn" data-close-upload aria-label="Close">x</button>
+        </div>
+        <form id="upload-form" class="upload-form" novalidate>
+          <div class="profile-grid">
             <label class="field">
-              <span>Search</span>
-              <input id="filter-query" type="search" placeholder="Search icons, topics, or keywords" />
+              <span>Title</span>
+              <input id="upload-title" name="title" type="text" maxlength="200" required placeholder="Name of resource" />
+            </label>
+            <label class="field field-wide">
+              <span>Short description</span>
+              <textarea id="upload-description" name="description" rows="3" required placeholder="Short description"></textarea>
             </label>
             <label class="field">
               <span>Country</span>
-              <select id="filter-country"></select>
+              <select id="upload-country" name="country" required></select>
             </label>
             <label class="field">
               <span>Category</span>
-              <select id="filter-category"></select>
+              <select id="upload-category" name="category" required></select>
             </label>
             <label class="field">
               <span>Type</span>
-              <select id="filter-type"></select>
+              <select id="upload-type" name="type" required></select>
+            </label>
+            <label class="field">
+              <span>Product detail</span>
+              <select id="upload-product-detail" name="productDetail"></select>
+            </label>
+            <label class="field">
+              <span>Cross-cutting</span>
+              <select id="upload-cross-cutting" name="crossCuttingCategory"></select>
+            </label>
+            <label class="field">
+              <span>Institution / NGO</span>
+              <select id="upload-institution" name="institution"></select>
+            </label>
+            <label class="field field-wide">
+              <span>Keywords</span>
+              <input id="upload-keywords" name="keywords" type="text" maxlength="200" placeholder="Comma separated words" />
+            </label>
+            <label class="field field-wide">
+              <span>File upload</span>
+              <input id="upload-file" name="file" type="file" accept="image/*,.svg,.pdf" required />
             </label>
           </div>
-          <div class="filter-actions">
-            <button type="submit" class="btn btn-primary">Search Library</button>
-            <button type="button" class="btn btn-secondary" id="btn-clear-filters">Clear</button>
-          </div>
-        </form>
 
-        <div class="section-head section-head-inline">
-          <p id="browse-status" class="status-text">Loading resources…</p>
-        </div>
-        <div id="resource-grid" class="resource-grid" aria-live="polite"></div>
-      </section>
-
-      <section id="panel-upload" class="page-section" data-route-panel="upload" hidden>
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">Icon-First Upload</p>
-            <h2 class="section-title">Add a new visual OIM resource</h2>
-            <p class="section-copy">Keep metadata lightweight, preview the image before upload, and save it directly to the shared backend.</p>
-          </div>
-        </div>
-
-        <div class="upload-layout">
-          <form id="upload-form" class="editor-card" novalidate>
-            <div class="field">
-              <label for="upload-title">Title</label>
-              <input id="upload-title" name="title" type="text" maxlength="200" required placeholder="e.g. Savings icon set" />
-            </div>
-            <div class="field">
-              <label for="upload-description">Short description</label>
-              <textarea
-                id="upload-description"
-                name="description"
-                rows="3"
-                maxlength="2000"
-                required
-                placeholder="Briefly describe what this icon or visual resource is for"
-              ></textarea>
-            </div>
-            <div class="field-grid">
-              <label class="field">
-                <span>Country</span>
-                <select id="upload-country" name="country" required></select>
-              </label>
-              <label class="field">
-                <span>Category</span>
-                <select id="upload-category" name="category" required></select>
-              </label>
-              <label class="field">
-                <span>Type</span>
-                <select id="upload-type" name="type" required></select>
-              </label>
-            </div>
-            <div class="field">
-              <label for="upload-keywords">Keywords</label>
-              <input id="upload-keywords" name="keywords" type="text" maxlength="200" placeholder="e.g. savings, cash, group, icon" />
-            </div>
-            <div class="field">
-              <label for="upload-file">File upload</label>
-              <input id="upload-file" name="file" type="file" accept="image/*,.svg,.pdf" required />
-            </div>
-            <p id="upload-status" class="status-text"></p>
-            <button type="submit" class="btn btn-primary btn-wide" id="btn-upload-submit">Upload Resource</button>
-          </form>
-
-          <aside class="preview-card">
-            <p class="preview-kicker">Preview</p>
-            <div id="upload-preview-frame" class="preview-frame">
+          <div class="upload-preview-wrap">
+            <div id="upload-preview-frame" class="upload-preview-frame">
               <div class="preview-placeholder">
-                <span class="preview-placeholder-icon">◌</span>
-                <p>Choose an image, icon, or visual asset to preview it here.</p>
+                <p>Select a file to preview.</p>
               </div>
             </div>
-            <div id="upload-preview-meta" class="preview-meta">
-              <p class="preview-meta-title">No file selected</p>
-              <p class="preview-meta-copy">Image-based resources will display inline after upload.</p>
-            </div>
-          </aside>
-        </div>
-      </section>
-
-      <section id="panel-admin" class="page-section" data-route-panel="admin" hidden>
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">Admin</p>
-            <h2 class="section-title">User management</h2>
-            <p class="section-copy">This MVP admin view is intentionally simple: it shows users, role, status, and created date so we can validate structure quickly.</p>
+            <div id="upload-preview-meta" class="small-note">No file selected</div>
           </div>
-        </div>
 
-        <div class="admin-card">
-          <div class="admin-toolbar">
-            <p id="admin-status" class="status-text">Loading users…</p>
-            <button type="button" class="btn btn-secondary" id="btn-refresh-users">Refresh</button>
+          <div class="profile-actions">
+            <p id="upload-status" class="small-note"></p>
+            <button type="submit" class="primary-btn" id="btn-upload-submit">Upload</button>
           </div>
-          <div class="table-wrap">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody id="users-table-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section id="panel-signin" class="page-section" data-route-panel="signin" hidden>
-        <div class="signin-shell">
-          <form id="signin-form" class="signin-card" novalidate>
-            <p class="section-kicker">Sign In</p>
-            <h2 class="section-title">Access uploads and admin tools</h2>
-            <p class="section-copy">
-              Enter your name and email to start a session. Emails included in the backend `ADMIN_EMAILS` setting are signed in as admins.
-            </p>
-            <div class="field">
-              <label for="signin-name">Name</label>
-              <input id="signin-name" name="name" type="text" maxlength="120" placeholder="Your name" />
-            </div>
-            <div class="field">
-              <label for="signin-email">Email</label>
-              <input id="signin-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
-            </div>
-            <p id="signin-status" class="status-text"></p>
-            <button type="submit" class="btn btn-primary btn-wide">Sign In</button>
-          </form>
-        </div>
-      </section>
-    </main>
-
-    <div id="modal-root" class="modal-root" hidden>
-      <div class="modal-backdrop" data-close-modal></div>
-      <div class="modal-card">
-        <div class="modal-top">
-          <h3 id="modal-title">Preview</h3>
-          <button type="button" class="modal-close" data-close-modal aria-label="Close">×</button>
-        </div>
-        <div id="modal-body" class="modal-body"></div>
+        </form>
       </div>
     </div>
 

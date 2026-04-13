@@ -45,7 +45,9 @@ const state = {
   resources: [],
   filteredResources: [],
   users: [],
+  commentsByResource: {},
   activeDetailId: null,
+  editingResourceId: null,
   uploadPreviewUrl: null,
   searchTimer: null,
   profileStoreCache: readJsonStore(PROFILE_STORE_KEY),
@@ -79,10 +81,12 @@ const els = {
   signInForm: document.getElementById("signin-form"),
   signInName: document.getElementById("signin-name"),
   signInEmail: document.getElementById("signin-email"),
+  signInPassword: document.getElementById("signin-password"),
   signInStatus: document.getElementById("signin-status"),
   signupForm: document.getElementById("signup-form"),
   signupName: document.getElementById("signup-name"),
   signupEmail: document.getElementById("signup-email"),
+  signupPassword: document.getElementById("signup-password"),
   signupCountry: document.getElementById("signup-country"),
   signupInterest: document.getElementById("signup-interest"),
   signupStatus: document.getElementById("signup-status"),
@@ -118,6 +122,9 @@ const els = {
   uploadCountry: document.getElementById("upload-country"),
   uploadCategory: document.getElementById("upload-category"),
   uploadType: document.getElementById("upload-type"),
+  uploadProductDetail: document.getElementById("upload-product-detail"),
+  uploadCrossCutting: document.getElementById("upload-cross-cutting"),
+  uploadInstitution: document.getElementById("upload-institution"),
   uploadKeywords: document.getElementById("upload-keywords"),
   uploadFile: document.getElementById("upload-file"),
   uploadStatus: document.getElementById("upload-status"),
@@ -211,7 +218,7 @@ function recommendationsStore() {
 }
 
 function commentsForResource(id) {
-  return commentsStore()[id] || [];
+  return state.commentsByResource[id] || commentsStore()[id] || [];
 }
 
 function saveComment(resourceId, comment) {
@@ -295,6 +302,9 @@ function initFields() {
   fillSelect(els.uploadCountry, metadata.countries, "Choose country");
   fillSelect(els.uploadCategory, [...metadata.mainCategories, ...metadata.crossCuttingCategories], "Choose category");
   fillSelect(els.uploadType, metadata.types, "Choose type");
+  fillSelect(els.uploadProductDetail, metadata.productDetails, "Choose detail");
+  fillSelect(els.uploadCrossCutting, metadata.crossCuttingCategories, "Choose cross-cutting");
+  fillSelect(els.uploadInstitution, metadata.institutions, "Choose institution");
   if (metadata.types.includes("Icon")) {
     els.uploadType.value = "Icon";
   }
@@ -487,6 +497,8 @@ function renderUsers() {
             <div>
               <strong>${escapeHtml(user.name)}</strong>
               <p>${escapeHtml(user.email)}</p>
+              <p class="small-note">${escapeHtml(user.country || "No country")} · ${escapeHtml(String(user.uploaded_resource_count || 0))} uploads</p>
+              ${user.why_interested ? `<p class="small-note">${escapeHtml(user.why_interested)}</p>` : ""}
             </div>
             <div class="tag-row">
               <span class="tag">${escapeHtml(user.role)}</span>
@@ -532,7 +544,7 @@ function renderMessages() {
     els.messagesList.innerHTML = `<div class="simple-item"><span>You do not have permission to use messages.</span></div>`;
     return;
   }
-  const allComments = Object.values(commentsStore()).flat();
+  const allComments = Object.values(state.commentsByResource).flat();
   els.messagesList.innerHTML = allComments.length
     ? allComments
         .slice()
@@ -541,8 +553,8 @@ function renderMessages() {
         .map(
           (comment) => `
             <div class="simple-item">
-              <strong>${escapeHtml(comment.name)}</strong>
-              <span>${escapeHtml(comment.message)}</span>
+              <strong>${escapeHtml(comment.user?.name || comment.name || "Member")}</strong>
+              <span>${escapeHtml(comment.body || comment.message || "")}</span>
             </div>
           `,
         )
@@ -619,19 +631,19 @@ function updateProfileUi() {
   if (els.profilePermissionSummary) {
     els.profilePermissionSummary.textContent = `Permissions: ${userPermissions().join(", ") || "none"}`;
   }
-  els.profileName.value = profile?.name || state.user.name || "";
-  els.profileEmail.value = profile?.email || state.user.email || "";
-  els.profileWhatsapp.value = profile?.whatsapp || "";
-  els.profileBiodata.value = profile?.biodata || "";
-  els.profileCountry.value = profile?.country || "";
-  els.profileInterest.value = profile?.interest || "";
-  els.profileSocials.value = profile?.socials || "";
+  els.profileName.value = state.user.name || profile?.name || "";
+  els.profileEmail.value = state.user.email || profile?.email || "";
+  els.profileWhatsapp.value = state.user.whatsapp_phone || profile?.whatsapp || "";
+  els.profileBiodata.value = state.user.biodata || profile?.biodata || "";
+  els.profileCountry.value = state.user.country || profile?.country || "";
+  els.profileInterest.value = state.user.why_interested || profile?.interest || "";
+  els.profileSocials.value = state.user.social_handles || profile?.socials || "";
 }
 
 async function restoreSession() {
   if (!state.token) return;
   try {
-    const res = await apiFetch("/auth/session");
+    const res = await apiFetch("/auth/me");
     if (!res.ok) throw new Error("Session ended");
     const json = await res.json();
     state.user = json.user;
@@ -681,11 +693,29 @@ function openUploadModal() {
     showToast("You do not have permission to upload.", false);
     return;
   }
+  if (!state.editingResourceId) {
+    els.uploadForm.reset();
+    renderUploadPreview();
+  }
   els.uploadModal.hidden = false;
+}
+
+function prefillUploadFromResource(resource) {
+  if (!resource) return;
+  els.uploadTitle.value = resource.title || "";
+  els.uploadDescription.value = resource.description || "";
+  els.uploadCountry.value = resource.country || "";
+  els.uploadCategory.value = resource.category || "";
+  els.uploadType.value = resource.type || "";
+  if (els.uploadProductDetail) els.uploadProductDetail.value = resource.productDetail || "";
+  if (els.uploadCrossCutting) els.uploadCrossCutting.value = resource.crossCutting || "";
+  if (els.uploadInstitution) els.uploadInstitution.value = resource.institution || "";
+  els.uploadKeywords.value = Array.isArray(resource.keywords) ? resource.keywords.join(", ") : "";
 }
 
 function closeUploadModal() {
   els.uploadModal.hidden = true;
+  state.editingResourceId = null;
 }
 
 function closeDetailModal() {
@@ -726,6 +756,7 @@ function detailHtml(resource) {
   const canUpload = hasPermission("upload_resources");
   const canRecommend = hasPermission("recommend_content");
   const canComment = hasPermission("comment_resources");
+  const canEditResource = Boolean(state.user && (resource.uploaded_by?.id === state.user.id || hasPermission("edit_resources")));
   return `
     <div class="detail-hero">
       <div class="detail-side">
@@ -755,6 +786,8 @@ function detailHtml(resource) {
           <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download</button>
           <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend (${recommendationCount(resource.id)})</button>
           <button type="button" class="secondary-btn" data-open-upload-inline="1" ${canUpload ? "" : "disabled"}>Upload similar</button>
+          ${canEditResource ? `<button type="button" class="secondary-btn" data-edit-resource="${escapeHtml(resource.id)}">Edit</button>` : ""}
+          ${canEditResource ? `<button type="button" class="secondary-btn" data-delete-resource="${escapeHtml(resource.id)}">Delete</button>` : ""}
         </div>
       </div>
     </div>
@@ -770,8 +803,8 @@ function detailHtml(resource) {
                 .map(
                   (comment) => `
                     <div class="simple-item">
-                      <strong>${escapeHtml(comment.name)}</strong>
-                      <span>${escapeHtml(comment.message)}</span>
+                      <strong>${escapeHtml(comment.user?.name || comment.name || "Member")}</strong>
+                      <span>${escapeHtml(comment.body || comment.message || "")}</span>
                     </div>
                   `,
                 )
@@ -779,24 +812,55 @@ function detailHtml(resource) {
             : `<div class="simple-item"><span>No comments yet</span></div>`
         }
       </div>
-      <form class="comment-form" data-comment-form="${escapeHtml(resource.id)}">
-        <label class="field">
-          <span>Add comment</span>
-          <textarea name="message" rows="3" placeholder="${canComment ? "Write a short comment" : "You do not have permission to comment"}" ${canComment ? "" : "disabled"}></textarea>
-        </label>
-        <button type="submit" class="primary-btn" ${canComment ? "" : "disabled"}>Post comment</button>
-      </form>
+      ${
+        state.user
+          ? `
+            <form class="comment-form" data-comment-form="${escapeHtml(resource.id)}">
+              <label class="field">
+                <span>Add comment</span>
+                <textarea name="message" rows="3" placeholder="${canComment ? "Write a short comment" : "You do not have permission to comment"}" ${canComment ? "" : "disabled"}></textarea>
+              </label>
+              <button type="submit" class="primary-btn" ${canComment ? "" : "disabled"}>Post comment</button>
+            </form>
+          `
+          : `<p class="small-note">Sign in to comment.</p>`
+      }
     </section>
   `;
 }
 
-function openDetail(resourceId) {
+async function loadResourceComments(resourceId) {
+  try {
+    const res = await apiFetch(`/resources/${encodeURIComponent(resourceId)}/comments`);
+    if (!res.ok) throw new Error(await errorText(res, "Could not load comments"));
+    const json = await res.json();
+    state.commentsByResource[resourceId] = Array.isArray(json.rows) ? json.rows : [];
+  } catch {
+    state.commentsByResource[resourceId] = commentsStore()[resourceId] || [];
+  }
+}
+
+async function openDetail(resourceId) {
+  const current = state.resources.find((item) => item.id === resourceId);
+  els.detailTitle.textContent = current?.title || "Resource";
+  els.detailBody.innerHTML = `<div class="simple-item"><span>Loading resource</span></div>`;
+  els.detailModal.hidden = false;
+  state.activeDetailId = resourceId;
+
+  try {
+    const [resourceRes] = await Promise.all([apiFetch(`/resources/${encodeURIComponent(resourceId)}`), loadResourceComments(resourceId)]);
+    if (resourceRes.ok) {
+      const fresh = normalizeResource(await resourceRes.json());
+      state.resources = state.resources.map((item) => (item.id === resourceId ? fresh : item));
+    }
+  } catch {
+    /* keep current resource */
+  }
+
   const resource = state.resources.find((item) => item.id === resourceId);
   if (!resource) return;
-  state.activeDetailId = resourceId;
   els.detailTitle.textContent = resource.title;
   els.detailBody.innerHTML = detailHtml(resource);
-  els.detailModal.hidden = false;
 }
 
 function applySearch() {
@@ -822,27 +886,32 @@ function clearSearch() {
 }
 
 async function doAuth(name, email, statusEl) {
-  return await doAuthRequest("/auth/sign-in", name, email, statusEl);
+  return await doAuthRequest("/auth/login", { name, email, password: els.signInPassword?.value.trim() || "" }, statusEl);
 }
 
-async function doAuthRequest(path, name, email, statusEl) {
-  const res = await apiFetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email }),
-  });
-  if (!res.ok) {
-    showStatus(statusEl, await errorText(res, "Could not sign in"), false);
+async function doAuthRequest(path, payload, statusEl) {
+  try {
+    const res = await apiFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      showStatus(statusEl, await errorText(res, "Could not sign in"), false);
+      return null;
+    }
+    const json = await res.json();
+    state.token = json.token;
+    state.user = json.user;
+    localStorage.setItem(SESSION_TOKEN_KEY, state.token);
+    updateTopButtons();
+    updateProfileUi();
+    await loadUsers();
+    return json;
+  } catch (error) {
+    showStatus(statusEl, error.message || "Could not reach the server", false);
     return null;
   }
-  const json = await res.json();
-  state.token = json.token;
-  state.user = json.user;
-  localStorage.setItem(SESSION_TOKEN_KEY, state.token);
-  updateTopButtons();
-  updateProfileUi();
-  await loadUsers();
-  return json;
 }
 
 async function saveUserPermissions(userId) {
@@ -885,8 +954,9 @@ async function handleSignIn(event) {
   event.preventDefault();
   const name = els.signInName.value.trim();
   const email = els.signInEmail.value.trim();
-  if (!email) {
-    showStatus(els.signInStatus, "Enter your email", false);
+  const password = els.signInPassword.value.trim();
+  if (!email || !password) {
+    showStatus(els.signInStatus, "Enter email and password", false);
     return;
   }
   showStatus(els.signInStatus, "Signing in", true);
@@ -901,14 +971,19 @@ async function handleSignUp(event) {
   event.preventDefault();
   const name = els.signupName.value.trim();
   const email = els.signupEmail.value.trim();
+  const password = els.signupPassword.value.trim();
   const country = els.signupCountry.value;
   const interest = els.signupInterest.value.trim();
-  if (!name || !email) {
-    showStatus(els.signupStatus, "Enter name and email", false);
+  if (!name || !email || !password) {
+    showStatus(els.signupStatus, "Enter name, email, and password", false);
     return;
   }
   showStatus(els.signupStatus, "Creating account", true);
-  const result = await doAuthRequest("/auth/sign-up", name, email, els.signupStatus);
+  const result = await doAuthRequest(
+    "/auth/signup",
+    { name, email, password, country, whyInterested: interest },
+    els.signupStatus,
+  );
   if (!result) return;
   saveProfile(email, {
     name,
@@ -949,27 +1024,42 @@ function handleProfileSave(event) {
     showStatus(els.profileStatus, "Email is required", false);
     return;
   }
-  saveProfile(email, {
+  const payload = {
     name: els.profileName.value.trim(),
-    email,
-    whatsapp: els.profileWhatsapp.value.trim(),
-    biodata: els.profileBiodata.value.trim(),
     country: els.profileCountry.value,
-    interest: els.profileInterest.value.trim(),
-    socials: els.profileSocials.value.trim(),
+    whyInterested: els.profileInterest.value.trim(),
+    whatsappPhone: els.profileWhatsapp.value.trim(),
+    biodata: els.profileBiodata.value.trim(),
+    socialHandles: els.profileSocials.value.trim(),
     avatarName: els.profileAvatar.files?.[0]?.name || getSavedProfile(email)?.avatarName || "",
-  });
-  if (state.user) {
-    state.user = {
-      ...state.user,
-      name: els.profileName.value.trim() || state.user.name,
-      email,
-    };
-  }
-  showStatus(els.profileStatus, "Profile saved", true);
-  updateTopButtons();
-  updateProfileUi();
-  showToast("Profile saved", true);
+  };
+  apiFetch("/auth/profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+    .then(async (res) => {
+      if (!res.ok) throw new Error(await errorText(res, "Could not save profile"));
+      const json = await res.json();
+      state.user = json.user;
+      saveProfile(email, {
+        name: els.profileName.value.trim(),
+        email,
+        whatsapp: els.profileWhatsapp.value.trim(),
+        biodata: els.profileBiodata.value.trim(),
+        country: els.profileCountry.value,
+        interest: els.profileInterest.value.trim(),
+        socials: els.profileSocials.value.trim(),
+        avatarName: payload.avatarName,
+      });
+      showStatus(els.profileStatus, "Profile saved", true);
+      updateTopButtons();
+      updateProfileUi();
+      showToast("Profile saved", true);
+    })
+    .catch((error) => {
+      showStatus(els.profileStatus, error.message || "Could not save profile", false);
+    });
 }
 
 async function handleUpload(event) {
@@ -987,32 +1077,39 @@ async function handleUpload(event) {
     country: els.uploadCountry.value,
     category: els.uploadCategory.value,
     type: els.uploadType.value,
+    productDetail: els.uploadProductDetail?.value || "",
+    crossCuttingCategory: els.uploadCrossCutting?.value || "",
+    institution: els.uploadInstitution?.value || "",
     keywords: els.uploadKeywords.value.trim(),
   };
 
-  if (!payload.title || !payload.description || !payload.country || !payload.category || !payload.type || !file) {
-    showStatus(els.uploadStatus, "Complete all fields and choose a file", false);
+  if (!payload.title || !payload.description || !payload.country || !payload.category || !payload.type || (!file && !state.editingResourceId)) {
+    showStatus(els.uploadStatus, state.editingResourceId ? "Complete all required fields" : "Complete all fields and choose a file", false);
     return;
   }
 
   const formData = new FormData();
   Object.entries(payload).forEach(([key, value]) => formData.append(key, value));
-  formData.append("file", file, file.name);
+  if (file) formData.append("file", file, file.name);
+  const isEditing = Boolean(state.editingResourceId);
 
   els.uploadSubmit.disabled = true;
-  showStatus(els.uploadStatus, "Uploading", true);
+  showStatus(els.uploadStatus, isEditing ? "Saving changes" : "Uploading", true);
 
   try {
-    const res = await apiFetch("/resources/upload", { method: "POST", body: formData });
-    if (!res.ok) throw new Error(await errorText(res, "Upload failed"));
+    const path = isEditing ? `/resources/${encodeURIComponent(state.editingResourceId)}` : "/resources";
+    const method = isEditing ? "PUT" : "POST";
+    const res = await apiFetch(path, { method, body: formData });
+    if (!res.ok) throw new Error(await errorText(res, isEditing ? "Update failed" : "Upload failed"));
     closeUploadModal();
     els.uploadForm.reset();
     renderUploadPreview();
     await loadResources();
-    showToast("Resource uploaded", true);
+    showToast(isEditing ? "Resource updated" : "Resource uploaded", true);
   } catch (error) {
-    showStatus(els.uploadStatus, error.message || "Upload failed", false);
+    showStatus(els.uploadStatus, error.message || (isEditing ? "Update failed" : "Upload failed"), false);
   } finally {
+    state.editingResourceId = null;
     els.uploadSubmit.disabled = false;
   }
 }
@@ -1109,7 +1206,37 @@ function bindEvents() {
 
     if (event.target.closest("[data-open-upload-inline]")) {
       closeDetailModal();
+      prefillUploadFromResource(state.resources.find((item) => item.id === state.activeDetailId));
+      state.editingResourceId = null;
       openUploadModal();
+      return;
+    }
+
+    const editButton = event.target.closest("[data-edit-resource]");
+    if (editButton) {
+      const id = editButton.getAttribute("data-edit-resource");
+      const resource = state.resources.find((item) => item.id === id);
+      state.editingResourceId = id;
+      closeDetailModal();
+      prefillUploadFromResource(resource);
+      openUploadModal();
+      return;
+    }
+
+    const deleteButton = event.target.closest("[data-delete-resource]");
+    if (deleteButton) {
+      const id = deleteButton.getAttribute("data-delete-resource");
+      apiFetch(`/resources/${encodeURIComponent(id)}`, { method: "DELETE" })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(await errorText(res, "Could not delete resource"));
+          state.resources = state.resources.filter((item) => item.id !== id);
+          state.filteredResources = filterResources(state.resources);
+          closeDetailModal();
+          renderResources();
+          renderAdmin();
+          showToast("Resource deleted", true);
+        })
+        .catch((error) => showToast(error.message || "Could not delete resource", false));
       return;
     }
 
@@ -1123,20 +1250,33 @@ function bindEvents() {
     const form = event.target.closest("[data-comment-form]");
     if (!form) return;
     event.preventDefault();
+    if (!state.user) {
+      showToast("Sign in to comment.", false);
+      setRoute("profile");
+      return;
+    }
     if (!hasPermission("comment_resources")) return;
     const resourceId = form.getAttribute("data-comment-form");
     const messageEl = form.querySelector("textarea[name='message']");
     const message = messageEl.value.trim();
     if (!message) return;
-    saveComment(resourceId, {
-      name: state.user.name,
-      message,
-      created_at: new Date().toISOString(),
-    });
-    messageEl.value = "";
-    openDetail(resourceId);
-    renderMessages();
-    showToast("Comment added", true);
+    apiFetch(`/resources/${encodeURIComponent(resourceId)}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: message }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await errorText(res, "Could not save comment"));
+        const comment = await res.json();
+        state.commentsByResource[resourceId] = [...commentsForResource(resourceId), comment];
+        messageEl.value = "";
+        openDetail(resourceId);
+        renderMessages();
+        showToast("Comment added", true);
+      })
+      .catch((error) => {
+        showToast(error.message || "Could not save comment", false);
+      });
   });
 
   window.addEventListener("hashchange", () => applyRoute(routeFromHash()));

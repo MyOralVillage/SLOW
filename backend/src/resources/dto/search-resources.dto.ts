@@ -19,6 +19,21 @@ export class SearchResourcesDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  productDetail?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  crossCuttingCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  institution?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(200)
   keywords?: string;
 

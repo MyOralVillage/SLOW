@@ -30,14 +30,22 @@ model User {
   id         String      @id @default(uuid())
   name       String
   email      String      @unique
+  password_hash String?
   role       UserRole    @default(member)
   status     UserStatus  @default(active)
+  country    String?
+  why_interested String?
+  avatar_name String?
+  whatsapp_phone String?
+  biodata    String?
+  social_handles String?
   permission_grants String[] @default([])
   created_at DateTime    @default(now())
   updated_at DateTime    @updatedAt
 
   sessions   Session[]
   resources  Resource[]  @relation("UploadedResources")
+  comments   Comment[]
 
   @@index([role])
   @@index([status])
@@ -62,6 +70,9 @@ model Resource {
   description       String
   country           String
   category          String
+  product_detail    String?
+  cross_cutting_category String?
+  institution       String?
   type              String
   keywords          String[]
   created_at        DateTime    @default(now())
@@ -69,6 +80,7 @@ model Resource {
 
   uploaded_by       String?
   uploadedBy        User?       @relation("UploadedResources", fields: [uploaded_by], references: [id], onDelete: SetNull)
+  comments          Comment[]
 
   file_storage      FileStorage @default(disk)
   storage_key       String?
@@ -80,6 +92,24 @@ model Resource {
 
   @@index([country])
   @@index([category])
+  @@index([product_detail])
+  @@index([cross_cutting_category])
+  @@index([institution])
   @@index([type])
   @@index([uploaded_by])
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  body       String
+  created_at DateTime @default(now())
+
+  resource_id String
+  resource    Resource @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([resource_id, created_at])
+  @@index([user_id])
 }

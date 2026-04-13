@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -26,6 +26,9 @@ function resourceCreateData(dto: CreateResourceDto, uploadedByUserId?: string | 
     description: dto.description.trim(),
     country: dto.country.trim(),
     category: dto.category.trim(),
+    product_detail: dto.productDetail?.trim() || null,
+    cross_cutting_category: dto.crossCuttingCategory?.trim() || null,
+    institution: dto.institution?.trim() || null,
     type: dto.type.trim(),
     keywords: normalizeKeywords(dto.keywords),
     original_filename: originalFilename || dto.originalFilename?.trim() || null,
@@ -47,6 +50,9 @@ export class ResourcesService {
       description: row.description,
       country: row.country,
       category: row.category,
+      productDetail: row.product_detail || "",
+      crossCutting: row.cross_cutting_category || "",
+      institution: row.institution || "",
       type: row.type,
       keywords: row.keywords || [],
       created_at: row.created_at,
@@ -83,6 +89,21 @@ export class ResourcesService {
     } as const;
   }
 
+  private async requireEditableResource(resourceId: string, userId: string, permissions: string[] = []) {
+    const row = await this.prisma.resource.findUnique({
+      where: { id: resourceId },
+      select: {
+        id: true,
+        uploaded_by: true,
+      },
+    });
+    if (!row) throw new NotFoundException("Resource not found.");
+    if (row.uploaded_by === userId || permissions.includes("edit_resources")) {
+      return row;
+    }
+    throw new ForbiddenException("You do not have permission to change this resource.");
+  }
+
   async create(dto: CreateResourceDto, uploadedByUserId?: string | null) {
     assertValidCreateDto(dto);
     const row = await this.prisma.resource.create({
@@ -90,6 +111,58 @@ export class ResourcesService {
       include: this.resourceInclude(),
     });
     return this.toResourceResponse(row);
+  }
+
+  async update(
+    id: string,
+    dto: CreateResourceDto,
+    auth: { userId: string; permissions?: string[] },
+    file?: Express.Multer.File,
+  ) {
+    assertValidCreateDto(dto);
+    await this.requireEditableResource(id, auth.userId, auth.permissions);
+
+    const data: any = resourceCreateData(dto, auth.userId, file?.originalname || null);
+    delete data.uploaded_by;
+
+    if (file?.buffer) {
+      const stored = await this.disk.writeResourceFile(id, file.originalname, file.buffer);
+      data.file_storage = "disk";
+      data.storage_key = stored.storageKey;
+      data.file_path = stored.absolutePath;
+      data.mime_type = file.mimetype || null;
+      data.size_bytes = BigInt(stored.sizeBytes);
+      data.original_filename = file.originalname || null;
+      data.sha256 = stored.sha256;
+    }
+
+    const row = await this.prisma.resource.update({
+      where: { id },
+      data,
+      include: this.resourceInclude(),
+    });
+    return this.toResourceResponse(row);
+  }
+
+  async remove(id: string, auth: { userId: string; permissions?: string[] }) {
+    const existing = await this.prisma.resource.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        file_path: true,
+        uploaded_by: true,
+      },
+    });
+    if (!existing) throw new NotFoundException("Resource not found.");
+    if (existing.uploaded_by !== auth.userId && !auth.permissions?.includes("edit_resources")) {
+      throw new ForbiddenException("You do not have permission to remove this resource.");
+    }
+
+    await this.prisma.resource.delete({ where: { id } });
+    if (existing.file_path) {
+      await fs.promises.unlink(existing.file_path).catch(() => undefined);
+    }
+    return { ok: true };
   }
 
   async createWithFile(dto: CreateResourceDto, file: Express.Multer.File, uploadedByUserId?: string | null) {
@@ -147,15 +220,19 @@ export class ResourcesService {
     if (q.country) where.country = q.country;
     if (q.category) where.category = q.category;
     if (q.type) where.type = q.type;
+    if (q.productDetail) where.product_detail = q.productDetail;
+    if (q.crossCuttingCategory) where.cross_cutting_category = q.crossCuttingCategory;
+    if (q.institution) where.institution = q.institution;
 
     const queryParts: any[] = [];
     const textQuery = (q.query || "").trim();
     if (textQuery) {
       queryParts.push(
-        { title: { contains: textQuery, mode: "insensitive" } },
-        { description: { contains: textQuery, mode: "insensitive" } },
-        { keywords: { has: textQuery } },
-      );
+          { title: { contains: textQuery, mode: "insensitive" } },
+          { description: { contains: textQuery, mode: "insensitive" } },
+          { institution: { contains: textQuery, mode: "insensitive" } },
+          { keywords: { has: textQuery } },
+        );
     }
 
     const kw = (q.keywords || "").trim();
@@ -169,6 +246,7 @@ export class ResourcesService {
         queryParts.push(
           { title: { contains: bit, mode: "insensitive" } },
           { description: { contains: bit, mode: "insensitive" } },
+          { institution: { contains: bit, mode: "insensitive" } },
           { keywords: { has: bit } },
         );
       }
@@ -199,5 +277,58 @@ export class ResourcesService {
     if (!fs.existsSync(abs)) throw new NotFoundException("File missing on disk.");
     const stat = await fs.promises.stat(abs);
     return { row, abs, stat, stream: fs.createReadStream(abs) };
+  }
+
+  async listComments(resourceId: string) {
+    await this.getById(resourceId);
+    const rows = await this.prisma.comment.findMany({
+      where: { resource_id: resourceId },
+      orderBy: { created_at: "asc" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      body: row.body,
+      created_at: row.created_at,
+      user: row.user,
+    }));
+  }
+
+  async addComment(resourceId: string, userId: string, body: string) {
+    const message = String(body || "").trim();
+    if (!message) {
+      throw new BadRequestException("Comment cannot be empty.");
+    }
+    await this.getById(resourceId);
+    const row = await this.prisma.comment.create({
+      data: {
+        resource_id: resourceId,
+        user_id: userId,
+        body: message,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
+    });
+    return {
+      id: row.id,
+      body: row.body,
+      created_at: row.created_at,
+      user: row.user,
+    };
   }
 }

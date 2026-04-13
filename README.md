@@ -6,8 +6,8 @@ How to run this project locally.
 
 The current MVP is built around:
 - visual/icon resource uploads stored in **PostgreSQL** + **local disk**
-- lightweight sign-in with database-backed sessions
-- basic admin user listing for `admin`, `member`, and `guest`
+- password-based sign up / login with database-backed sessions
+- profile basics, comments, resource detail, and admin user listing
 
 ### Run Postgres + backend (Docker Compose)
 
@@ -34,7 +34,7 @@ npm run prisma:migrate
 npm run dev
 ```
 
-Set `ADMIN_EMAILS` in `backend/.env` to whichever emails should sign in as admins.
+Set `OWNER_EMAILS` / `ADMIN_EMAILS` in `backend/.env` to whichever emails should sign in as elevated users.
 
 ## Web UI (sign in + icon uploads + admin)
 
@@ -55,19 +55,25 @@ python3 web/server.py
 
 3. Open `http://127.0.0.1:8080`
 
-4. Sign in with any email.
-If the email matches `ADMIN_EMAILS`, the app exposes the admin page.
+4. Create an account from the web UI, then sign in with the same email and password.
+If the email matches `OWNER_EMAILS` or `ADMIN_EMAILS`, the app exposes the admin page.
 
 ## Main API endpoints
 
-- `POST /api/auth/sign-in`
-- `GET /api/auth/session`
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
 - `POST /api/auth/sign-out`
+- `POST /api/auth/profile`
 - `GET /api/users` (admin only)
-- `POST /api/resources/upload`
 - `GET /api/resources`
 - `GET /api/resources/search`
 - `GET /api/resources/:id`
+- `POST /api/resources`
+- `PUT /api/resources/:id`
+- `DELETE /api/resources/:id`
+- `GET /api/resources/:id/comments`
+- `POST /api/resources/:id/comments`
 - `GET /api/resources/:id/file`
 
 ## Deployment / sharing
@@ -89,6 +95,19 @@ python3 web/server.py
 ```
 
 If you need a quick all-local demo, running the backend on `3001` and the web server on `8080` is enough.
+
+## Notes
+
+- Prisma schema changed for passwords, richer resources, comments, and profile fields, so run:
+
+```bash
+cd backend
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+- Uploaded files are stored in `uploads/` on local disk for this MVP.
+- For quick remote review, you can share the backend with `ngrok http 3001` and then point the static web app at that URL.
 
 ## Legacy API smoke test (optional)
 
