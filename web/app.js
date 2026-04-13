@@ -3,8 +3,11 @@ const PROFILE_STORE_KEY = "slow_profile_store_v1";
 const COMMENT_STORE_KEY = "slow_comment_store_v1";
 const RECOMMEND_STORE_KEY = "slow_recommend_store_v1";
 
+const PRODUCTION_API = "https://slow-57j2.onrender.com/api";
+const LOCAL_API = "http://127.0.0.1:3001/api";
+
 const config = {
-  backendBaseUrl: "http://127.0.0.1:3001/api",
+  backendBaseUrl: location.hostname === "127.0.0.1" || location.hostname === "localhost" ? LOCAL_API : PRODUCTION_API,
 };
 
 const metadata = window.SLOW_UPLOAD_OPTIONS || {
