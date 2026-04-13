@@ -47,6 +47,10 @@ const state = {
   users: [],
   activeDetailId: null,
   uploadPreviewUrl: null,
+  searchTimer: null,
+  profileStoreCache: readJsonStore(PROFILE_STORE_KEY),
+  commentStoreCache: readJsonStore(COMMENT_STORE_KEY),
+  recommendStoreCache: readJsonStore(RECOMMEND_STORE_KEY),
 };
 
 const els = {
@@ -183,27 +187,27 @@ function writeJsonStore(key, value) {
 }
 
 function profileStore() {
-  return readJsonStore(PROFILE_STORE_KEY);
+  return state.profileStoreCache;
 }
 
 function saveProfile(email, data) {
-  const store = profileStore();
+  const store = { ...profileStore() };
   store[email.toLowerCase()] = data;
+  state.profileStoreCache = store;
   writeJsonStore(PROFILE_STORE_KEY, store);
 }
 
 function getSavedProfile(email) {
   if (!email) return null;
-  const store = profileStore();
-  return store[email.toLowerCase()] || null;
+  return profileStore()[email.toLowerCase()] || null;
 }
 
 function commentsStore() {
-  return readJsonStore(COMMENT_STORE_KEY);
+  return state.commentStoreCache;
 }
 
 function recommendationsStore() {
-  return readJsonStore(RECOMMEND_STORE_KEY);
+  return state.recommendStoreCache;
 }
 
 function commentsForResource(id) {
@@ -211,14 +215,16 @@ function commentsForResource(id) {
 }
 
 function saveComment(resourceId, comment) {
-  const store = commentsStore();
+  const store = { ...commentsStore() };
   store[resourceId] = [...(store[resourceId] || []), comment];
+  state.commentStoreCache = store;
   writeJsonStore(COMMENT_STORE_KEY, store);
 }
 
 function recommendResource(resourceId) {
-  const store = recommendationsStore();
+  const store = { ...recommendationsStore() };
   store[resourceId] = Number(store[resourceId] || 0) + 1;
+  state.recommendStoreCache = store;
   writeJsonStore(RECOMMEND_STORE_KEY, store);
 }
 
@@ -252,7 +258,13 @@ async function apiFetch(path, options = {}) {
 async function errorText(res, fallback) {
   try {
     const text = (await res.text()).trim();
-    return text || fallback;
+    if (!text) return fallback;
+    try {
+      const json = JSON.parse(text);
+      return json.message || json.error || fallback;
+    } catch {
+      return text;
+    }
   } catch {
     return fallback;
   }
@@ -793,6 +805,13 @@ function applySearch() {
   renderResources();
 }
 
+function scheduleApplySearch() {
+  window.clearTimeout(state.searchTimer);
+  state.searchTimer = window.setTimeout(() => {
+    applySearch();
+  }, 120);
+}
+
 function clearSearch() {
   els.searchForm.reset();
   fillSelect(els.filterCountry, metadata.countries, "All countries");
@@ -803,7 +822,11 @@ function clearSearch() {
 }
 
 async function doAuth(name, email, statusEl) {
-  const res = await apiFetch("/auth/sign-in", {
+  return await doAuthRequest("/auth/sign-in", name, email, statusEl);
+}
+
+async function doAuthRequest(path, name, email, statusEl) {
+  const res = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email }),
@@ -885,7 +908,7 @@ async function handleSignUp(event) {
     return;
   }
   showStatus(els.signupStatus, "Creating account", true);
-  const result = await doAuth(name, email, els.signupStatus);
+  const result = await doAuthRequest("/auth/sign-up", name, email, els.signupStatus);
   if (!result) return;
   saveProfile(email, {
     name,
@@ -897,6 +920,8 @@ async function handleSignUp(event) {
     socials: "",
     avatarName: "",
   });
+  els.signupForm.reset();
+  if (els.signupCountry) els.signupCountry.value = country;
   updateProfileUi();
   showStatus(els.signupStatus, "Account created", true);
   showToast("Account created", true);
@@ -1011,6 +1036,12 @@ function bindEvents() {
     event.preventDefault();
     applySearch();
   });
+  [els.searchQuery, els.filterCountry, els.filterProductDetail, els.filterCrossCutting, els.filterInstitution, els.filterKeywords]
+    .filter(Boolean)
+    .forEach((field) => {
+      field.addEventListener("input", scheduleApplySearch);
+      field.addEventListener("change", scheduleApplySearch);
+    });
   els.uploadForm?.addEventListener("submit", handleUpload);
   els.uploadFile?.addEventListener("change", renderUploadPreview);
 

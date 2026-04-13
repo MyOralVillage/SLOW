@@ -105,6 +105,23 @@ export class AuthService {
     };
   }
 
+  async signUp(name: string | undefined, emailInput: string) {
+    const email = normalizeEmail(emailInput);
+    if (!email || !email.includes("@")) {
+      throw new UnauthorizedException("Enter a valid email address.");
+    }
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ForbiddenException("An account with this email already exists. Please sign in.");
+    }
+
+    return await this.signIn(name, email);
+  }
+
   async getUserForToken(token: string | undefined) {
     const normalized = String(token || "").trim();
     if (!normalized) return null;

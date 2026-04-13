@@ -25,6 +25,11 @@ export class AuthController {
     return await this.auth.signIn(body?.name, String(body?.email || ""));
   }
 
+  @Post("sign-up")
+  async signUp(@Body() body: SignInBody) {
+    return await this.auth.signUp(body?.name, String(body?.email || ""));
+  }
+
   @Post("sign-out")
   async signOut(@Req() req: Request) {
     return await this.auth.signOut(bearerToken(req));
