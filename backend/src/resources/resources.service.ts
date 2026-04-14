@@ -33,6 +33,8 @@ function resourceCreateData(dto: CreateResourceDto, uploadedByUserId?: string | 
     keywords: normalizeKeywords(dto.keywords),
     original_filename: originalFilename || dto.originalFilename?.trim() || null,
     uploaded_by: uploadedByUserId || null,
+    external_url: dto.externalUrl?.trim() || null,
+    mime_type: dto.externalUrl ? "image/png" : null,
   };
 }
 
@@ -64,10 +66,14 @@ export class ResourcesService {
             role: row.uploadedBy.role,
           }
         : null,
-      file: row.file_path
+      file: row.file_path || row.external_url
         ? {
-            url: `/api/resources/${row.id}/file`,
-            thumbnailUrl: row.mime_type && row.mime_type.startsWith("image/") ? `/api/resources/${row.id}/file` : null,
+            url: row.external_url || `/api/resources/${row.id}/file`,
+            thumbnailUrl: row.external_url
+              ? row.external_url
+              : row.mime_type && row.mime_type.startsWith("image/")
+                ? `/api/resources/${row.id}/file`
+                : null,
             mimeType: row.mime_type,
             originalFilename: row.original_filename,
             sizeBytes: row.size_bytes ? row.size_bytes.toString() : null,
@@ -271,6 +277,11 @@ export class ResourcesService {
   async openFileStream(id: string) {
     const row = await this.prisma.resource.findUnique({ where: { id } });
     if (!row) throw new NotFoundException("Resource not found.");
+
+    if (row.external_url) {
+      return { row, externalUrl: row.external_url };
+    }
+
     const filePath = row.file_path || null;
     if (!filePath) throw new NotFoundException("No file for this resource.");
     const abs = path.resolve(filePath);

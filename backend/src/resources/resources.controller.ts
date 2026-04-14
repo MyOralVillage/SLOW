@@ -59,6 +59,7 @@ export class ResourcesController {
       type: String(body?.type || ""),
       keywords: splitKeywords(body?.keywords),
       originalFilename: file?.originalname || undefined,
+      externalUrl: body?.externalUrl ? String(body.externalUrl) : undefined,
     };
   }
 
@@ -152,7 +153,13 @@ export class ResourcesController {
 
   @Get(":id/file")
   async file(@Param("id") id: string, @Query("download") download: string | undefined, @Res() res: Response) {
-    const { row, stat, stream } = await this.svc.openFileStream(id);
+    const result = await this.svc.openFileStream(id);
+
+    if ("externalUrl" in result && result.externalUrl) {
+      return res.redirect(result.externalUrl as string);
+    }
+
+    const { row, stat, stream } = result as { row: any; stat: any; stream: any };
     res.setHeader("Content-Length", stat.size);
     res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
     const filename = row.original_filename || row.title || "download";

@@ -50,4 +50,9 @@ export class CreateResourceDto {
   @IsString()
   @MaxLength(220)
   originalFilename?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  externalUrl?: string;
 }

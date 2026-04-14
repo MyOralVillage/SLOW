@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """
 Seed the SLOW resource library with the Salone OIM core icons from the GitHub wiki.
-Downloads each icon image and uploads it to the backend API.
+Stores the GitHub image URLs directly as external_url (no file download needed).
 
 Usage:
-  python3 scripts/seed_icons.py
-
-Requires a running backend at http://127.0.0.1:3001/api and an owner/admin account.
+  python3 scripts/seed_icons.py                          # local backend
+  API_URL=https://slow-57j2.onrender.com/api python3 scripts/seed_icons.py  # production
 """
 import json
 import os
-import re
 import ssl
 import sys
-import tempfile
 import urllib.request
 import urllib.error
 
@@ -123,7 +120,6 @@ def get_or_create_owner_token():
     password = "SeedIcons2026!"
     name = "SLOW Library"
 
-    # Try signup first
     body = json.dumps({"name": name, "email": email, "password": password}).encode()
     req = urllib.request.Request(
         f"{API}/auth/signup",
@@ -132,14 +128,13 @@ def get_or_create_owner_token():
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, context=SSL_CTX) as resp:
             data = json.loads(resp.read())
             print(f"  Created seed account: {email}")
             return data["token"]
     except urllib.error.HTTPError:
         pass
 
-    # Fall back to login
     body = json.dumps({"email": email, "password": password}).encode()
     req = urllib.request.Request(
         f"{API}/auth/login",
@@ -147,56 +142,20 @@ def get_or_create_owner_token():
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, context=SSL_CTX) as resp:
         data = json.loads(resp.read())
         print(f"  Logged in as seed account: {email}")
         return data["token"]
 
 
-def download_image(url):
-    """Download image bytes from GitHub."""
-    req = urllib.request.Request(url, headers={"User-Agent": "SLOW-Seed/1.0"})
-    with urllib.request.urlopen(req, timeout=30, context=SSL_CTX) as resp:
-        return resp.read(), resp.headers.get("Content-Type", "image/png")
-
-
-def build_multipart(fields, file_field, file_data, filename, content_type):
-    """Build a multipart/form-data body."""
-    boundary = "----SLOWSeedBoundary"
-    body = b""
-    for key, value in fields.items():
-        body += f"--{boundary}\r\n".encode()
-        body += f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode()
-        body += f"{value}\r\n".encode()
-
-    body += f"--{boundary}\r\n".encode()
-    body += f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'.encode()
-    body += f"Content-Type: {content_type}\r\n\r\n".encode()
-    body += file_data
-    body += f"\r\n--{boundary}--\r\n".encode()
-    return body, f"multipart/form-data; boundary={boundary}"
-
-
 def upload_icon(token, icon, existing_titles):
-    """Upload a single icon as a resource."""
+    """Create a resource with an external URL (no file download needed)."""
     full_title = f"{icon['code']} {icon['title']}"
     if full_title in existing_titles:
         print(f"  SKIP {full_title} (already exists)")
         return False
 
-    try:
-        img_data, mime = download_image(icon["url"])
-    except Exception as e:
-        print(f"  FAIL {full_title}: download error: {e}")
-        return False
-
-    ext = "png"
-    if "jpeg" in (mime or ""):
-        ext = "jpg"
-    elif "svg" in (mime or ""):
-        ext = "svg"
-
-    fields = {
+    payload = {
         "title": full_title,
         "description": f"OIM icon: {icon['title']} ({icon['sub']})",
         "country": "Sierra Leone",
@@ -206,29 +165,28 @@ def upload_icon(token, icon, existing_titles):
         "crossCuttingCategory": "Icons",
         "institution": "My Oral Village",
         "keywords": f"{icon['code']}, {icon['title']}, {icon['sub']}, OIM, icon",
+        "externalUrl": icon["url"],
     }
 
-    filename = f"{icon['code']}_{icon['title'].replace(' ', '_').replace('/', '_')}.{ext}"
-    body, content_type = build_multipart(fields, "file", img_data, filename, mime or "image/png")
-
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(
         f"{API}/resources",
         data=body,
         headers={
             "Authorization": f"Bearer {token}",
-            "Content-Type": content_type,
+            "Content-Type": "application/json",
         },
         method="POST",
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=SSL_CTX) as resp:
             result = json.loads(resp.read())
             print(f"  OK   {full_title} -> {result['id']}")
             return True
     except urllib.error.HTTPError as e:
         err = e.read().decode() if e.fp else str(e)
-        print(f"  FAIL {full_title}: {e.code} {err[:120]}")
+        print(f"  FAIL {full_title}: {e.code} {err[:200]}")
         return False
 
 
@@ -239,11 +197,37 @@ def get_existing_titles(token):
         headers={"Authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, context=SSL_CTX) as resp:
             data = json.loads(resp.read())
             return {r["title"] for r in data.get("rows", [])}
     except Exception:
         return set()
+
+
+def delete_all_resources(token):
+    """Delete all existing resources to start fresh."""
+    req = urllib.request.Request(
+        f"{API}/resources?limit=100&offset=0",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req, context=SSL_CTX) as resp:
+            data = json.loads(resp.read())
+            rows = data.get("rows", [])
+            for r in rows:
+                dreq = urllib.request.Request(
+                    f"{API}/resources/{r['id']}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    method="DELETE",
+                )
+                try:
+                    urllib.request.urlopen(dreq, timeout=10, context=SSL_CTX)
+                    print(f"  DEL  {r['title']}")
+                except urllib.error.HTTPError:
+                    pass
+            return len(rows)
+    except Exception:
+        return 0
 
 
 def main():
@@ -251,6 +235,13 @@ def main():
     print()
 
     token = get_or_create_owner_token()
+
+    if "--clean" in sys.argv:
+        print("  Cleaning existing resources...")
+        deleted = delete_all_resources(token)
+        print(f"  Deleted {deleted} resources")
+        print()
+
     existing = get_existing_titles(token)
     print(f"  Found {len(existing)} existing resources")
     print()

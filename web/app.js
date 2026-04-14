@@ -345,6 +345,7 @@ function fallbackThumb(resource) {
 
 function backendAssetUrl(path) {
   if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
   return new URL(path, `${apiBase()}/`).toString();
 }
 
@@ -354,7 +355,9 @@ function resourceImageUrl(resource) {
 
 function resourceDownloadUrl(resource) {
   if (!resource?.file?.url) return "";
-  return `${backendAssetUrl(resource.file.url)}?download=1`;
+  const url = backendAssetUrl(resource.file.url);
+  if (url.startsWith("http") && !url.includes("/api/")) return url;
+  return `${url}?download=1`;
 }
 
 function normalizeResource(resource) {

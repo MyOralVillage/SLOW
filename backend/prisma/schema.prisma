@@ -85,6 +85,7 @@ model Resource {
   file_storage      FileStorage @default(disk)
   storage_key       String?
   file_path         String?
+  external_url      String?
   mime_type         String?
   size_bytes        BigInt?
   original_filename String?
