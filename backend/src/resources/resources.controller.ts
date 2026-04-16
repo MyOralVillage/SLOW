@@ -19,6 +19,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import type { Request, Response } from "express";
 
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
+import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
 import { CreateResourceDto } from "./dto/create-resource.dto";
 import { SearchResourcesDto } from "./dto/search-resources.dto";
 import { ResourcesService } from "./resources.service";
@@ -64,7 +65,8 @@ export class ResourcesController {
   }
 
   @Post()
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("upload_resources")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
   async create(
     @Req() req: AuthenticatedRequest,
@@ -72,9 +74,6 @@ export class ResourcesController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (!req.authUser) throw new UnauthorizedException("Please sign in.");
-    if (!req.authUser.permissions?.includes("upload_resources")) {
-      throw new ForbiddenException("This user cannot upload resources.");
-    }
     const dto = this.createDtoFromBody(body, file);
     if (file?.buffer) {
       return await this.svc.createWithFile(dto, file, req.authUser.id);
@@ -83,7 +82,8 @@ export class ResourcesController {
   }
 
   @Post("upload")
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("upload_resources")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
   async createWithFile(
     @Req() req: AuthenticatedRequest,
@@ -91,15 +91,13 @@ export class ResourcesController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!req.authUser) throw new UnauthorizedException("Please sign in.");
-    if (!req.authUser.permissions?.includes("upload_resources")) {
-      throw new ForbiddenException("This user cannot upload resources.");
-    }
     const dto = this.createDtoFromBody(body, file);
     return await this.svc.createWithFile(dto, file, req.authUser.id);
   }
 
   @Put(":id")
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("upload_resources")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
   async update(
     @Param("id") id: string,
@@ -113,7 +111,8 @@ export class ResourcesController {
   }
 
   @Delete(":id")
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("upload_resources")
   async remove(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     if (!req.authUser) throw new UnauthorizedException("Please sign in.");
     return await this.svc.remove(id, { userId: req.authUser.id, permissions: req.authUser.permissions });
@@ -142,12 +141,10 @@ export class ResourcesController {
   }
 
   @Post(":id/comments")
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("comment_resources")
   async addComment(@Param("id") id: string, @Req() req: AuthenticatedRequest, @Body() body: CommentBody) {
     if (!req.authUser) throw new UnauthorizedException("Please sign in.");
-    if (!req.authUser.permissions?.includes("comment_resources")) {
-      throw new ForbiddenException("This user cannot comment.");
-    }
     return await this.svc.addComment(id, req.authUser.id, String(body?.body || ""));
   }
 

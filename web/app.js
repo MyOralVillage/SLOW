@@ -27,18 +27,59 @@ const ALL_PERMISSIONS = [
   "search_resources",
   "download_content",
   "complete_profile",
+  "upload_resources",
   "comment_resources",
   "recommend_content",
   "message_users",
   "create_discussions",
-  "upload_resources",
+  "enable_notifications",
+  "request_notifications",
   "edit_resources",
+  "edit_tags",
+  "initiate_comment_thread",
+  "link_discussion",
+  "conduct_poll",
+  "certify_resources",
   "manage_categories",
   "manage_users",
   "manage_permissions",
+  "approve_resources",
+  "remove_comments",
+  "disable_resources",
   "send_notifications",
   "manage_site",
+  "manage_all_users",
 ];
+
+const ROLE_PERMISSIONS = {
+  owner: [...ALL_PERMISSIONS],
+  admin: ALL_PERMISSIONS.filter((p) => p !== "manage_site" && p !== "manage_all_users"),
+  vip: [
+    "view_content","search_resources","download_content","complete_profile",
+    "upload_resources","comment_resources","recommend_content","message_users",
+    "create_discussions","enable_notifications","request_notifications",
+    "edit_resources","edit_tags","initiate_comment_thread","link_discussion",
+    "conduct_poll","certify_resources",
+  ],
+  specialist: [
+    "view_content","search_resources","download_content","complete_profile",
+    "upload_resources","comment_resources","recommend_content","message_users",
+    "create_discussions","enable_notifications","request_notifications",
+    "edit_resources","edit_tags","initiate_comment_thread","link_discussion",
+    "conduct_poll",
+  ],
+  member: [
+    "view_content","search_resources","download_content","complete_profile",
+    "upload_resources","comment_resources","recommend_content","message_users",
+    "create_discussions","enable_notifications","request_notifications",
+  ],
+  none: ["view_content","search_resources","download_content"],
+};
+
+function roleLabel(role) {
+  const labels = { owner: "Owner", admin: "Admin", vip: "VIP", specialist: "Specialist", member: "Member", none: "None" };
+  return labels[role] || role;
+}
 
 const state = {
   route: "home",
@@ -493,25 +534,35 @@ function renderUsers() {
   if (!els.usersPermissionList) return;
   const canManagePermissions = hasPermission("manage_permissions");
   const isOwner = state.user?.role === "owner";
-  if (!state.users.length) {
-    els.usersPermissionList.innerHTML = `<div class="simple-item"><span>No users found</span></div>`;
+
+  const searchEl = document.getElementById("admin-user-search");
+  const query = (searchEl?.value || "").trim().toLowerCase();
+
+  const filtered = state.users.filter((user) => {
+    if (!query) return true;
+    return [user.name, user.email, user.role, user.country].join(" ").toLowerCase().includes(query);
+  });
+
+  if (!filtered.length) {
+    els.usersPermissionList.innerHTML = `<div class="simple-item"><span>${state.users.length ? "No users match the filter" : "No users found"}</span></div>`;
     return;
   }
-  els.usersPermissionList.innerHTML = state.users
+  els.usersPermissionList.innerHTML = filtered
     .map(
       (user) => {
         const ownerLocked = !isOwner && user.role === "owner";
+        const memberSince = formatDate(user.created_at);
         return `
         <article class="user-permission-card" data-user-card="${escapeHtml(user.id)}" ${ownerLocked ? `data-owner-locked="1"` : ""}>
           <div class="user-permission-head">
             <div>
               <strong>${escapeHtml(user.name)}</strong>
               <p>${escapeHtml(user.email)}</p>
-              <p class="small-note">${escapeHtml(user.country || "No country")} · ${escapeHtml(String(user.uploaded_resource_count || 0))} uploads</p>
+              <p class="small-note">${escapeHtml(user.country || "No country")} · ${escapeHtml(String(user.uploaded_resource_count || 0))} uploads · Joined ${escapeHtml(memberSince)}</p>
               ${user.why_interested ? `<p class="small-note">${escapeHtml(user.why_interested)}</p>` : ""}
             </div>
             <div class="tag-row">
-              <span class="tag">${escapeHtml(user.role)}</span>
+              <span class="tag role-tag role-${escapeHtml(user.role)}">${escapeHtml(roleLabel(user.role))}</span>
               <span class="tag">${escapeHtml(user.status)}</span>
             </div>
           </div>
@@ -519,7 +570,7 @@ function renderUsers() {
             <label class="field">
               <span>Role</span>
               <select data-user-role="${escapeHtml(user.id)}" ${!canManagePermissions || ownerLocked ? "disabled" : ""}>
-                ${ROLE_OPTIONS.map((role) => `<option value="${escapeHtml(role)}" ${user.role === role ? "selected" : ""} ${!isOwner && role === "owner" ? "disabled" : ""}>${escapeHtml(role)}</option>`).join("")}
+                ${ROLE_OPTIONS.map((role) => `<option value="${escapeHtml(role)}" ${user.role === role ? "selected" : ""} ${!isOwner && role === "owner" ? "disabled" : ""}>${escapeHtml(roleLabel(role))}</option>`).join("")}
               </select>
             </label>
             <label class="field">
@@ -529,17 +580,23 @@ function renderUsers() {
               </select>
             </label>
           </div>
-          <div class="permission-checklist">
-            ${ALL_PERMISSIONS.map((permission) => `
-              <label class="permission-option">
-                <input type="checkbox" data-user-permission="${escapeHtml(user.id)}" value="${escapeHtml(permission)}" ${Array.isArray(user.permission_grants) && user.permission_grants.includes(permission) ? "checked" : ""} ${!canManagePermissions || ownerLocked || (!isOwner && permission === "manage_site") ? "disabled" : ""} />
-                <span>${escapeHtml(permission)}</span>
-              </label>
-            `).join("")}
-          </div>
+          <details class="permission-details">
+            <summary class="permission-toggle">Permission grants (${(user.permission_grants || []).length} extra)</summary>
+            <div class="permission-checklist">
+              ${ALL_PERMISSIONS.map((permission) => {
+                const fromRole = (ROLE_PERMISSIONS[user.role] || []).includes(permission);
+                const isGrant = Array.isArray(user.permission_grants) && user.permission_grants.includes(permission);
+                return `
+                <label class="permission-option ${fromRole ? "from-role" : ""}">
+                  <input type="checkbox" data-user-permission="${escapeHtml(user.id)}" value="${escapeHtml(permission)}" ${isGrant ? "checked" : ""} ${!canManagePermissions || ownerLocked || (!isOwner && permission === "manage_site") ? "disabled" : ""} />
+                  <span>${escapeHtml(permission)}${fromRole ? " ✓" : ""}</span>
+                </label>
+              `;
+              }).join("")}
+            </div>
+          </details>
           <div class="user-permission-actions">
-            <button type="button" class="primary-btn" data-save-user="${escapeHtml(user.id)}" ${!canManagePermissions || ownerLocked ? "disabled" : ""}>Save user</button>
-            <p class="small-note">Effective permissions: ${escapeHtml((user.permissions || []).join(", "))}</p>
+            <button type="button" class="primary-btn" data-save-user="${escapeHtml(user.id)}" ${!canManagePermissions || ownerLocked ? "disabled" : ""}>Save</button>
             ${ownerLocked ? `<p class="small-note">Only an owner can change this user.</p>` : ""}
           </div>
         </article>
@@ -573,8 +630,8 @@ function renderMessages() {
 }
 
 function renderNotifications() {
-  if (!hasPermission("send_notifications") && !hasPermission("recommend_content")) {
-    els.notificationsList.innerHTML = `<div class="simple-item"><span>You do not have permission to use notifications.</span></div>`;
+  if (!hasPermission("enable_notifications") && !hasPermission("send_notifications") && !hasPermission("recommend_content")) {
+    els.notificationsList.innerHTML = `<div class="simple-item"><span>Sign in to see notifications.</span></div>`;
     return;
   }
   const items = state.resources
@@ -614,8 +671,9 @@ function updateTopButtons() {
   if (els.btnTopSignin) {
     els.btnTopSignin.textContent = state.user ? "Profile" : "Sign in";
   }
-  if (els.btnOpenUpload) els.btnOpenUpload.hidden = state.user ? !hasPermission("upload_resources") : true;
-  if (els.btnHomeUpload) els.btnHomeUpload.hidden = false;
+  const canUpload = hasPermission("upload_resources");
+  if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
+  if (els.btnHomeUpload) els.btnHomeUpload.hidden = !canUpload;
   if (els.backendBadge) {
     els.backendBadge.textContent = state.backendReachable ? "Library connected" : "Offline sample library";
     els.backendBadge.classList.toggle("ok", state.backendReachable);
@@ -1135,6 +1193,7 @@ function bindEvents() {
   els.btnClearSearch?.addEventListener("click", clearSearch);
   els.btnRefreshLibrary?.addEventListener("click", () => loadResources().catch(() => undefined));
   els.btnRefreshUsers?.addEventListener("click", () => loadUsers().catch(() => undefined));
+  document.getElementById("admin-user-search")?.addEventListener("input", () => renderUsers());
   els.signInForm?.addEventListener("submit", handleSignIn);
   els.signupForm?.addEventListener("submit", handleSignUp);
   els.profileForm?.addEventListener("submit", handleProfileSave);

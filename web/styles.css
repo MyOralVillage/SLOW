@@ -661,8 +661,47 @@ img {
 }
 
 .user-permission-actions {
-  display: grid;
+  display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.role-tag {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.role-tag.role-owner { background: #1a472e; color: #fff; }
+.role-tag.role-admin { background: #1e5c8c; color: #fff; }
+.role-tag.role-vip { background: #8c6d1e; color: #fff; }
+.role-tag.role-specialist { background: #5c3d8f; color: #fff; }
+.role-tag.role-member { background: var(--accent); color: #fff; }
+.role-tag.role-none { background: var(--muted); color: #fff; }
+
+.permission-details {
+  margin-bottom: 12px;
+}
+
+.permission-toggle {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+  user-select: none;
+}
+
+.permission-toggle:hover {
+  color: var(--text);
+}
+
+.permission-option.from-role {
+  background: #e7f3ea;
+  border-color: #c8e0ce;
+}
+
+.permission-option.from-role span {
+  color: var(--accent-dark, #1a472e);
 }
 
 .field-wide {
