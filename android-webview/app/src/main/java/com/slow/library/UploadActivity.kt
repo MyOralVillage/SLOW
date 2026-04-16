@@ -102,7 +102,7 @@ class UploadActivity : AppCompatActivity() {
 
         dropdownCountry.setText(UploadFieldOptions.COUNTRIES.first(), false)
         dropdownCategory.setText(UploadFieldOptions.CATEGORIES.first(), false)
-        dropdownType.setText("document", false)
+        dropdownType.setText(UploadFieldOptions.TYPES.first(), false)
         dropdownProductDetail.setText("", false)
     }
 

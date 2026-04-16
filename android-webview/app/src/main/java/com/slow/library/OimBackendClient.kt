@@ -11,7 +11,8 @@ import java.net.URL
 
 class OimBackendClient(
     private val baseUrl: String,
-    private val apiKey: String,
+    private val apiKey: String = "",
+    private val sessionToken: String = "",
 ) {
     data class CreateResourceRequest(
         val title: String,
@@ -37,19 +38,27 @@ class OimBackendClient(
         val id: String? = null,
     )
 
+    private fun applyAuth(conn: HttpURLConnection) {
+        if (sessionToken.isNotBlank()) {
+            conn.setRequestProperty("Authorization", "Bearer $sessionToken")
+        } else if (apiKey.isNotBlank()) {
+            conn.setRequestProperty("X-API-Key", apiKey)
+        }
+    }
+
     fun createResource(request: CreateResourceRequest): CreateResult {
         val endpoint = "${baseUrl.trimEnd('/')}/resources"
         val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
-            setRequestProperty("X-API-Key", apiKey)
             setRequestProperty("Content-Type", "application/json")
             connectTimeout = 15000
             readTimeout = 20000
         }
+        applyAuth(conn)
 
         val kwArray = JSONArray()
-        request.keywords?.trim()?.takeIf { it.isNotEmpty() }?.split(Regex("\\s+"))?.forEach { kwArray.put(it) }
+        request.keywords?.trim()?.takeIf { it.isNotEmpty() }?.split(Regex("[,\\s]+"))?.forEach { kwArray.put(it.trim()) }
 
         val payload = JSONObject()
             .put("title", request.title)
@@ -57,11 +66,11 @@ class OimBackendClient(
             .put("country", request.country)
             .put("category", request.category)
             .put("type", request.type)
-            .put("productDetail", request.productDetail)
-            .put("crossCutting", request.crossCutting)
-            .put("institution", request.institution)
+            .put("productDetail", request.productDetail ?: JSONObject.NULL)
+            .put("crossCuttingCategory", request.crossCutting ?: JSONObject.NULL)
+            .put("institution", request.institution ?: JSONObject.NULL)
             .put("keywords", kwArray)
-            .put("originalFilename", request.selectedFilename)
+            .put("originalFilename", request.selectedFilename ?: JSONObject.NULL)
 
         OutputStreamWriter(conn.outputStream).use { writer ->
             writer.write(payload.toString())
@@ -91,11 +100,11 @@ class OimBackendClient(
         val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
-            setRequestProperty("X-API-Key", apiKey)
             setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
             connectTimeout = 20000
             readTimeout = 120000
         }
+        applyAuth(conn)
 
         DataOutputStream(conn.outputStream).use { out ->
             writeMultipartFile(out, boundary, "file", fileName, mimeType, inputStream)
@@ -145,4 +154,3 @@ class OimBackendClient(
             null
         }
 }
-

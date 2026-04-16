@@ -1,17 +1,21 @@
 <resources>
     <string name="app_name">SLOW Library</string>
-    <string name="backend_base_url">http://10.0.2.2:3001/api</string>
+    <string name="frontend_url">https://slowoim.netlify.app</string>
+    <string name="backend_base_url">https://slow-57j2.onrender.com/api</string>
     <string name="backend_api_key"></string>
     <string name="nav_home">Home</string>
-    <string name="nav_resources">Resources</string>
-    <string name="nav_upload">Upload</string>
+    <string name="nav_messages">Messages</string>
+    <string name="nav_notifications">Alerts</string>
     <string name="nav_profile">Profile</string>
+    <string name="nav_saved">Saved</string>
+    <string name="retry">Try again</string>
+    <string name="error_network">Could not connect.\nCheck your internet and try again.</string>
+    <string name="download_description">Downloading from SLOW Library</string>
     <string name="filter_country">Country: Sierra Leone</string>
-    <string name="filter_category">Category: savings</string>
-    <string name="filter_type">Type: document</string>
+    <string name="filter_category">Category: Savings</string>
+    <string name="filter_type">Type: Icon</string>
     <string name="search_keywords_hint">Search keywords</string>
     <string name="search_apply">Search</string>
-    <string name="nav_saved">Saved</string>
     <string name="saved_uploads_intro">Recent submissions stored on this device (metadata only).</string>
     <string name="saved_uploads_empty">No saved uploads yet.</string>
     <string name="saved_uploads_parse_error">Could not read saved history.</string>
@@ -38,9 +42,9 @@
     <string name="upload_error_category">Choose a category.</string>
     <string name="upload_error_type">Choose a type.</string>
     <string name="upload_error_file">Choose a file to upload.</string>
-    <string name="upload_error_product_detail">Product detail must be individual, group, both, or left blank.</string>
+    <string name="upload_error_product_detail">Product detail must match one of the options or be left blank.</string>
     <string name="upload_resource_no_id">Resource created but the backend did not return an id; file was not uploaded.</string>
     <string name="upload_backend_ok">Resource and file uploaded to the library.</string>
     <string name="upload_attachment_failed">Page created. Attachment failed: %1$s</string>
-    <string name="upload_mock_saved">Saved locally. Add backend API key to enable library upload.</string>
+    <string name="upload_mock_saved">Saved locally. Sign in on the web app to upload to the library.</string>
 </resources>

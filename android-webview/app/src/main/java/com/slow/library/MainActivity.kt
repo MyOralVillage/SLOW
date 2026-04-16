@@ -1,98 +1,273 @@
 package com.slow.library
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
+import android.view.View
+import android.webkit.CookieManager
+import android.webkit.URLUtil
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.button.MaterialButton
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.google.android.material.textfield.TextInputEditText
-import java.net.URLEncoder
 
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var bottomNav: BottomNavigationView
-    private lateinit var btnFilterCountry: MaterialButton
-    private lateinit var btnFilterCategory: MaterialButton
-    private lateinit var btnFilterType: MaterialButton
-    private lateinit var inputSearchKeywords: TextInputEditText
-    private lateinit var btnSearchApply: MaterialButton
-    private lateinit var btnSavedUploads: MaterialButton
-    private lateinit var baseUrl: String
+    private lateinit var progressBar: ProgressBar
+    private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var errorView: LinearLayout
+    private lateinit var errorMessage: TextView
+
+    private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+    private var frontendUrl = ""
+
+    private val fileChooserLauncher =
+        registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            fileChooserCallback?.onReceiveValue(uris.toTypedArray())
+            fileChooserCallback = null
+        }
+
+    private val fileChooserAnyLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            fileChooserCallback?.onReceiveValue(uris.toTypedArray())
+            fileChooserCallback = null
+        }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        frontendUrl = getString(R.string.frontend_url).trimEnd('/')
         webView = findViewById(R.id.web_view)
         bottomNav = findViewById(R.id.bottom_nav)
-        btnFilterCountry = findViewById(R.id.btn_filter_country)
-        btnFilterCategory = findViewById(R.id.btn_filter_category)
-        btnFilterType = findViewById(R.id.btn_filter_type)
-        inputSearchKeywords = findViewById(R.id.input_search_keywords)
-        btnSearchApply = findViewById(R.id.btn_search_apply)
-        btnSavedUploads = findViewById(R.id.btn_saved_uploads)
+        progressBar = findViewById(R.id.progress_bar)
+        swipeRefresh = findViewById(R.id.swipe_refresh)
+        errorView = findViewById(R.id.error_view)
+        errorMessage = findViewById(R.id.error_message)
 
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
+        setupWebView()
+        setupBottomNav()
+        setupSwipeRefresh()
+        setupErrorView()
 
-        baseUrl = getString(R.string.bookstack_base_url).trimEnd('/')
-        loadPath("$baseUrl/")
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState)
+        } else {
+            webView.loadUrl("$frontendUrl/")
+        }
+    }
 
-        bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_home -> loadPath("$baseUrl/")
-                R.id.nav_resources -> loadPath("$baseUrl/search")
-                R.id.nav_upload -> {
-                    startActivity(Intent(this, UploadActivity::class.java))
-                    true
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView() {
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            allowFileAccess = true
+            allowContentAccess = true
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            setSupportZoom(false)
+            builtInZoomControls = false
+            mediaPlaybackRequiresUserGesture = false
+            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(false)
+        }
+
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(webView, true)
+        }
+
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                progressBar.visibility = View.VISIBLE
+                errorView.visibility = View.GONE
+                webView.visibility = View.VISIBLE
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                progressBar.visibility = View.GONE
+                swipeRefresh.isRefreshing = false
+                syncBottomNavToUrl(url)
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    progressBar.visibility = View.GONE
+                    swipeRefresh.isRefreshing = false
+                    showError(getString(R.string.error_network))
                 }
-                R.id.nav_profile -> loadPath("$baseUrl/settings/profile")
-                else -> false
+            }
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                val url = request?.url?.toString() ?: return false
+                if (url.startsWith(frontendUrl) || url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost")) {
+                    return false
+                }
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                return true
             }
         }
 
-        btnFilterCountry.setOnClickListener { loadSearch("country:\"Sierra Leone\"") }
-        btnFilterCategory.setOnClickListener { loadSearch("category:savings") }
-        btnFilterType.setOnClickListener { loadSearch("type:document") }
-
-        btnSearchApply.setOnClickListener {
-            val keywords = inputSearchKeywords.text?.toString()?.trim().orEmpty()
-            val query =
-                if (keywords.isEmpty()) {
-                    "resource"
-                } else {
-                    keywords
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                progressBar.progress = newProgress
+                if (newProgress >= 100) {
+                    progressBar.visibility = View.GONE
                 }
-            loadSearch(query)
+            }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                callback: ValueCallback<Array<Uri>>?,
+                params: FileChooserParams?
+            ): Boolean {
+                fileChooserCallback?.onReceiveValue(null)
+                fileChooserCallback = callback
+
+                val acceptTypes = params?.acceptTypes ?: emptyArray()
+                val mimeType = acceptTypes.firstOrNull()?.takeIf { it.isNotBlank() } ?: "*/*"
+
+                try {
+                    if (mimeType.startsWith("image/")) {
+                        fileChooserLauncher.launch("image/*")
+                    } else {
+                        fileChooserAnyLauncher.launch(arrayOf(mimeType))
+                    }
+                } catch (e: Exception) {
+                    try {
+                        fileChooserAnyLauncher.launch(arrayOf("*/*"))
+                    } catch (e2: Exception) {
+                        fileChooserCallback?.onReceiveValue(null)
+                        fileChooserCallback = null
+                        return false
+                    }
+                }
+                return true
+            }
         }
 
-        btnSavedUploads.setOnClickListener {
-            startActivity(Intent(this, SavedUploadsActivity::class.java))
+        webView.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
+            try {
+                val request = DownloadManager.Request(Uri.parse(url)).apply {
+                    val filename = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                    setTitle(filename)
+                    setDescription(getString(R.string.download_description))
+                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+                    val cookie = CookieManager.getInstance().getCookie(url)
+                    if (!cookie.isNullOrBlank()) {
+                        addRequestHeader("Cookie", cookie)
+                    }
+                }
+                val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                dm.enqueue(request)
+            } catch (_: Exception) {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }
         }
     }
 
-    private fun loadPath(url: String): Boolean {
-        webView.loadUrl(url)
-        return true
+    private fun setupBottomNav() {
+        bottomNav.setOnItemSelectedListener { item ->
+            val hash = when (item.itemId) {
+                R.id.nav_home -> "home"
+                R.id.nav_messages -> "messages"
+                R.id.nav_notifications -> "notifications"
+                R.id.nav_profile -> "profile"
+                else -> return@setOnItemSelectedListener false
+            }
+            webView.evaluateJavascript("window.location.hash='$hash';", null)
+            true
+        }
     }
 
-    private fun loadSearch(query: String): Boolean {
-        val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
-        return loadPath("$baseUrl/search?term=$encoded")
+    private fun syncBottomNavToUrl(url: String?) {
+        val hash = url?.substringAfter("#", "home") ?: "home"
+        val itemId = when {
+            hash.startsWith("messages") -> R.id.nav_messages
+            hash.startsWith("notifications") -> R.id.nav_notifications
+            hash.startsWith("profile") -> R.id.nav_profile
+            else -> R.id.nav_home
+        }
+        bottomNav.menu.findItem(itemId)?.isChecked = true
     }
 
+    private fun setupSwipeRefresh() {
+        swipeRefresh.setColorSchemeColors(0xFF1B5E20.toInt())
+        swipeRefresh.setOnRefreshListener {
+            errorView.visibility = View.GONE
+            webView.visibility = View.VISIBLE
+            webView.reload()
+        }
+    }
+
+    private fun setupErrorView() {
+        findViewById<View>(R.id.btn_retry).setOnClickListener {
+            errorView.visibility = View.GONE
+            webView.visibility = View.VISIBLE
+            webView.reload()
+        }
+    }
+
+    private fun showError(message: String) {
+        errorMessage.text = message
+        errorView.visibility = View.VISIBLE
+        webView.visibility = View.GONE
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
+    }
+
+    @Deprecated("Deprecated in API but still needed for WebView back")
     override fun onBackPressed() {
         if (webView.canGoBack()) {
             webView.goBack()
         } else {
+            @Suppress("DEPRECATION")
             super.onBackPressed()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.onResume()
+    }
+
+    override fun onPause() {
+        webView.onPause()
+        super.onPause()
     }
 }
