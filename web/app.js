@@ -607,8 +607,12 @@ function renderUsers() {
 }
 
 function renderMessages() {
+  if (!state.user) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>Sign in to see messages.</span></div>`;
+    return;
+  }
   if (!hasPermission("message_users")) {
-    els.messagesList.innerHTML = `<div class="simple-item"><span>You do not have permission to use messages.</span></div>`;
+    els.messagesList.innerHTML = `<div class="simple-item"><span>Your role does not include messaging.</span></div>`;
     return;
   }
   const allComments = Object.values(state.commentsByResource).flat();
@@ -630,7 +634,7 @@ function renderMessages() {
 }
 
 function renderNotifications() {
-  if (!hasPermission("enable_notifications") && !hasPermission("send_notifications") && !hasPermission("recommend_content")) {
+  if (!state.user) {
     els.notificationsList.innerHTML = `<div class="simple-item"><span>Sign in to see notifications.</span></div>`;
     return;
   }
@@ -727,11 +731,12 @@ async function loadResources() {
     const res = await apiFetch("/resources?limit=100&offset=0");
     if (!res.ok) throw new Error(await errorText(res, "Could not load resources"));
     const json = await res.json();
-    const rows = Array.isArray(json.rows) ? json.rows.map(normalizeResource) : [];
-    state.resources = rows.length ? rows : metadata.sampleResources.map(normalizeResource);
+    state.resources = (Array.isArray(json.rows) ? json.rows : []).map(normalizeResource);
     state.backendReachable = true;
   } catch {
-    state.resources = metadata.sampleResources.map(normalizeResource);
+    if (!state.backendReachable && !state.resources.length) {
+      state.resources = metadata.sampleResources.map(normalizeResource);
+    }
     state.backendReachable = false;
   }
   state.filteredResources = filterResources(state.resources);
@@ -758,13 +763,16 @@ async function loadUsers() {
 
 function openUploadModal() {
   if (!hasPermission("upload_resources")) {
-    showToast("You do not have permission to upload.", false);
+    showToast("Sign in with an account that can upload.", false);
     return;
   }
+  showStatus(els.uploadStatus, "", true);
   if (!state.editingResourceId) {
     els.uploadForm.reset();
     renderUploadPreview();
+    if (metadata.types.includes("Icon")) els.uploadType.value = "Icon";
   }
+  els.uploadSubmit.disabled = false;
   els.uploadModal.hidden = false;
 }
 
@@ -825,18 +833,32 @@ function detailHtml(resource) {
   const canRecommend = state.user ? hasPermission("recommend_content") : false;
   const canComment = state.user ? hasPermission("comment_resources") : false;
   const canEditResource = Boolean(state.user && (resource.uploaded_by?.id === state.user.id || hasPermission("edit_resources")));
+
+  const allTags = [resource.category, resource.country, resource.type].filter(Boolean);
+  if (resource.productDetail) allTags.push(resource.productDetail);
+  if (resource.crossCutting) allTags.push(resource.crossCutting);
+  if (resource.institution) allTags.push(resource.institution);
+
+  const keywordTags = (resource.keywords || []).filter((k) => !allTags.includes(k));
+
+  const uploaderLine = resource.uploaded_by?.name
+    ? `<p class="detail-meta">Uploaded by ${escapeHtml(resource.uploaded_by.name)} · ${formatDate(resource.created_at)}</p>`
+    : `<p class="detail-meta">${formatDate(resource.created_at)}</p>`;
+
+  const fileMeta = resource.file
+    ? `<p class="detail-meta">${escapeHtml(resource.file.originalFilename || "")}${resource.file.sizeBytes ? ` · ${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB` : ""}</p>`
+    : "";
+
   return `
     <div class="detail-hero">
       <div class="detail-side">
         <div class="detail-category">${escapeHtml(resource.category || "Resource")}</div>
         <div class="detail-side-actions">
           <button type="button" class="secondary-btn detail-side-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download</button>
-          <button type="button" class="secondary-btn detail-side-btn" data-open-upload-inline="1" ${canUpload ? "" : "disabled"}>Upload</button>
           <button type="button" class="secondary-btn detail-side-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend</button>
         </div>
       </div>
       <div class="detail-preview-wrap">
-        <div class="detail-search-mark" aria-hidden="true">Search</div>
         <div class="detail-preview">
           ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" />` : fallbackThumb(resource)}
         </div>
@@ -845,15 +867,16 @@ function detailHtml(resource) {
         <p class="detail-type">${escapeHtml(resource.type || "Resource")}</p>
         <h3>${escapeHtml(resource.title)}</h3>
         <p class="detail-text">${escapeHtml(resource.description || "")}</p>
+        ${uploaderLine}
+        ${fileMeta}
         <div class="tag-row">
-          ${cardTags(resource)
-            .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
-            .join("")}
+          ${allTags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
         </div>
+        ${keywordTags.length ? `<div class="tag-row" style="margin-top:4px">${keywordTags.map((k) => `<span class="tag tag-keyword">${escapeHtml(k)}</span>`).join("")}</div>` : ""}
         <div class="detail-actions">
           <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download</button>
           <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend (${recommendationCount(resource.id)})</button>
-          <button type="button" class="secondary-btn" data-open-upload-inline="1" ${canUpload ? "" : "disabled"}>Upload similar</button>
+          ${canUpload ? `<button type="button" class="secondary-btn" data-open-upload-inline="1">Upload similar</button>` : ""}
           ${canEditResource ? `<button type="button" class="secondary-btn" data-edit-resource="${escapeHtml(resource.id)}">Edit</button>` : ""}
           ${canEditResource ? `<button type="button" class="secondary-btn" data-delete-resource="${escapeHtml(resource.id)}">Delete</button>` : ""}
         </div>
@@ -862,17 +885,18 @@ function detailHtml(resource) {
 
     <section class="discussion-section">
       <div class="section-head">
-        <h3>Comments</h3>
+        <h3>Comments (${comments.length})</h3>
       </div>
-      <div class="simple-list">
+      <div class="simple-list" id="detail-comments-list">
         ${
           comments.length
             ? comments
                 .map(
-                  (comment) => `
+                  (c) => `
                     <div class="simple-item">
-                      <strong>${escapeHtml(comment.user?.name || comment.name || "Member")}</strong>
-                      <span>${escapeHtml(comment.body || comment.message || "")}</span>
+                      <strong>${escapeHtml(c.user?.name || c.name || "Member")}</strong>
+                      <span>${escapeHtml(c.body || c.message || "")}</span>
+                      ${c.created_at ? `<span class="small-note">${formatDate(c.created_at)}</span>` : ""}
                     </div>
                   `,
                 )
@@ -888,10 +912,10 @@ function detailHtml(resource) {
                 <span>Add comment</span>
                 <textarea name="message" rows="3" placeholder="${canComment ? "Write a short comment" : "You do not have permission to comment"}" ${canComment ? "" : "disabled"}></textarea>
               </label>
-              <button type="submit" class="primary-btn" ${canComment ? "" : "disabled"}>Post comment</button>
+              <button type="submit" class="primary-btn" data-comment-submit ${canComment ? "" : "disabled"}>Post comment</button>
             </form>
           `
-          : `<p class="small-note">Sign in to comment.</p>`
+          : `<p class="small-note" style="padding:8px 0">Sign in to comment.</p>`
       }
     </section>
   `;
@@ -974,6 +998,9 @@ async function doAuthRequest(path, payload, statusEl) {
     localStorage.setItem(SESSION_TOKEN_KEY, state.token);
     updateTopButtons();
     updateProfileUi();
+    renderResources();
+    renderMessages();
+    renderNotifications();
     await loadUsers();
     return json;
   } catch (error) {
@@ -1079,9 +1106,14 @@ async function handleSignOut() {
   }
   state.token = "";
   state.user = null;
+  state.users = [];
   localStorage.removeItem(SESSION_TOKEN_KEY);
   updateTopButtons();
   updateProfileUi();
+  renderResources();
+  renderMessages();
+  renderNotifications();
+  renderAdmin();
   showToast("Signed out", true);
 }
 
@@ -1324,11 +1356,16 @@ function bindEvents() {
       setRoute("profile");
       return;
     }
-    if (!hasPermission("comment_resources")) return;
+    if (!hasPermission("comment_resources")) {
+      showToast("Your role does not allow commenting.", false);
+      return;
+    }
     const resourceId = form.getAttribute("data-comment-form");
     const messageEl = form.querySelector("textarea[name='message']");
+    const submitBtn = form.querySelector("[data-comment-submit]");
     const message = messageEl.value.trim();
     if (!message) return;
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Posting..."; }
     apiFetch(`/resources/${encodeURIComponent(resourceId)}/comments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1344,6 +1381,7 @@ function bindEvents() {
         showToast("Comment added", true);
       })
       .catch((error) => {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Post comment"; }
         showToast(error.message || "Could not save comment", false);
       });
   });

@@ -909,6 +909,18 @@ img {
   font-size: 15px;
 }
 
+.detail-meta {
+  margin: 2px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tag-keyword {
+  background: #f0f0f0;
+  color: #555;
+  font-size: 12px;
+}
+
 .discussion-section {
   display: grid;
   gap: 14px;
