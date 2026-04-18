@@ -974,6 +974,7 @@ function clearSearch() {
   fillSelect(els.filterProductDetail, metadata.productDetails, "All product details");
   fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All cross-cutting");
   fillSelect(els.filterInstitution, metadata.institutions, "All institutions");
+  document.querySelectorAll(".category-tile.is-selected").forEach((t) => t.classList.remove("is-selected"));
   applySearch();
 }
 
@@ -1246,6 +1247,8 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
       const categoryButton = event.target.closest("[data-category-value]");
     if (categoryButton) {
+      document.querySelectorAll(".category-tile.is-selected").forEach((t) => t.classList.remove("is-selected"));
+      categoryButton.classList.add("is-selected");
       const kind = categoryButton.getAttribute("data-category-kind");
       const value = categoryButton.getAttribute("data-category-value") || "";
       if (kind === "main") {
@@ -1257,8 +1260,9 @@ function bindEvents() {
         els.filterCrossCutting.value = value;
         state.filteredResources = filterResources(state.resources);
       }
-      showStatus(els.browseStatus, `${state.filteredResources.length} resources`, true);
+      showStatus(els.browseStatus, `${state.filteredResources.length} resources · ${value}`, true);
       renderResources();
+      document.getElementById("resource-grid")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
     }
 
