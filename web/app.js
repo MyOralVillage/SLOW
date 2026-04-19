@@ -425,6 +425,7 @@ function cardTags(resource) {
 
 function resourceCardHtml(resource) {
   const imageUrl = resourceImageUrl(resource);
+  const desc = (resource.description || "").slice(0, 60);
   return `
     <article class="resource-card">
       <button type="button" class="resource-card-hit" data-open-detail="${escapeHtml(resource.id)}">
@@ -433,7 +434,7 @@ function resourceCardHtml(resource) {
         </div>
         <div class="resource-card-body">
           <h3>${escapeHtml(resource.title)}</h3>
-          <p class="resource-type">${escapeHtml(resource.type || "Resource")}</p>
+          <p class="resource-type">${escapeHtml(resource.type || "Resource")}${resource.country ? ` · ${escapeHtml(resource.country)}` : ""}</p>
           <div class="tag-row">
             ${cardTags(resource)
               .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
@@ -486,12 +487,14 @@ function renderResources() {
   if (!els.resourceGrid) return;
   if (!resources.length) {
     const canUpload = hasPermission("upload_resources");
+    const hasFilter = (els.searchQuery?.value || "").trim() || els.filterCountry?.value || els.filterCrossCutting?.value;
     els.resourceGrid.innerHTML = `
       <div class="empty-card">
-        <div class="empty-card-icon" aria-hidden="true">📂</div>
-        <p class="empty-card-title">No resources yet</p>
-        <p>Choose a category above or upload the first icon or template.</p>
-        ${canUpload ? `<button type="button" class="primary-btn" onclick="document.getElementById('btn-home-upload')?.click()">Upload a resource</button>` : ""}
+        <div class="empty-card-icon" aria-hidden="true">${hasFilter ? "🔍" : "📂"}</div>
+        <p class="empty-card-title">${hasFilter ? "No matching resources" : "No resources yet"}</p>
+        <p>${hasFilter ? "Try a different search or clear your filters." : "Browse a category above or upload the first icon or template."}</p>
+        ${hasFilter ? `<button type="button" class="secondary-btn" onclick="document.getElementById('btn-clear-search')?.click()">Clear filters</button>` : ""}
+        ${canUpload && !hasFilter ? `<button type="button" class="primary-btn" onclick="document.getElementById('btn-home-upload')?.click()">Upload a resource</button>` : ""}
       </div>
     `;
     return;
@@ -874,7 +877,7 @@ function detailHtml(resource) {
         </div>
         ${keywordTags.length ? `<div class="tag-row" style="margin-top:4px">${keywordTags.map((k) => `<span class="tag tag-keyword">${escapeHtml(k)}</span>`).join("")}</div>` : ""}
         <div class="detail-actions">
-          <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download</button>
+          <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download${resource.file?.sizeBytes ? ` (${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB)` : ""}</button>
           <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend (${recommendationCount(resource.id)})</button>
           ${canUpload ? `<button type="button" class="secondary-btn" data-open-upload-inline="1">Upload similar</button>` : ""}
           ${canEditResource ? `<button type="button" class="secondary-btn" data-edit-resource="${escapeHtml(resource.id)}">Edit</button>` : ""}
@@ -901,7 +904,7 @@ function detailHtml(resource) {
                   `,
                 )
                 .join("")
-            : `<div class="simple-item"><span>No comments yet</span></div>`
+            : `<div class="simple-item"><span>${state.user ? "Be the first to comment on this resource." : "Sign in to see and add comments."}</span></div>`
         }
       </div>
       ${
@@ -910,12 +913,12 @@ function detailHtml(resource) {
             <form class="comment-form" data-comment-form="${escapeHtml(resource.id)}">
               <label class="field">
                 <span>Add comment</span>
-                <textarea name="message" rows="3" placeholder="${canComment ? "Write a short comment" : "You do not have permission to comment"}" ${canComment ? "" : "disabled"}></textarea>
+                <textarea name="message" rows="3" placeholder="${canComment ? "Write a short comment" : "Your role does not allow commenting"}" ${canComment ? "" : "disabled"}></textarea>
               </label>
               <button type="submit" class="primary-btn" data-comment-submit ${canComment ? "" : "disabled"}>Post comment</button>
             </form>
           `
-          : `<p class="small-note" style="padding:8px 0">Sign in to comment.</p>`
+          : `<p class="small-note" style="padding:8px 0"><a href="#profile" style="color:var(--accent);font-weight:700">Sign in</a> to leave a comment.</p>`
       }
     </section>
   `;

@@ -423,6 +423,10 @@ img {
   transform: scale(0.985);
 }
 
+.resource-card-body .tag-row {
+  margin-top: 4px;
+}
+
 .resource-card-hit {
   width: 100%;
   border: none;
@@ -984,6 +988,22 @@ img {
 .discussion-section {
   display: grid;
   gap: 12px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 14px;
+}
+
+.discussion-section .simple-item {
+  padding: 10px 12px;
+}
+
+.discussion-section .simple-item strong {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.discussion-section .simple-item span {
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .comment-form {
