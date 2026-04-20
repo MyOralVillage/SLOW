@@ -664,7 +664,11 @@ function renderNotifications() {
 }
 
 function applyRoute(route) {
-  const next = ["home", "messages", "notifications", "profile"].includes(route) ? route : "home";
+  let next = ["home", "messages", "notifications", "profile"].includes(route) ? route : "home";
+  if ((next === "messages" || next === "notifications") && !state.user) {
+    next = "profile";
+    showToast("Sign in to access this section", false);
+  }
   state.route = next;
   els.routePanels.forEach((panel) => {
     const on = panel.dataset.routePanel === next;
@@ -676,7 +680,7 @@ function applyRoute(route) {
 
 function updateTopButtons() {
   if (els.btnTopSignin) {
-    els.btnTopSignin.textContent = state.user ? "Profile" : "Sign in";
+    els.btnTopSignin.textContent = state.user ? state.user.name || "Profile" : "Sign in";
   }
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
@@ -702,9 +706,10 @@ function updateProfileUi() {
     return;
   }
 
-  els.profileSummary.textContent = `${state.user.name} · ${state.user.role}`;
+  els.profileSummary.innerHTML = `${escapeHtml(state.user.name)} · <span class="tag role-tag role-${escapeHtml(state.user.role)}" style="vertical-align:middle">${escapeHtml(roleLabel(state.user.role))}</span>`;
   if (els.profilePermissionSummary) {
-    els.profilePermissionSummary.textContent = `Permissions: ${userPermissions().join(", ") || "none"}`;
+    const perms = userPermissions();
+    els.profilePermissionSummary.textContent = perms.length ? `${perms.length} permissions active` : "No permissions assigned";
   }
   els.profileName.value = state.user.name || profile?.name || "";
   els.profileEmail.value = state.user.email || profile?.email || "";
@@ -717,15 +722,26 @@ function updateProfileUi() {
 
 async function restoreSession() {
   if (!state.token) return;
-  try {
-    const res = await apiFetch("/auth/me");
-    if (!res.ok) throw new Error("Session ended");
-    const json = await res.json();
-    state.user = json.user;
-  } catch {
-    state.token = "";
-    state.user = null;
-    localStorage.removeItem(SESSION_TOKEN_KEY);
+  let attempts = 0;
+  while (attempts < 2) {
+    try {
+      const res = await apiFetch("/auth/me");
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          state.token = "";
+          state.user = null;
+          localStorage.removeItem(SESSION_TOKEN_KEY);
+          return;
+        }
+        throw new Error("Session check failed");
+      }
+      const json = await res.json();
+      state.user = json.user;
+      return;
+    } catch {
+      attempts++;
+      if (attempts < 2) await new Promise((r) => setTimeout(r, 1500));
+    }
   }
 }
 
@@ -1051,33 +1067,52 @@ async function saveUserPermissions(userId) {
 
 async function handleSignIn(event) {
   event.preventDefault();
+  showStatus(els.signupStatus, "", true);
   const name = els.signInName.value.trim();
   const email = els.signInEmail.value.trim();
   const password = els.signInPassword.value.trim();
-  if (!email || !password) {
-    showStatus(els.signInStatus, "Enter email and password", false);
+  if (!email) {
+    showStatus(els.signInStatus, "Enter your email address", false);
+    els.signInEmail.focus();
     return;
   }
-  showStatus(els.signInStatus, "Signing in", true);
+  if (!password) {
+    showStatus(els.signInStatus, "Enter your password", false);
+    els.signInPassword.focus();
+    return;
+  }
+  showStatus(els.signInStatus, "Signing in…", true);
   const result = await doAuth(name, email, els.signInStatus);
   if (!result) return;
-  showStatus(els.signInStatus, "Signed in", true);
-  showToast("Signed in", true);
+  showStatus(els.signInStatus, "", true);
+  showToast(`Welcome back, ${result.user?.name || ""}`, true);
   setRoute("profile");
 }
 
 async function handleSignUp(event) {
   event.preventDefault();
+  showStatus(els.signInStatus, "", true);
   const name = els.signupName.value.trim();
   const email = els.signupEmail.value.trim();
   const password = els.signupPassword.value.trim();
   const country = els.signupCountry.value;
   const interest = els.signupInterest.value.trim();
-  if (!name || !email || !password) {
-    showStatus(els.signupStatus, "Enter name, email, and password", false);
+  if (!name) {
+    showStatus(els.signupStatus, "Enter your name", false);
+    els.signupName.focus();
     return;
   }
-  showStatus(els.signupStatus, "Creating account", true);
+  if (!email) {
+    showStatus(els.signupStatus, "Enter your email address", false);
+    els.signupEmail.focus();
+    return;
+  }
+  if (!password) {
+    showStatus(els.signupStatus, "Create a password", false);
+    els.signupPassword.focus();
+    return;
+  }
+  showStatus(els.signupStatus, "Creating account…", true);
   const result = await doAuthRequest(
     "/auth/signup",
     { name, email, password, country, whyInterested: interest },
@@ -1097,8 +1132,8 @@ async function handleSignUp(event) {
   els.signupForm.reset();
   if (els.signupCountry) els.signupCountry.value = country;
   updateProfileUi();
-  showStatus(els.signupStatus, "Account created", true);
-  showToast("Account created", true);
+  showStatus(els.signupStatus, "", true);
+  showToast(`Welcome, ${name}! Account created.`, true);
   setRoute("profile");
 }
 
