@@ -61,6 +61,10 @@ img {
   height: auto;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 /* ───── Shell ───── */
 
 .app-shell {
@@ -512,6 +516,39 @@ a.text-link-btn {
   margin: 4px 0 2px;
 }
 
+.messages-layout {
+  display: grid;
+  gap: 12px;
+}
+
+.messages-conversations-panel,
+.messages-thread-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.messages-thread-list {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.message-inbox-item.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.message-mine {
+  border-color: #b8d4e7;
+  background: #eef6fb;
+}
+
+.message-theirs {
+  border-color: var(--border-light);
+  background: #fff;
+}
+
 .resource-thumb--has-image {
   background: #f0ebe2;
 }
@@ -770,7 +807,7 @@ a.text-link-btn {
   padding: 16px 14px;
 }
 
-.auth-loading-card {
+.auth-loading-card:not([hidden]) {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 14px;
@@ -778,6 +815,10 @@ a.text-link-btn {
 }
 
 .auth-state-note {
+  margin: 0 0 12px;
+}
+
+.auth-state-actions {
   margin: 0 0 12px;
 }
 
@@ -1466,7 +1507,7 @@ a.text-link-btn {
     text-align: left;
   }
 
-  #auth-panels.profile-grid {
+  #auth-panels.profile-grid:not([hidden]) {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
@@ -1584,6 +1625,11 @@ a.text-link-btn {
   .profile-top-actions .secondary-btn,
   .verify-actions .secondary-btn {
     width: auto;
+  }
+
+  .messages-layout {
+    grid-template-columns: minmax(250px, 320px) 1fr;
+    align-items: start;
   }
 }
 

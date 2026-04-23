@@ -50,6 +50,16 @@ export class ResourcesService {
     const hasFile = Boolean(row.external_url || hasLocal);
     const mime = row.mime_type || null;
     const isImg = isImageMime(mime, row.original_filename);
+    const resolvedLocal = hasLocal
+      ? this.disk.resolveLocalPath({
+          storageKey: row.storage_key,
+          filePath: row.file_path,
+        })
+      : null;
+    const localAvailable = Boolean(row.external_url) || !hasLocal || Boolean(resolvedLocal);
+    const unavailableReason = localAvailable
+      ? null
+      : "This file is currently unavailable. Please re-upload it.";
     return {
       id: row.id,
       title: row.title,
@@ -83,6 +93,8 @@ export class ResourcesService {
             mimeType: mime,
             originalFilename: row.original_filename,
             sizeBytes: row.size_bytes != null ? row.size_bytes.toString() : null,
+            available: localAvailable,
+            unavailableReason,
           }
         : null,
     };
@@ -299,7 +311,7 @@ export class ResourcesService {
       filePath: row.file_path,
     });
     if (!resolved) {
-      throw new NotFoundException("File missing on disk. If the server was restarted, re-upload may be required.");
+      throw new NotFoundException("This file is currently unavailable. Please re-upload it.");
     }
     const abs = resolved.abs;
     const stat = await fs.promises.stat(abs);

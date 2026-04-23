@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
 
 import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
@@ -10,36 +10,47 @@ type Authed = { authUser?: { id: string; permissions?: string[] } };
 export class MessagesController {
   constructor(private readonly messages: MessagesService) {}
 
-  @Get()
+  @Get("users")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("message_users")
-  async list(
-    @Req() req: Authed,
-    @Query("box") box: string | undefined,
-  ) {
-    const b = String(box || "inbox") === "sent" ? "sent" : "inbox";
-    return await this.messages.listForUser(req.authUser!.id, b);
+  async listRecipients(@Req() req: Authed) {
+    return await this.messages.listRecipients(req.authUser!.id);
   }
 
-  @Post()
+  @Get("conversations")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("message_users")
-  async send(
+  async listConversations(@Req() req: Authed) {
+    return await this.messages.listConversations(req.authUser!.id);
+  }
+
+  @Get("conversations/:id")
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("message_users")
+  async getConversation(@Req() req: Authed, @Param("id") id: string) {
+    return await this.messages.getConversation(id, req.authUser!.id);
+  }
+
+  @Post("conversations")
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("message_users")
+  async createConversation(
     @Req() req: Authed,
-    @Body() body: { toUserId?: string; toEmail?: string; body?: string; message?: string },
+    @Body() body: { participantUserId?: string; body?: string; message?: string },
   ) {
+    const participantUserId = String(body?.participantUserId || "");
     const text = String(body?.body || body?.message || "");
-    if (body?.toEmail) {
-      return await this.messages.sendByEmail(req.authUser!.id, String(body.toEmail), text);
-    }
-    const toId = String(body?.toUserId || "");
-    return await this.messages.send(req.authUser!.id, toId, text);
+    return await this.messages.createConversation(req.authUser!.id, participantUserId, text);
   }
 
-  @Patch(":id/read")
+  @Post("conversations/:id/messages")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("message_users")
-  async read(@Req() req: Authed, @Param("id") id: string) {
-    return await this.messages.markRead(id, req.authUser!.id);
+  async sendMessage(
+    @Req() req: Authed,
+    @Param("id") id: string,
+    @Body() body: { body?: string; message?: string },
+  ) {
+    return await this.messages.sendMessage(id, req.authUser!.id, String(body?.body || body?.message || ""));
   }
 }

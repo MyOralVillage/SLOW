@@ -103,6 +103,12 @@ const state = {
   authFormMode: "signin",
   /** When set, show reset-password card (signed out). */
   pendingPasswordResetToken: auth?.getPendingResetToken?.() || null,
+  messageConversations: [],
+  messageRecipients: [],
+  activeConversationId: null,
+  activeConversation: null,
+  activeConversationMessages: [],
+  messagesPollTimer: null,
 };
 
 const els = {
@@ -129,6 +135,8 @@ const els = {
   notificationsList: document.getElementById("notifications-list"),
   authLoadingCard: document.getElementById("auth-loading-card"),
   authStateNote: document.getElementById("auth-state-note"),
+  authStateActions: document.getElementById("auth-state-actions"),
+  btnAuthRetrySession: document.getElementById("btn-auth-retry-session"),
   authPanels: document.getElementById("auth-panels"),
   signInForm: document.getElementById("signin-form"),
   signInName: document.getElementById("signin-name"),
@@ -194,12 +202,17 @@ const els = {
   btnRequestVerificationP: document.getElementById("btn-request-verification-p"),
   btnGotoHome: document.getElementById("btn-goto-home"),
   appHomeLink: document.getElementById("app-home-link"),
-  messageToEmail: document.getElementById("message-to-email"),
+  messageToUser: document.getElementById("message-to-user"),
   messageBody: document.getElementById("message-body"),
+  messageReplyBody: document.getElementById("message-reply-body"),
   btnSendMessage: document.getElementById("btn-send-message"),
+  btnSendReply: document.getElementById("btn-send-reply"),
   messagesSendStatus: document.getElementById("messages-send-status"),
   messagesComposeNote: document.getElementById("messages-compose-note"),
   messagesComposeWrap: document.getElementById("messages-compose-wrap"),
+  messagesThreadWrap: document.getElementById("messages-thread-wrap"),
+  messagesThreadList: document.getElementById("messages-thread-list"),
+  messagesThreadTitle: document.getElementById("messages-thread-title"),
   signinMainBlock: document.getElementById("signin-main-block"),
   forgotPasswordBlock: document.getElementById("forgot-password-block"),
   resetPasswordCard: document.getElementById("reset-password-card"),
@@ -419,47 +432,223 @@ async function processEmailVerifyFromQuery() {
 
 async function loadMessages() {
   if (!els.messagesList) return;
+  stopMessagesPolling();
   if (!state.user) {
     els.messagesList.innerHTML = `<div class="simple-item"><span>Sign in to see messages.</span></div>`;
     if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = true;
+    if (els.messagesThreadWrap) els.messagesThreadWrap.hidden = true;
     return;
   }
   if (!hasPermission("message_users")) {
     els.messagesList.innerHTML = `<div class="simple-item"><span>Your role does not include messaging yet.</span></div>`;
     if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = true;
+    if (els.messagesThreadWrap) els.messagesThreadWrap.hidden = true;
     return;
   }
   if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = false;
+  if (els.messagesThreadWrap) els.messagesThreadWrap.hidden = true;
   if (els.messagesSendStatus) els.messagesSendStatus.textContent = "";
-  els.messagesList.innerHTML = `<div class="simple-item"><span>Loading messages…</span></div>`;
-  const res = await apiFetch("/messages?box=inbox");
-  if (!res.ok) {
-    els.messagesList.innerHTML = `<div class="simple-item"><span>Could not load messages.</span></div>`;
+  els.messagesList.innerHTML = `<div class="simple-item"><span>Loading conversations…</span></div>`;
+
+  const [conversationsRes, recipientsRes] = await Promise.all([
+    apiFetch("/messages/conversations"),
+    apiFetch("/messages/users"),
+  ]);
+  if (!conversationsRes.ok) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>Could not load conversations.</span></div>`;
     return;
   }
-  const json = await res.json();
-  const rows = Array.isArray(json.rows) ? json.rows : [];
+  if (!recipientsRes.ok) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>Could not load users for messaging.</span></div>`;
+    return;
+  }
+
+  const conversationsJson = await conversationsRes.json();
+  const recipientsJson = await recipientsRes.json();
+  state.messageConversations = Array.isArray(conversationsJson.rows) ? conversationsJson.rows : [];
+  state.messageRecipients = Array.isArray(recipientsJson.rows) ? recipientsJson.rows : [];
+  renderMessageRecipients();
+  renderConversationList();
+
+  if (state.messageConversations.length && !state.activeConversationId) {
+    await openConversation(state.messageConversations[0].id);
+  } else if (!state.messageConversations.length) {
+    state.activeConversationId = null;
+    state.activeConversation = null;
+    state.activeConversationMessages = [];
+    renderConversationThread();
+  } else if (state.activeConversationId) {
+    await openConversation(state.activeConversationId);
+  }
+  startMessagesPolling();
+}
+
+function renderMessageRecipients() {
+  if (!els.messageToUser) return;
+  const recipients = state.messageRecipients || [];
+  els.messageToUser.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = recipients.length ? "Choose a user" : "No users available";
+  els.messageToUser.appendChild(placeholder);
+  recipients.forEach((u) => {
+    const option = document.createElement("option");
+    option.value = u.id;
+    option.textContent = `${u.name} (${u.email})`;
+    els.messageToUser.appendChild(option);
+  });
+}
+
+function renderConversationList() {
+  if (!els.messagesList) return;
+  const rows = state.messageConversations || [];
   if (!rows.length) {
-    els.messagesList.innerHTML = `<div class="simple-item"><span>No messages in your inbox yet. Send a message to another member by email below (they need an account).</span></div>`;
+    els.messagesList.innerHTML = `<div class="simple-item"><span>No conversations yet. Start one using the form.</span></div>`;
     return;
   }
   els.messagesList.innerHTML = rows
-    .map(
-      (m) => `
-        <div class="simple-item message-inbox-item">
-          <strong>${escapeHtml(m.from?.name || "Member")}</strong>
-          <span class="message-body">${escapeHtml(m.body || "")}</span>
-          <span class="small-note">${formatDate(m.created_at)}</span>
-        </div>
-      `,
-    )
+    .map((conv) => {
+      const name = conv.counterpart?.name || conv.participants?.find((p) => p.id !== state.user?.id)?.name || "Conversation";
+      const preview = conv.last_message?.body || "No messages yet";
+      const isActive = conv.id === state.activeConversationId;
+      return `
+        <button type="button" class="simple-item message-inbox-item ${isActive ? "is-active" : ""}" data-open-conversation="${escapeHtml(conv.id)}">
+          <strong>${escapeHtml(name)}</strong>
+          <span class="message-body">${escapeHtml(preview)}</span>
+          <span class="small-note">${conv.last_message?.created_at ? formatDate(conv.last_message.created_at) : "New"}</span>
+          ${conv.unread_count ? `<span class="tag">${escapeHtml(String(conv.unread_count))} unread</span>` : ""}
+        </button>
+      `;
+    })
     .join("");
+}
+
+function renderConversationThread() {
+  if (!els.messagesThreadWrap || !els.messagesThreadList || !els.messagesThreadTitle) return;
+  if (!state.activeConversation || !state.activeConversationId) {
+    els.messagesThreadWrap.hidden = true;
+    return;
+  }
+  const counterpart = state.activeConversation.participants?.find((p) => p.id !== state.user?.id);
+  els.messagesThreadTitle.textContent = counterpart ? `Conversation with ${counterpart.name}` : "Conversation";
+  els.messagesThreadWrap.hidden = false;
+  const rows = state.activeConversationMessages || [];
+  els.messagesThreadList.innerHTML = rows.length
+    ? rows
+        .map((m) => {
+          const mine = m.sender?.id === state.user?.id;
+          return `
+            <div class="simple-item ${mine ? "message-mine" : "message-theirs"}">
+              <strong>${escapeHtml(m.sender?.name || "Member")}</strong>
+              <span class="message-body">${escapeHtml(m.body || "")}</span>
+              <span class="small-note">${formatDate(m.created_at)}</span>
+            </div>
+          `;
+        })
+        .join("")
+    : `<div class="simple-item"><span>No messages yet. Send the first message below.</span></div>`;
+}
+
+async function openConversation(conversationId) {
+  const id = String(conversationId || "").trim();
+  if (!id) return;
+  const res = await apiFetch(`/messages/conversations/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    showToast(await errorText(res, "Could not load conversation"), false);
+    return;
+  }
+  const json = await res.json();
+  state.activeConversationId = id;
+  state.activeConversation = json.conversation || null;
+  state.activeConversationMessages = Array.isArray(json.messages) ? json.messages : [];
+  renderConversationList();
+  renderConversationThread();
+}
+
+async function startConversationFromComposer() {
+  const participantUserId = String(els.messageToUser?.value || "").trim();
+  const text = String(els.messageBody?.value || "").trim();
+  if (!participantUserId) {
+    showStatus(els.messagesSendStatus, "Choose a user", false);
+    return;
+  }
+  if (!text) {
+    showStatus(els.messagesSendStatus, "Write a message", false);
+    return;
+  }
+  showStatus(els.messagesSendStatus, "Starting conversation…", true);
+  const res = await apiFetch("/messages/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ participantUserId, body: text }),
+  });
+  if (!res.ok) {
+    showStatus(els.messagesSendStatus, await errorText(res, "Could not start conversation"), false);
+    return;
+  }
+  if (els.messageBody) els.messageBody.value = "";
+  showStatus(els.messagesSendStatus, "Conversation started", true);
+  await refreshConversations();
+}
+
+async function sendConversationReply() {
+  if (!state.activeConversationId) return;
+  const text = String(els.messageReplyBody?.value || "").trim();
+  if (!text) {
+    showStatus(els.messagesSendStatus, "Write a message", false);
+    return;
+  }
+  showStatus(els.messagesSendStatus, "Sending…", true);
+  const res = await apiFetch(`/messages/conversations/${encodeURIComponent(state.activeConversationId)}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body: text }),
+  });
+  if (!res.ok) {
+    showStatus(els.messagesSendStatus, await errorText(res, "Could not send message"), false);
+    return;
+  }
+  if (els.messageReplyBody) els.messageReplyBody.value = "";
+  showStatus(els.messagesSendStatus, "Sent", true);
+  await refreshConversations();
+}
+
+async function refreshConversations() {
+  const listRes = await apiFetch("/messages/conversations");
+  if (!listRes.ok) return;
+  const listJson = await listRes.json();
+  state.messageConversations = Array.isArray(listJson.rows) ? listJson.rows : [];
+  renderConversationList();
+  if (state.activeConversationId) {
+    await openConversation(state.activeConversationId);
+  }
+}
+
+function startMessagesPolling() {
+  stopMessagesPolling();
+  state.messagesPollTimer = window.setInterval(() => {
+    if (state.route !== "messages" || !state.user) return;
+    void refreshConversations();
+  }, 8000);
+}
+
+function stopMessagesPolling() {
+  if (state.messagesPollTimer) {
+    window.clearInterval(state.messagesPollTimer);
+    state.messagesPollTimer = null;
+  }
 }
 
 function showStatus(target, message, ok = true) {
   if (!target) return;
   target.textContent = message || "";
   target.className = `small-note ${message ? (ok ? "ok" : "err") : ""}`;
+}
+
+function setVisible(el, visible) {
+  if (!el) return;
+  el.hidden = !visible;
+  el.style.display = visible ? "" : "none";
 }
 
 function routeFromHash() {
@@ -679,6 +868,10 @@ function fileLabel(resource) {
   return (resource?.type || "File").slice(0, 12);
 }
 
+function isFileUnavailable(resource) {
+  return Boolean(resource?.file) && resource.file.available === false;
+}
+
 function resourceImageUrl(resource) {
   const f = resource?.file;
   if (!f) return "";
@@ -696,23 +889,45 @@ function resourceDownloadUrl(resource) {
 
 function triggerResourceDownload(resource) {
   const url = resourceDownloadUrl(resource);
+  if (isFileUnavailable(resource)) {
+    showToast(resource.file.unavailableReason || "This file is currently unavailable. Please re-upload it.", false);
+    return;
+  }
   if (!url) {
     showToast("No file available for this resource.", false);
     return;
   }
 
   const filename = fileNameFromMeta(resource?.file);
-  const link = document.createElement("a");
-  link.href = url;
-  link.rel = "noopener";
   if (url.startsWith("http") && !url.includes("/api/")) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.rel = "noopener";
     link.target = "_blank";
-  } else if (filename) {
-    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return;
   }
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  apiFetch(`/resources/${encodeURIComponent(resource.id)}/file?download=1`)
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await errorText(res, "This file is currently unavailable. Please re-upload it."));
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.setAttribute("download", filename || `${resource?.title || "resource"}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      showToast("Download started", true);
+    })
+    .catch((err) => {
+      showToast(err.message || "This file is currently unavailable. Please re-upload it.", false);
+    });
 }
 
 function resourcePreviewUrl(resource) {
@@ -741,6 +956,8 @@ function normalizeFile(f) {
     mimeType: f.mimeType || f.mime_type,
     originalFilename: f.originalFilename || f.original_filename,
     sizeBytes: f.sizeBytes != null ? f.sizeBytes : f.size_bytes,
+    available: f.available !== false,
+    unavailableReason: f.unavailableReason || f.unavailable_reason || "",
   };
 }
 
@@ -767,6 +984,7 @@ function cardTags(resource) {
 }
 
 function resourceCardHtml(resource) {
+  const unavailable = isFileUnavailable(resource);
   return `
     <article class="resource-card">
       <button type="button" class="resource-card-hit" data-open-detail="${escapeHtml(resource.id)}">
@@ -780,6 +998,7 @@ function resourceCardHtml(resource) {
             ${cardTags(resource)
               .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
               .join("")}
+            ${unavailable ? `<span class="tag">File unavailable</span>` : ""}
           </div>
         </div>
       </button>
@@ -996,12 +1215,14 @@ function applyRoute(route) {
   els.bottomNavButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.route === next));
   if (next === "messages" && state.user) {
     void loadMessages();
+  } else {
+    stopMessagesPolling();
   }
 }
 
 function updateTopButtons() {
   if (els.btnTopSignin) {
-    els.btnTopSignin.textContent = state.user ? state.user.name || "Profile" : "Sign in";
+    els.btnTopSignin.textContent = state.user ? "Edit profile" : "Sign in";
   }
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
@@ -1013,26 +1234,29 @@ function updateTopButtons() {
 }
 
 function renderLoadingState() {
-  if (els.authLoadingCard) els.authLoadingCard.hidden = false;
-  if (els.authStateNote) els.authStateNote.hidden = true;
-  if (els.authPanels) els.authPanels.hidden = true;
-  if (els.profileEditor) els.profileEditor.hidden = true;
+  setVisible(els.authLoadingCard, true);
+  setVisible(els.authStateNote, false);
+  setVisible(els.authStateActions, false);
+  setVisible(els.authPanels, false);
+  setVisible(els.profileEditor, false);
 }
 
 function renderSignedOutView() {
   const showResetCard = Boolean(state.pendingPasswordResetToken);
-  if (els.authLoadingCard) els.authLoadingCard.hidden = true;
-  if (els.authPanels) els.authPanels.hidden = false;
-  if (els.profileEditor) els.profileEditor.hidden = true;
-  if (els.btnSignout) els.btnSignout.hidden = true;
-  if (els.signInForm) els.signInForm.hidden = showResetCard;
-  if (els.signupForm) els.signupForm.hidden = showResetCard;
-  if (els.resetPasswordCard) els.resetPasswordCard.hidden = !showResetCard;
+  setVisible(els.authLoadingCard, false);
+  setVisible(els.authStateActions, false);
+  setVisible(els.authPanels, true);
+  setVisible(els.profileEditor, false);
+  setVisible(els.btnSignout, false);
+  setVisible(els.signInForm, !showResetCard);
+  setVisible(els.signupForm, !showResetCard);
+  setVisible(els.resetPasswordCard, showResetCard);
   if (els.authStateNote) {
-    els.authStateNote.hidden = !state.authError;
+    setVisible(els.authStateNote, Boolean(state.authError));
     els.authStateNote.textContent = state.authError || "";
     els.authStateNote.className = `small-note auth-state-note ${state.authError ? "err" : ""}`;
   }
+  setVisible(els.authStateActions, Boolean(state.authError));
   showSigninForgotMode(!showResetCard && state.authFormMode === "forgot");
   if (els.profileSummary) els.profileSummary.textContent = "";
   if (els.profileEmailLine) els.profileEmailLine.textContent = "";
@@ -1048,14 +1272,15 @@ function renderSignedOutView() {
 }
 
 function renderSignedInView(currentUser, profile) {
-  if (els.authLoadingCard) els.authLoadingCard.hidden = true;
+  setVisible(els.authLoadingCard, false);
   if (els.authStateNote) {
-    els.authStateNote.hidden = true;
+    setVisible(els.authStateNote, false);
     els.authStateNote.textContent = "";
   }
-  if (els.authPanels) els.authPanels.hidden = true;
-  if (els.profileEditor) els.profileEditor.hidden = false;
-  if (els.btnSignout) els.btnSignout.hidden = false;
+  setVisible(els.authStateActions, false);
+  setVisible(els.authPanels, false);
+  setVisible(els.profileEditor, true);
+  setVisible(els.btnSignout, true);
   if (els.profileSummary) {
     els.profileSummary.innerHTML = `${escapeHtml(currentUser.name)} <span class="tag role-tag role-${escapeHtml(currentUser.role)}">${escapeHtml(roleLabel(currentUser.role))}</span>`;
   }
@@ -1104,7 +1329,19 @@ function renderProfilePage() {
 
 async function restoreSession() {
   syncAuthState();
-  await auth.restoreSession(apiFetch);
+  try {
+    await Promise.race([
+      auth.restoreSession(apiFetch),
+      new Promise((_, reject) =>
+        window.setTimeout(() => reject(new Error("Session check timed out. Please sign in again.")), 9000),
+      ),
+    ]);
+  } catch (err) {
+    auth.clearSession({
+      preservePendingReset: true,
+      error: err?.message || "Could not restore your session. Please sign in again.",
+    });
+  }
   syncAuthState();
 }
 
@@ -1213,7 +1450,7 @@ function renderUploadPreview() {
 
 function detailHtml(resource) {
   const comments = commentsForResource(resource.id);
-  const canDownload = true;
+  const canDownload = Boolean(resource.file?.url) && resource.file?.available !== false;
   const canUpload = hasPermission("upload_resources");
   const canRecommend = state.user ? hasPermission("recommend_content") : false;
   const canComment = state.user ? hasPermission("comment_resources") : false;
@@ -1233,6 +1470,9 @@ function detailHtml(resource) {
   const ofn = fileNameFromMeta(resource.file);
   const fileMeta = resource.file
     ? `<p class="detail-meta">${escapeHtml(ofn || fileLabel(resource))}${resource.file.sizeBytes ? ` · ${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB` : ""}</p>`
+    : "";
+  const fileUnavailable = resource.file?.available === false
+    ? `<p class="small-note err">This file is currently unavailable. Please re-upload it.</p>`
     : "";
 
   return `
@@ -1255,6 +1495,7 @@ function detailHtml(resource) {
         <p class="detail-text">${escapeHtml(resource.description || "")}</p>
         ${uploaderLine}
         ${fileMeta}
+        ${fileUnavailable}
         <div class="tag-row">
           ${allTags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
         </div>
@@ -1528,9 +1769,15 @@ async function handleSignUp(event) {
 
 async function handleSignOut() {
   await auth.logout(apiFetch);
+  stopMessagesPolling();
   syncAuthState();
   state.authFormMode = "signin";
   state.users = [];
+  state.messageConversations = [];
+  state.messageRecipients = [];
+  state.activeConversationId = null;
+  state.activeConversation = null;
+  state.activeConversationMessages = [];
   updateTopButtons();
   renderProfilePage();
   renderResources();
@@ -1695,9 +1942,10 @@ function bindEvents() {
       .then(async (res) => {
         if (!res.ok) throw new Error(await errorText(res, "Could not send email"));
         const json = await res.json();
+        const ok = json?.ok !== false;
         const detail = json.previewUrl ? `${json.message} Preview: ${json.previewUrl}` : json.message || "Check your inbox for the link.";
-        showStatus(els.profileStatus, detail, true);
-        showToast(json.message || "Verification email sent", true);
+        showStatus(els.profileStatus, detail, ok);
+        showToast(json.message || (ok ? "Verification email sent" : "Could not send verification email"), ok);
       })
       .catch((err) => {
         showStatus(els.profileStatus, err.message || "Could not send", false);
@@ -1720,6 +1968,12 @@ function bindEvents() {
   els.btnShowForgot?.addEventListener("click", () => showSigninForgotMode(true));
   els.btnCancelForgot?.addEventListener("click", () => showSigninForgotMode(false));
   els.btnSendReset?.addEventListener("click", handleSendPasswordReset);
+  els.btnAuthRetrySession?.addEventListener("click", async () => {
+    showStatus(els.authStateNote, "Retrying session check…", true);
+    if (els.authStateActions) els.authStateActions.hidden = true;
+    await restoreSession();
+    renderProfilePage();
+  });
   els.btnApplyPasswordReset?.addEventListener("click", handleApplyPasswordReset);
   els.linkResetToSignin?.addEventListener("click", (e) => {
     e.preventDefault();
@@ -1733,33 +1987,12 @@ function bindEvents() {
   });
 
   els.btnSendMessage?.addEventListener("click", () => {
-    if (!state.token) {
-      setRoute("profile");
-      return;
-    }
-    const to = (els.messageToEmail?.value || "").trim();
-    const body = (els.messageBody?.value || "").trim();
-    if (!to || !body) {
-      if (els.messagesSendStatus) showStatus(els.messagesSendStatus, "Enter email and message", false);
-      return;
-    }
-    if (els.messagesSendStatus) showStatus(els.messagesSendStatus, "Sending…", true);
-    apiFetch("/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toEmail: to, body }),
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(await errorText(res, "Could not send"));
-        if (els.messageBody) els.messageBody.value = "";
-        if (els.messagesSendStatus) showStatus(els.messagesSendStatus, "Sent", true);
-        showToast("Message sent", true);
-        void loadMessages();
-      })
-      .catch((err) => {
-        if (els.messagesSendStatus) showStatus(els.messagesSendStatus, err.message || "Error", false);
-        showToast(err.message || "Could not send", false);
-      });
+    if (!state.token) return setRoute("profile");
+    void startConversationFromComposer();
+  });
+  els.btnSendReply?.addEventListener("click", () => {
+    if (!state.token) return setRoute("profile");
+    void sendConversationReply();
   });
 
   els.profileAvatar?.addEventListener("change", async () => {
@@ -1834,6 +2067,11 @@ function bindEvents() {
     const detailButton = event.target.closest("[data-open-detail]");
     if (detailButton) {
       openDetail(detailButton.getAttribute("data-open-detail"));
+      return;
+    }
+    const conversationButton = event.target.closest("[data-open-conversation]");
+    if (conversationButton) {
+      void openConversation(conversationButton.getAttribute("data-open-conversation"));
       return;
     }
 

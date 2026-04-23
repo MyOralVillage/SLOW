@@ -54,9 +54,49 @@ model User {
   comments   Comment[]
   messagesSent     Message[] @relation("MessagesSent")
   messagesReceived Message[] @relation("MessagesReceived")
+  conversationParticipants ConversationParticipant[]
+  conversationMessagesSent ConversationMessage[] @relation("ConversationMessagesSent")
 
   @@index([role])
   @@index([status])
+}
+
+model Conversation {
+  id         String   @id @default(uuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     ConversationMessage[]
+}
+
+model ConversationParticipant {
+  id              String   @id @default(uuid())
+  created_at      DateTime @default(now())
+  last_read_at    DateTime?
+  conversation_id String
+  user_id         String
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
+  @@index([user_id, created_at])
+}
+
+model ConversationMessage {
+  id              String   @id @default(uuid())
+  body            String
+  created_at      DateTime @default(now())
+  read_at         DateTime?
+  conversation_id String
+  sender_id       String
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       User         @relation("ConversationMessagesSent", fields: [sender_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, created_at])
+  @@index([sender_id, created_at])
 }
 
 model Session {

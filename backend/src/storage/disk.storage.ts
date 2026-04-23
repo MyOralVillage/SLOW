@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -16,8 +16,21 @@ function sanitizeFilename(name: string) {
 
 @Injectable()
 export class DiskStorage {
+  private readonly log = new Logger(DiskStorage.name);
+  private warnedAboutStorage = false;
+
   baseDir() {
-    return path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), "..", "uploads"));
+    const configured = String(process.env.UPLOAD_DIR || "").trim();
+    const base = configured
+      ? path.resolve(configured)
+      : path.resolve(__dirname, "..", "..", "uploads");
+    if (!this.warnedAboutStorage) {
+      this.warnedAboutStorage = true;
+      this.log.warn(
+        `Using local disk storage at ${base}. In production, mount a persistent volume or use object storage to keep files across restarts/deploys.`,
+      );
+    }
+    return base;
   }
 
   async ensureDir(dir: string) {

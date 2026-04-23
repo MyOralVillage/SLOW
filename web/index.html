@@ -100,21 +100,37 @@
           <div class="section-head">
             <h2>Messages</h2>
           </div>
-          <p class="small-note" id="messages-compose-note">Message another member by email. They must already have an account.</p>
-          <div class="card-panel" id="messages-compose-wrap" hidden>
-            <label class="field">
-              <span>Recipient email</span>
-              <input type="email" id="message-to-email" inputmode="email" autocomplete="email" placeholder="name@example.org" />
-            </label>
-            <label class="field field-wide">
-              <span>Your message</span>
-              <textarea id="message-body" rows="3" placeholder="Write a short message"></textarea>
-            </label>
-            <button type="button" class="primary-btn" id="btn-send-message">Send message</button>
-            <p id="messages-send-status" class="small-note"></p>
+          <p class="small-note" id="messages-compose-note">Start a conversation, select a thread, and send direct messages.</p>
+          <div class="messages-layout">
+            <div class="card-panel messages-conversations-panel">
+              <h3 class="panel-title">Conversations</h3>
+              <p id="messages-send-status" class="small-note"></p>
+              <div id="messages-list" class="simple-list"></div>
+            </div>
+            <div class="card-panel messages-thread-panel">
+              <div id="messages-compose-wrap">
+                <h3 class="panel-title">New message</h3>
+                <label class="field">
+                  <span>Choose user</span>
+                  <select id="message-to-user"></select>
+                </label>
+                <label class="field field-wide">
+                  <span>First message</span>
+                  <textarea id="message-body" rows="3" placeholder="Write a short message"></textarea>
+                </label>
+                <button type="button" class="primary-btn" id="btn-send-message">Start conversation</button>
+              </div>
+              <div id="messages-thread-wrap" hidden>
+                <h3 class="panel-title" id="messages-thread-title">Conversation</h3>
+                <div id="messages-thread-list" class="messages-thread-list"></div>
+                <label class="field field-wide">
+                  <span>Reply</span>
+                  <textarea id="message-reply-body" rows="3" placeholder="Write a message"></textarea>
+                </label>
+                <button type="button" class="primary-btn" id="btn-send-reply">Send</button>
+              </div>
+            </div>
           </div>
-          <p class="panel-subtitle" id="messages-box-label">Inbox</p>
-          <div id="messages-list" class="simple-list"></div>
         </section>
       </section>
 
@@ -144,6 +160,9 @@
           </div>
 
           <p id="auth-state-note" class="small-note auth-state-note" hidden></p>
+          <div id="auth-state-actions" class="auth-state-actions" hidden>
+            <button type="button" class="secondary-btn" id="btn-auth-retry-session">Retry session check</button>
+          </div>
 
           <div id="auth-panels" class="profile-grid" hidden>
             <form id="signin-form" class="card-panel" novalidate>

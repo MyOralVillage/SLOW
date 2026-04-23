@@ -7,94 +7,253 @@ import { PrismaService } from "../prisma/prisma.service";
 export class MessagesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listForUser(userId: string, box: "inbox" | "sent") {
-    if (box === "inbox") {
-      const rows = await this.prisma.message.findMany({
-        where: { to_user_id: userId },
-        orderBy: { created_at: "desc" },
-        take: 100,
-        include: {
-          fromUser: { select: { id: true, name: true, email: true } },
+  private async requireConversationMembership(conversationId: string, userId: string) {
+    const participant = await this.prisma.conversationParticipant.findUnique({
+      where: {
+        conversation_id_user_id: {
+          conversation_id: conversationId,
+          user_id: userId,
         },
-      });
-      return {
-        rows: rows.map((m) => ({
-          id: m.id,
-          body: m.body,
-          created_at: m.created_at,
-          read_at: m.read_at,
-          from: m.fromUser,
-          toUserId: m.to_user_id,
-        })),
-      };
-    }
-    const rows = await this.prisma.message.findMany({
-      where: { from_user_id: userId },
-      orderBy: { created_at: "desc" },
-      take: 100,
-      include: {
-        toUser: { select: { id: true, name: true, email: true } },
       },
     });
+    if (!participant) {
+      throw new ForbiddenException("You do not have access to this conversation.");
+    }
+    return participant;
+  }
+
+  private async requireActiveRecipient(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, status: true },
+    });
+    if (!user) throw new NotFoundException("Recipient not found.");
+    if (user.status === UserStatus.disabled) throw new BadRequestException("Cannot message this user.");
+    return user;
+  }
+
+  async listRecipients(currentUserId: string) {
+    const rows = await this.prisma.user.findMany({
+      where: {
+        id: { not: currentUserId },
+        status: { not: UserStatus.disabled },
+      },
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+      take: 200,
+    });
+    return { rows };
+  }
+
+  async listConversations(userId: string) {
+    const conversations = await this.prisma.conversation.findMany({
+      where: {
+        participants: {
+          some: { user_id: userId },
+        },
+      },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        },
+        messages: {
+          orderBy: { created_at: "desc" },
+          take: 1,
+          include: {
+            sender: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { updated_at: "desc" },
+      take: 100,
+    });
+
+    const unreadByConversation = new Map<string, number>();
+    await Promise.all(
+      conversations.map(async (c) => {
+        const mine = c.participants.find((p) => p.user_id === userId);
+        const unread = await this.prisma.conversationMessage.count({
+          where: {
+            conversation_id: c.id,
+            sender_id: { not: userId },
+            read_at: null,
+            created_at: mine?.last_read_at ? { gt: mine.last_read_at } : undefined,
+          },
+        });
+        unreadByConversation.set(c.id, unread);
+      }),
+    );
+
     return {
-      rows: rows.map((m) => ({
+      rows: conversations.map((c) => {
+        const counterpart = c.participants.find((p) => p.user_id !== userId)?.user || null;
+        const last = c.messages[0] || null;
+        return {
+          id: c.id,
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+          counterpart,
+          participants: c.participants.map((p) => p.user),
+          last_message: last
+            ? {
+                id: last.id,
+                body: last.body,
+                created_at: last.created_at,
+                sender: last.sender,
+              }
+            : null,
+          unread_count: unreadByConversation.get(c.id) || 0,
+        };
+      }),
+    };
+  }
+
+  async getConversation(conversationId: string, userId: string) {
+    await this.requireConversationMembership(conversationId, userId);
+
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        },
+        messages: {
+          orderBy: { created_at: "asc" },
+          take: 200,
+          include: {
+            sender: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        },
+      },
+    });
+    if (!conversation) throw new NotFoundException("Conversation not found.");
+
+    await this.prisma.conversationMessage.updateMany({
+      where: {
+        conversation_id: conversationId,
+        sender_id: { not: userId },
+        read_at: null,
+      },
+      data: { read_at: new Date() },
+    });
+    await this.prisma.conversationParticipant.update({
+      where: {
+        conversation_id_user_id: {
+          conversation_id: conversationId,
+          user_id: userId,
+        },
+      },
+      data: { last_read_at: new Date() },
+    });
+
+    return {
+      conversation: {
+        id: conversation.id,
+        created_at: conversation.created_at,
+        updated_at: conversation.updated_at,
+        participants: conversation.participants.map((p) => p.user),
+      },
+      messages: conversation.messages.map((m) => ({
         id: m.id,
         body: m.body,
         created_at: m.created_at,
         read_at: m.read_at,
-        to: m.toUser,
-        fromUserId: m.from_user_id,
+        sender: m.sender,
       })),
     };
   }
 
-  async send(fromUserId: string, toUserId: string, body: string) {
+  async createConversation(currentUserId: string, participantUserId: string, body?: string) {
+    const toUserId = String(participantUserId || "").trim();
+    if (!toUserId) throw new BadRequestException("Choose a user to message.");
+    if (currentUserId === toUserId) throw new BadRequestException("Cannot message yourself.");
+    await this.requireActiveRecipient(toUserId);
+
+    const existing = await this.prisma.conversation.findFirst({
+      where: {
+        participants: {
+          every: {
+            user_id: { in: [currentUserId, toUserId] },
+          },
+        },
+        AND: [
+          { participants: { some: { user_id: currentUserId } } },
+          { participants: { some: { user_id: toUserId } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      if (String(body || "").trim()) {
+        await this.sendMessage(existing.id, currentUserId, String(body));
+      }
+      return await this.getConversation(existing.id, currentUserId);
+    }
+
+    const created = await this.prisma.conversation.create({
+      data: {
+        participants: {
+          create: [{ user_id: currentUserId }, { user_id: toUserId }],
+        },
+      },
+      select: { id: true },
+    });
+    if (String(body || "").trim()) {
+      await this.sendMessage(created.id, currentUserId, String(body));
+    }
+    return await this.getConversation(created.id, currentUserId);
+  }
+
+  async sendMessage(conversationId: string, senderId: string, body: string) {
     const text = String(body || "").trim();
     if (!text) throw new BadRequestException("Message cannot be empty.");
-    if (fromUserId === toUserId) throw new BadRequestException("Cannot message yourself.");
+    await this.requireConversationMembership(conversationId, senderId);
 
-    const to = await this.prisma.user.findUnique({ where: { id: toUserId }, select: { id: true, status: true } });
-    if (!to) throw new NotFoundException("Recipient not found.");
-    if (to.status === UserStatus.disabled) throw new BadRequestException("Cannot message this user.");
-
-    const row = await this.prisma.message.create({
+    const row = await this.prisma.conversationMessage.create({
       data: {
-        from_user_id: fromUserId,
-        to_user_id: toUserId,
+        conversation_id: conversationId,
+        sender_id: senderId,
         body: text,
       },
       include: {
-        toUser: { select: { id: true, name: true, email: true } },
+        sender: { select: { id: true, name: true, email: true } },
       },
+    });
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: { updated_at: new Date() },
     });
 
     return {
       id: row.id,
       body: row.body,
       created_at: row.created_at,
-      to: row.toUser,
+      sender: row.sender,
     };
-  }
-
-  async sendByEmail(fromUserId: string, toEmail: string, body: string) {
-    const email = String(toEmail || "")
-      .trim()
-      .toLowerCase();
-    if (!email) throw new BadRequestException("Recipient email is required.");
-    const to = await this.prisma.user.findUnique({ where: { email }, select: { id: true, status: true } });
-    if (!to) throw new NotFoundException("No user with that email.");
-    if (to.status === UserStatus.disabled) throw new BadRequestException("Cannot message this user.");
-    return await this.send(fromUserId, to.id, body);
-  }
-
-  async markRead(messageId: string, userId: string) {
-    const m = await this.prisma.message.findUnique({ where: { id: messageId } });
-    if (!m || m.to_user_id !== userId) throw new ForbiddenException("Cannot update this message.");
-    if (m.read_at) return { ok: true };
-    await this.prisma.message.update({
-      where: { id: messageId },
-      data: { read_at: new Date() },
-    });
-    return { ok: true };
   }
 }
