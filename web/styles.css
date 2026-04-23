@@ -768,6 +768,10 @@ a.text-link-btn {
   align-items: center;
 }
 
+.auth-state-note {
+  margin: 0 0 12px;
+}
+
 .auth-loading-spinner {
   width: 18px;
   height: 18px;

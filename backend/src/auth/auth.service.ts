@@ -1,9 +1,11 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { User, UserRole, UserStatus } from "@prisma/client";
@@ -77,6 +79,23 @@ export class AuthService {
       this.log.warn(`WEB_APP_URL is using the local fallback (${base}). Password reset and verification links will not work for real users until this is set to your public frontend URL.`);
     }
     return base;
+  }
+
+  private emailErrorMessage(kind: "verification" | "password reset", error: unknown) {
+    if (error instanceof ServiceUnavailableException) {
+      return "Email service is not configured.";
+    }
+    return kind === "verification"
+      ? "Could not send verification email."
+      : "Could not send password reset email.";
+  }
+
+  private normalizeEmailError(kind: "verification" | "password reset", error: unknown) {
+    const message = this.emailErrorMessage(kind, error);
+    if (error instanceof ServiceUnavailableException) {
+      return new ServiceUnavailableException(message);
+    }
+    return new BadGatewayException(message);
   }
 
   private serializeUser(user: User) {
@@ -170,17 +189,30 @@ export class AuthService {
       },
     });
 
+    let emailNotice: { ok: boolean; message: string; previewUrl?: string } | null = null;
     if (verifyToken) {
       const base = this.webAppBaseUrl();
       const link = `${base}/?email_verify=${encodeURIComponent(verifyToken)}`;
       try {
-        await this.mail.sendVerificationEmail(email, link);
+        const result = await this.mail.sendVerificationEmail(email, link);
+        if (result.previewUrl) {
+          emailNotice = {
+            ok: true,
+            message: "Verification email preview generated. Open the preview link from the response or server logs.",
+            previewUrl: result.previewUrl,
+          };
+        }
       } catch (e) {
         this.log.error("Verification email not sent (check Resend/SMTP or logs for link)", e);
+        emailNotice = {
+          ok: false,
+          message: this.emailErrorMessage("verification", e),
+        };
       }
     }
 
-    return await this.createSession(user);
+    const session = await this.createSession(user);
+    return emailNotice ? { ...session, email_notice: emailNotice } : session;
   }
 
   async login(emailInput: string, passwordInput: string) {
@@ -314,6 +346,7 @@ export class AuthService {
     if (!email || !email.includes("@")) {
       return generic;
     }
+    this.mail.assertTransportAvailable();
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || user.status === UserStatus.disabled || !user.password_hash) {
@@ -332,9 +365,17 @@ export class AuthService {
     const base = this.webAppBaseUrl();
     const link = `${base}/?reset_password=${encodeURIComponent(resetToken)}`;
     try {
-      await this.mail.sendPasswordResetEmail(user.email, link);
+      const result = await this.mail.sendPasswordResetEmail(user.email, link);
+      if (result.previewUrl) {
+        return {
+          ok: true,
+          message: "Password reset email preview generated. Open the preview link from the response or server logs.",
+          previewUrl: result.previewUrl,
+        };
+      }
     } catch (e) {
-      this.log.error("Password reset email not sent (configure RESEND_API_KEY or SMTP; link may be in MailService logs)", e);
+      this.log.error("Password reset email not sent", e);
+      throw this.normalizeEmailError("password reset", e);
     }
     return generic;
   }
@@ -401,6 +442,7 @@ export class AuthService {
   }
 
   async requestVerificationEmail(userId: string) {
+    this.mail.assertTransportAvailable();
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException("User not found.");
     if (user.email_verified) throw new BadRequestException("Your email is already verified.");
@@ -414,11 +456,19 @@ export class AuthService {
     const base = this.webAppBaseUrl();
     const link = `${base}/?email_verify=${encodeURIComponent(verifyToken)}`;
     try {
-      await this.mail.sendVerificationEmail(user.email, link);
+      const result = await this.mail.sendVerificationEmail(user.email, link);
+      if (result.previewUrl) {
+        return {
+          ok: true,
+          message: "Verification email preview generated. Open the preview link from the response or server logs.",
+          previewUrl: result.previewUrl,
+        };
+      }
     } catch (e) {
       this.log.error("Verification resend failed", e);
+      throw this.normalizeEmailError("verification", e);
     }
-    return { ok: true };
+    return { ok: true, message: "Verification email sent." };
   }
 
   async saveAvatar(userId: string, file: Express.Multer.File) {

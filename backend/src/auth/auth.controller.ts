@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, Res, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, Req, Res, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 
@@ -132,9 +132,21 @@ export class AuthController {
     return await this.auth.verifyEmail(String(body?.token || ""));
   }
 
+  @Get("verify-email")
+  async verifyEmailFromLink(@Query("token") token?: string) {
+    return await this.auth.verifyEmail(String(token || ""));
+  }
+
   @Post("request-verification")
   @UseGuards(SessionAuthGuard)
   async requestVerification(@Req() req: Request & { authUser?: { id: string } }) {
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    return await this.auth.requestVerificationEmail(req.authUser.id);
+  }
+
+  @Post("send-verification")
+  @UseGuards(SessionAuthGuard)
+  async sendVerification(@Req() req: Request & { authUser?: { id: string } }) {
     if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
     return await this.auth.requestVerificationEmail(req.authUser.id);
   }

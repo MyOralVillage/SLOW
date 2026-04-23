@@ -87,6 +87,8 @@ const state = {
   backendReachable: false,
   token: auth?.getToken?.() || "",
   user: auth?.getCurrentUser?.() || null,
+  authLoading: auth?.isLoading?.() || false,
+  authError: auth?.getError?.() || "",
   resources: [],
   filteredResources: [],
   users: [],
@@ -98,7 +100,7 @@ const state = {
   profileStoreCache: readJsonStore(PROFILE_STORE_KEY),
   commentStoreCache: readJsonStore(COMMENT_STORE_KEY),
   recommendStoreCache: readJsonStore(RECOMMEND_STORE_KEY),
-  authReady: auth?.isReady?.() || false,
+  authFormMode: "signin",
   /** When set, show reset-password card (signed out). */
   pendingPasswordResetToken: auth?.getPendingResetToken?.() || null,
 };
@@ -126,6 +128,7 @@ const els = {
   messagesList: document.getElementById("messages-list"),
   notificationsList: document.getElementById("notifications-list"),
   authLoadingCard: document.getElementById("auth-loading-card"),
+  authStateNote: document.getElementById("auth-state-note"),
   authPanels: document.getElementById("auth-panels"),
   signInForm: document.getElementById("signin-form"),
   signInName: document.getElementById("signin-name"),
@@ -236,8 +239,26 @@ function syncAuthState(snapshot = auth?.getSnapshot?.()) {
   if (!snapshot) return;
   state.token = snapshot.token || "";
   state.user = snapshot.currentUser || null;
-  state.authReady = Boolean(snapshot.ready);
+  state.authLoading = Boolean(snapshot.authLoading);
+  state.authError = String(snapshot.authError || "");
   state.pendingPasswordResetToken = snapshot.pendingResetToken || null;
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const { timeoutMs = 0, ...fetchOptions } = options;
+  if (!timeoutMs) return await fetch(url, fetchOptions);
+
+  let timer = null;
+  try {
+    return await Promise.race([
+      fetch(url, fetchOptions),
+      new Promise((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error("Request timed out. Please try again.")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
 }
 
 function showToast(message, ok = true) {
@@ -293,6 +314,7 @@ function processPasswordResetFromQuery() {
 }
 
 function showSigninForgotMode(show) {
+  state.authFormMode = show ? "forgot" : "signin";
   if (els.signinMainBlock) els.signinMainBlock.hidden = Boolean(show);
   if (els.forgotPasswordBlock) els.forgotPasswordBlock.hidden = !show;
   if (show) {
@@ -308,6 +330,7 @@ async function handleSendPasswordReset() {
     showStatus(els.forgotStatus, "Enter your account email", false);
     return;
   }
+  auth.clearAuthError?.();
   showStatus(els.forgotStatus, "Sending…", true);
   try {
     const result = await auth.forgotPassword(apiFetch, email);
@@ -315,9 +338,11 @@ async function handleSendPasswordReset() {
       showStatus(els.forgotStatus, await errorText(result.response, "Could not send request"), false);
       return;
     }
-    const msg = result.data?.message || "If an account exists for that email, you will receive a reset link.";
+    const msg = result.data?.previewUrl
+      ? `${result.data.message} Preview: ${result.data.previewUrl}`
+      : result.data?.message || "If an account exists for that email, you will receive a reset link.";
     showStatus(els.forgotStatus, msg, true);
-    showToast("If an account exists, we sent a reset link.", true);
+    showToast(result.data?.message || "If an account exists, we sent a reset link.", true);
   } catch (e) {
     showStatus(els.forgotStatus, e.message || "Could not send", false);
   }
@@ -371,6 +396,7 @@ async function processEmailVerifyFromQuery() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: tok }),
+      timeoutMs: 7000,
     });
     const clean = new URL(window.location.href);
     clean.searchParams.delete("email_verify");
@@ -517,7 +543,7 @@ function hasPermission(permission, user = state.user) {
 
 async function loadConfig() {
   try {
-    const res = await fetch("config.local.json", { cache: "no-store" });
+    const res = await fetchWithTimeout("config.local.json", { cache: "no-store", timeoutMs: 3000 });
     if (res.ok) Object.assign(config, await res.json());
   } catch {
     /* optional */
@@ -525,11 +551,15 @@ async function loadConfig() {
 }
 
 async function apiFetch(path, options = {}) {
-  const headers = new Headers(options.headers || {});
+  const { timeoutMs = 0, clearSessionOnAuthFailure = true, ...fetchOptions } = options;
+  const headers = new Headers(fetchOptions.headers || {});
   if (state.token) headers.set("Authorization", `Bearer ${state.token}`);
-  const res = await fetch(`${apiBase()}${path}`, { ...options, headers });
-  if (res.status === 401 && state.token) {
-    auth.clearSession({ preservePendingReset: true });
+  const res = await fetchWithTimeout(`${apiBase()}${path}`, { ...fetchOptions, headers, timeoutMs });
+  if (clearSessionOnAuthFailure && (res.status === 401 || res.status === 403) && state.token) {
+    auth.clearSession({
+      preservePendingReset: true,
+      error: "Your session expired. Please sign in again.",
+    });
     syncAuthState();
   }
   return res;
@@ -926,45 +956,50 @@ function updateTopButtons() {
   }
 }
 
-function renderProfilePage() {
-  const currentUser = state.user;
-  const profile = getSavedProfile(currentUser?.email || "");
-  const signedIn = Boolean(currentUser);
-  const authReady = Boolean(state.authReady);
-  const showResetCard = !signedIn && Boolean(state.pendingPasswordResetToken);
+function renderLoadingState() {
+  if (els.authLoadingCard) els.authLoadingCard.hidden = false;
+  if (els.authStateNote) els.authStateNote.hidden = true;
+  if (els.authPanels) els.authPanels.hidden = true;
+  if (els.profileEditor) els.profileEditor.hidden = true;
+}
 
-  if (els.authLoadingCard) els.authLoadingCard.hidden = authReady;
-  if (els.authPanels) els.authPanels.hidden = !authReady || signedIn;
-  if (els.profileEditor) els.profileEditor.hidden = !authReady || !signedIn;
-  if (els.btnSignout) els.btnSignout.hidden = !signedIn;
-  if (els.adminPanel) els.adminPanel.hidden = !hasPermission("manage_users");
-
-  if (els.signInForm) els.signInForm.hidden = !authReady || showResetCard;
-  if (els.signupForm) els.signupForm.hidden = !authReady || showResetCard;
-  if (els.resetPasswordCard) els.resetPasswordCard.hidden = !authReady || !showResetCard;
-
-  if (!authReady) return;
-
-  if (!signedIn) {
-    showSigninForgotMode(false);
-    if (els.profileSummary) els.profileSummary.textContent = "";
-    if (els.profileEmailLine) els.profileEmailLine.textContent = "";
-    if (els.profileJoinedLine) els.profileJoinedLine.textContent = "";
-    if (els.profilePermissionSummary) els.profilePermissionSummary.textContent = "";
-    if (els.profileEmailStatus) {
-      els.profileEmailStatus.textContent = "";
-      els.profileEmailStatus.hidden = true;
-      els.profileEmailStatus.classList.remove("ok", "warn");
-    }
-    if (els.btnRequestVerificationP) els.btnRequestVerificationP.hidden = true;
-    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
-    return;
+function renderSignedOutView() {
+  const showResetCard = Boolean(state.pendingPasswordResetToken);
+  if (els.authLoadingCard) els.authLoadingCard.hidden = true;
+  if (els.authPanels) els.authPanels.hidden = false;
+  if (els.profileEditor) els.profileEditor.hidden = true;
+  if (els.btnSignout) els.btnSignout.hidden = true;
+  if (els.signInForm) els.signInForm.hidden = showResetCard;
+  if (els.signupForm) els.signupForm.hidden = showResetCard;
+  if (els.resetPasswordCard) els.resetPasswordCard.hidden = !showResetCard;
+  if (els.authStateNote) {
+    els.authStateNote.hidden = !state.authError;
+    els.authStateNote.textContent = state.authError || "";
+    els.authStateNote.className = `small-note auth-state-note ${state.authError ? "err" : ""}`;
   }
-
-  if (state.pendingPasswordResetToken) {
-    auth.setPendingResetToken(null);
-    syncAuthState();
+  showSigninForgotMode(!showResetCard && state.authFormMode === "forgot");
+  if (els.profileSummary) els.profileSummary.textContent = "";
+  if (els.profileEmailLine) els.profileEmailLine.textContent = "";
+  if (els.profileJoinedLine) els.profileJoinedLine.textContent = "";
+  if (els.profilePermissionSummary) els.profilePermissionSummary.textContent = "";
+  if (els.profileEmailStatus) {
+    els.profileEmailStatus.textContent = "";
+    els.profileEmailStatus.hidden = true;
+    els.profileEmailStatus.classList.remove("ok", "warn");
   }
+  if (els.btnRequestVerificationP) els.btnRequestVerificationP.hidden = true;
+  if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
+}
+
+function renderSignedInView(currentUser, profile) {
+  if (els.authLoadingCard) els.authLoadingCard.hidden = true;
+  if (els.authStateNote) {
+    els.authStateNote.hidden = true;
+    els.authStateNote.textContent = "";
+  }
+  if (els.authPanels) els.authPanels.hidden = true;
+  if (els.profileEditor) els.profileEditor.hidden = false;
+  if (els.btnSignout) els.btnSignout.hidden = false;
   if (els.profileSummary) {
     els.profileSummary.innerHTML = `${escapeHtml(currentUser.name)} <span class="tag role-tag role-${escapeHtml(currentUser.role)}">${escapeHtml(roleLabel(currentUser.role))}</span>`;
   }
@@ -992,15 +1027,29 @@ function renderProfilePage() {
   els.profileSocials.value = currentUser.social_handles || profile?.socials || "";
 }
 
+function renderProfilePage() {
+  const currentUser = state.user;
+  const profile = getSavedProfile(currentUser?.email || "");
+
+  if (els.adminPanel) els.adminPanel.hidden = !hasPermission("manage_users");
+
+  if (state.authLoading) {
+    renderLoadingState();
+    return;
+  }
+
+  if (!currentUser) {
+    renderSignedOutView();
+    return;
+  }
+
+  renderSignedInView(currentUser, profile);
+}
+
 async function restoreSession() {
   syncAuthState();
-  try {
-    await auth.restoreSession(apiFetch);
-  } catch (error) {
-    console.warn("Could not restore session", error);
-  } finally {
-    syncAuthState();
-  }
+  await auth.restoreSession(apiFetch);
+  syncAuthState();
 }
 
 async function loadResources() {
@@ -1341,6 +1390,7 @@ async function saveUserPermissions(userId) {
 
 async function handleSignIn(event) {
   event.preventDefault();
+  auth.clearAuthError?.();
   showStatus(els.signupStatus, "", true);
   const name = els.signInName.value.trim();
   const email = els.signInEmail.value.trim();
@@ -1358,6 +1408,7 @@ async function handleSignIn(event) {
   showStatus(els.signInStatus, "Signing in…", true);
   const result = await doAuth(name, email, els.signInStatus);
   if (!result) return;
+  state.authFormMode = "signin";
   showStatus(els.signInStatus, "", true);
   showToast(`Welcome back, ${result.user?.name || ""}`, true);
   setRoute("home");
@@ -1365,6 +1416,7 @@ async function handleSignIn(event) {
 
 async function handleSignUp(event) {
   event.preventDefault();
+  auth.clearAuthError?.();
   showStatus(els.signInStatus, "", true);
   const name = els.signupName.value.trim();
   const email = els.signupEmail.value.trim();
@@ -1393,6 +1445,7 @@ async function handleSignUp(event) {
     els.signupStatus,
   );
   if (!result) return;
+  state.authFormMode = "signin";
   saveProfile(email, {
     name,
     email,
@@ -1406,14 +1459,22 @@ async function handleSignUp(event) {
   els.signupForm.reset();
   if (els.signupCountry) els.signupCountry.value = country;
   renderProfilePage();
-  showStatus(els.signupStatus, "", true);
-  showToast(`Welcome, ${name}! Account created. Check your email to verify.`, true);
+  const emailNotice = result.email_notice || null;
+  if (emailNotice?.message) {
+    const detail = emailNotice.previewUrl ? `${emailNotice.message} Preview: ${emailNotice.previewUrl}` : emailNotice.message;
+    showStatus(els.signupStatus, detail, emailNotice.ok !== false);
+    showToast(emailNotice.message, emailNotice.ok !== false);
+  } else {
+    showStatus(els.signupStatus, "", true);
+    showToast(`Welcome, ${name}! Account created. Check your email to verify.`, true);
+  }
   setRoute("home");
 }
 
 async function handleSignOut() {
   await auth.logout(apiFetch);
   syncAuthState();
+  state.authFormMode = "signin";
   state.users = [];
   updateTopButtons();
   renderProfilePage();
@@ -1573,12 +1634,15 @@ function bindEvents() {
 
   els.btnRequestVerification?.addEventListener("click", () => {
     if (!state.token) return;
+    auth.clearAuthError?.();
     showStatus(els.profileStatus, "Sending…", true);
-    apiFetch("/auth/request-verification", { method: "POST" })
+    apiFetch("/auth/request-verification", { method: "POST", timeoutMs: 7000 })
       .then(async (res) => {
         if (!res.ok) throw new Error(await errorText(res, "Could not send email"));
-        showStatus(els.profileStatus, "Check your inbox for the link.", true);
-        showToast("Verification email sent", true);
+        const json = await res.json();
+        const detail = json.previewUrl ? `${json.message} Preview: ${json.previewUrl}` : json.message || "Check your inbox for the link.";
+        showStatus(els.profileStatus, detail, true);
+        showToast(json.message || "Verification email sent", true);
       })
       .catch((err) => {
         showStatus(els.profileStatus, err.message || "Could not send", false);
@@ -1845,22 +1909,20 @@ async function bootstrap() {
     syncAuthState(snapshot);
     updateTopButtons();
     renderProfilePage();
-    renderMessages();
-    renderNotifications();
-    renderAdmin();
   });
   syncAuthState();
-  await loadConfig();
-  initFields();
-  await processEmailVerifyFromQuery();
-  renderCategoryTiles();
+  renderProfilePage();
+  updateTopButtons();
   bindEvents();
   processPasswordResetFromQuery();
   await restoreSession();
+  await processEmailVerifyFromQuery();
+  await loadConfig();
+  initFields();
+  renderCategoryTiles();
   updateTopButtons();
   renderProfilePage();
-  await loadResources();
-  await loadUsers();
+  await Promise.allSettled([loadResources(), loadUsers()]);
   renderMessages();
   renderNotifications();
   renderAdmin();
@@ -1869,5 +1931,11 @@ async function bootstrap() {
 
 bootstrap().catch((error) => {
   console.error(error);
+  auth.clearSession?.({
+    preservePendingReset: true,
+    error: "Could not finish loading the page. Please sign in again.",
+  });
+  syncAuthState();
+  renderProfilePage();
   showToast(error.message || "Could not load page", false);
 });

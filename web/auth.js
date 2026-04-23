@@ -1,11 +1,13 @@
 (function attachSlowAuth(global) {
   const SESSION_TOKEN_KEY = "slow_session_token_v4";
   const PENDING_RESET_TOKEN_KEY = "slow_pending_reset_token_v1";
+  const AUTH_CHECK_TIMEOUT_MS = 7000;
 
   const state = {
     token: "",
     currentUser: null,
-    ready: false,
+    authLoading: false,
+    authError: "",
     pendingResetToken: null,
   };
 
@@ -45,16 +47,40 @@
   function syncFromStorage() {
     state.token = safeGet(SESSION_TOKEN_KEY).trim();
     state.pendingResetToken = safeGet(PENDING_RESET_TOKEN_KEY).trim() || null;
+    state.authLoading = Boolean(state.token);
+    state.authError = "";
+  }
+
+  function setState(next, shouldEmit = true) {
+    Object.assign(state, next);
+    if (shouldEmit) emit();
   }
 
   function persistSession(token) {
-    state.token = String(token || "").trim();
-    safeSet(SESSION_TOKEN_KEY, state.token);
+    const normalized = String(token || "").trim();
+    state.token = normalized;
+    safeSet(SESSION_TOKEN_KEY, normalized);
   }
 
   function persistPendingReset(token) {
-    state.pendingResetToken = String(token || "").trim() || null;
-    safeSet(PENDING_RESET_TOKEN_KEY, state.pendingResetToken || "");
+    const normalized = String(token || "").trim() || null;
+    state.pendingResetToken = normalized;
+    safeSet(PENDING_RESET_TOKEN_KEY, normalized || "");
+  }
+
+  async function readResponseMessage(res) {
+    try {
+      const text = (await res.text()).trim();
+      if (!text) return "";
+      try {
+        const json = JSON.parse(text);
+        return String(json.message || json.error || text).trim();
+      } catch {
+        return text;
+      }
+    } catch {
+      return "";
+    }
   }
 
   syncFromStorage();
@@ -69,9 +95,11 @@
       return {
         token: state.token,
         currentUser: state.currentUser,
-        ready: state.ready,
+        authLoading: state.authLoading,
+        authError: state.authError,
         pendingResetToken: state.pendingResetToken,
         signedIn: Boolean(state.currentUser),
+        ready: !state.authLoading,
       };
     },
 
@@ -87,22 +115,32 @@
       return state.pendingResetToken;
     },
 
+    isLoading() {
+      return state.authLoading;
+    },
+
+    getError() {
+      return state.authError;
+    },
+
     isReady() {
-      return state.ready;
+      return !state.authLoading;
     },
 
     isSignedIn() {
       return Boolean(state.currentUser);
     },
 
-    markReady(value) {
-      state.ready = Boolean(value);
-      emit();
+    clearAuthError() {
+      setState({ authError: "" });
     },
 
     setCurrentUser(user) {
-      state.currentUser = user || null;
-      emit();
+      setState({
+        currentUser: user || null,
+        authLoading: false,
+        authError: "",
+      });
     },
 
     setPendingResetToken(token) {
@@ -112,19 +150,25 @@
 
     clearSession(options = {}) {
       const preservePendingReset = Boolean(options.preservePendingReset);
-      state.currentUser = null;
       persistSession("");
       if (!preservePendingReset) {
         persistPendingReset(null);
       }
-      emit();
+      setState({
+        currentUser: null,
+        authLoading: false,
+        authError: String(options.error || "").trim(),
+      });
     },
 
     setSession(token, user) {
       persistSession(token);
-      state.currentUser = user || null;
       persistPendingReset(null);
-      emit();
+      setState({
+        currentUser: user || null,
+        authLoading: false,
+        authError: "",
+      });
     },
 
     consumeResetLinkFromUrl() {
@@ -137,58 +181,68 @@
       if (!token) return null;
 
       persistSession("");
-      state.currentUser = null;
       persistPendingReset(token);
+      setState({
+        currentUser: null,
+        authLoading: false,
+        authError: "",
+      });
 
-      if (rootToken) {
-        url.searchParams.delete("reset_password");
-      }
-      if (pageToken) {
-        url.searchParams.delete("token");
-      }
+      if (rootToken) url.searchParams.delete("reset_password");
+      if (pageToken) url.searchParams.delete("token");
       global.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-      emit();
       return token;
     },
 
     async restoreSession(apiFetch) {
       if (!state.token) {
-        state.currentUser = null;
-        state.ready = true;
-        emit();
+        setState({
+          currentUser: null,
+          authLoading: false,
+          authError: "",
+        });
         return null;
       }
 
-      let attempts = 0;
-      while (attempts < 2) {
-        try {
-          const res = await apiFetch("/auth/me");
-          if (!res.ok) {
-            if (res.status === 401 || res.status === 403) {
-              api.clearSession({ preservePendingReset: true });
-              state.ready = true;
-              emit();
-              return null;
-            }
-            throw new Error("Session check failed");
-          }
-          const json = await res.json();
-          state.currentUser = json.user || null;
-          state.ready = true;
-          emit();
-          return state.currentUser;
-        } catch (error) {
-          attempts += 1;
-          if (attempts >= 2) {
-            state.ready = true;
-            emit();
-            throw error;
-          }
-          await new Promise((resolve) => global.setTimeout(resolve, 1500));
-        }
-      }
+      setState({ authLoading: true, authError: "" });
 
-      return null;
+      try {
+        const res = await apiFetch("/auth/me", {
+          timeoutMs: AUTH_CHECK_TIMEOUT_MS,
+          clearSessionOnAuthFailure: false,
+        });
+
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            api.clearSession({
+              preservePendingReset: true,
+              error: "Your session expired. Please sign in again.",
+            });
+            return null;
+          }
+
+          const detail = await readResponseMessage(res);
+          api.clearSession({
+            preservePendingReset: true,
+            error: detail || "Could not restore your session. Please sign in again.",
+          });
+          return null;
+        }
+
+        const json = await res.json();
+        setState({
+          currentUser: json.user || null,
+          authLoading: false,
+          authError: "",
+        });
+        return state.currentUser;
+      } catch (error) {
+        api.clearSession({
+          preservePendingReset: true,
+          error: error?.message || "Could not restore your session. Please sign in again.",
+        });
+        return null;
+      }
     },
 
     async login(apiFetch, payload) {
@@ -196,6 +250,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        timeoutMs: AUTH_CHECK_TIMEOUT_MS,
       });
       if (!res.ok) return { ok: false, response: res };
       const json = await res.json();
@@ -208,6 +263,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        timeoutMs: AUTH_CHECK_TIMEOUT_MS,
       });
       if (!res.ok) return { ok: false, response: res };
       const json = await res.json();
@@ -217,9 +273,13 @@
 
     async logout(apiFetch) {
       try {
-        await apiFetch("/auth/sign-out", { method: "POST" });
+        await apiFetch("/auth/sign-out", {
+          method: "POST",
+          timeoutMs: AUTH_CHECK_TIMEOUT_MS,
+          clearSessionOnAuthFailure: false,
+        });
       } catch {
-        /* ignore network failure */
+        /* ignore logout network failure */
       }
       api.clearSession();
       return { ok: true };
@@ -230,6 +290,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
+        timeoutMs: AUTH_CHECK_TIMEOUT_MS,
       });
       const json = res.ok ? await res.json() : null;
       return { ok: res.ok, response: res, data: json };
@@ -240,6 +301,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),
+        timeoutMs: AUTH_CHECK_TIMEOUT_MS,
       });
       const json = res.ok ? await res.json() : null;
       if (res.ok) {
