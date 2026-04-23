@@ -882,6 +882,7 @@ function resourceImageUrl(resource) {
 
 function resourceDownloadUrl(resource) {
   if (!resource?.file?.url) return "";
+  if (resource?.file?.available === false) return "";
   const url = backendAssetUrl(resource.file.url);
   if (url.startsWith("http") && !url.includes("/api/")) return url;
   return `${url}?download=1`;
@@ -932,10 +933,14 @@ function triggerResourceDownload(resource) {
 
 function resourcePreviewUrl(resource) {
   if (!resource?.file?.url) return "";
+  if (resource?.file?.available === false) return "";
   return backendAssetUrl(resource.file.url);
 }
 
 function resourcePreviewHtml(resource, mode = "detail") {
+  if (resource?.file?.available === false) {
+    return fallbackThumb(resource, "Missing");
+  }
   const previewUrl = resourcePreviewUrl(resource);
   if (isImageFileMeta(resource?.file) && previewUrl) {
     const cls = mode === "card" ? "resource-thumb-img" : "detail-preview-img";
