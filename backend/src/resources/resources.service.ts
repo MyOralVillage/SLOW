@@ -47,7 +47,8 @@ export class ResourcesService {
 
   private toResourceResponse(row: any) {
     const hasLocal = Boolean(row.storage_key || row.file_path);
-    const hasFile = Boolean(row.external_url || hasLocal);
+    const hasDbBytes = Boolean(row.file_bytes && row.file_bytes.length);
+    const hasFile = Boolean(row.external_url || hasDbBytes || hasLocal);
     const mime = row.mime_type || null;
     const isImg = isImageMime(mime, row.original_filename);
     const resolvedLocal = hasLocal
@@ -56,7 +57,7 @@ export class ResourcesService {
           filePath: row.file_path,
         })
       : null;
-    const localAvailable = Boolean(row.external_url) || !hasLocal || Boolean(resolvedLocal);
+    const localAvailable = Boolean(row.external_url) || hasDbBytes || !hasLocal || Boolean(resolvedLocal);
     const unavailableReason = localAvailable
       ? null
       : "This file is currently unavailable. Please re-upload it.";
@@ -158,6 +159,7 @@ export class ResourcesService {
       data.size_bytes = BigInt(stored.sizeBytes);
       data.original_filename = file.originalname || null;
       data.sha256 = stored.sha256;
+      data.file_bytes = new Uint8Array(file.buffer);
     }
 
     const row = await this.prisma.resource.update({
@@ -216,6 +218,7 @@ export class ResourcesService {
         size_bytes: BigInt(stored.sizeBytes),
         original_filename: file.originalname || null,
         sha256: stored.sha256,
+        file_bytes: new Uint8Array(file.buffer),
       },
       include: this.resourceInclude(),
     });
@@ -304,6 +307,14 @@ export class ResourcesService {
 
     if (row.external_url) {
       return { row, externalUrl: row.external_url };
+    }
+
+    if (row.file_bytes && row.file_bytes.length) {
+      return {
+        row,
+        buffer: row.file_bytes,
+        size: row.file_bytes.length,
+      };
     }
 
     const resolved = this.disk.resolveLocalPath({

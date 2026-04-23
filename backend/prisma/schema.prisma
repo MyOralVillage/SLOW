@@ -138,6 +138,7 @@ model Resource {
   size_bytes        BigInt?
   original_filename String?
   sha256            String?
+  file_bytes        Bytes?
 
   @@index([country])
   @@index([category])

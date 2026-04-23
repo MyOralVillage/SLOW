@@ -162,18 +162,26 @@ export class ResourcesController {
       return res.redirect(result.externalUrl as string);
     }
 
-    const { row, stat, stream } = result as { row: any; stat: any; stream: any };
-    res.setHeader("Content-Length", stat.size);
-    res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("X-Content-Type-Options", "nosniff");
+    const row = (result as any).row;
     const filename = row.original_filename || row.title || "download";
     const safeFilename = String(filename).replace(/["\\\r\n]/g, "_");
     const disposition = download === "1" ? "attachment" : "inline";
+    res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader(
       "Content-Disposition",
       `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     );
+
+    if ("buffer" in (result as any) && (result as any).buffer) {
+      const buffer = (result as any).buffer as Buffer;
+      res.setHeader("Content-Length", buffer.length);
+      return res.send(buffer);
+    }
+
+    const { stat, stream } = result as { stat: any; stream: any };
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Accept-Ranges", "bytes");
     stream.pipe(res);
     stream.on("close", () => {
       try {
