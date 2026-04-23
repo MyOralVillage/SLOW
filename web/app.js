@@ -109,6 +109,9 @@ const state = {
   activeConversation: null,
   activeConversationMessages: [],
   messagesPollTimer: null,
+  messageUserSearchTimer: null,
+  selectedMessageUser: null,
+  pendingSharedResource: null,
 };
 
 const els = {
@@ -202,7 +205,9 @@ const els = {
   btnRequestVerificationP: document.getElementById("btn-request-verification-p"),
   btnGotoHome: document.getElementById("btn-goto-home"),
   appHomeLink: document.getElementById("app-home-link"),
-  messageToUser: document.getElementById("message-to-user"),
+  messageToUserSearch: document.getElementById("message-to-user-search"),
+  messageToUserId: document.getElementById("message-to-user-id"),
+  messageUserResults: document.getElementById("message-user-results"),
   messageBody: document.getElementById("message-body"),
   messageReplyBody: document.getElementById("message-reply-body"),
   btnSendMessage: document.getElementById("btn-send-message"),
@@ -213,6 +218,7 @@ const els = {
   messagesThreadWrap: document.getElementById("messages-thread-wrap"),
   messagesThreadList: document.getElementById("messages-thread-list"),
   messagesThreadTitle: document.getElementById("messages-thread-title"),
+  messagesShareBanner: document.getElementById("messages-share-banner"),
   signinMainBlock: document.getElementById("signin-main-block"),
   forgotPasswordBlock: document.getElementById("forgot-password-block"),
   resetPasswordCard: document.getElementById("reset-password-card"),
@@ -450,25 +456,19 @@ async function loadMessages() {
   if (els.messagesSendStatus) els.messagesSendStatus.textContent = "";
   els.messagesList.innerHTML = `<div class="simple-item"><span>Loading conversations…</span></div>`;
 
-  const [conversationsRes, recipientsRes] = await Promise.all([
+  const [conversationsRes] = await Promise.all([
     apiFetch("/messages/conversations"),
-    apiFetch("/messages/users"),
   ]);
   if (!conversationsRes.ok) {
     els.messagesList.innerHTML = `<div class="simple-item"><span>Could not load conversations.</span></div>`;
     return;
   }
-  if (!recipientsRes.ok) {
-    els.messagesList.innerHTML = `<div class="simple-item"><span>Could not load users for messaging.</span></div>`;
-    return;
-  }
 
   const conversationsJson = await conversationsRes.json();
-  const recipientsJson = await recipientsRes.json();
   state.messageConversations = Array.isArray(conversationsJson.rows) ? conversationsJson.rows : [];
-  state.messageRecipients = Array.isArray(recipientsJson.rows) ? recipientsJson.rows : [];
-  renderMessageRecipients();
   renderConversationList();
+  clearMessageRecipientSelection();
+  renderMessageShareBanner();
 
   if (state.messageConversations.length && !state.activeConversationId) {
     await openConversation(state.messageConversations[0].id);
@@ -483,20 +483,47 @@ async function loadMessages() {
   startMessagesPolling();
 }
 
-function renderMessageRecipients() {
-  if (!els.messageToUser) return;
-  const recipients = state.messageRecipients || [];
-  els.messageToUser.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = recipients.length ? "Choose a user" : "No users available";
-  els.messageToUser.appendChild(placeholder);
-  recipients.forEach((u) => {
-    const option = document.createElement("option");
-    option.value = u.id;
-    option.textContent = `${u.name} (${u.email})`;
-    els.messageToUser.appendChild(option);
-  });
+function clearMessageRecipientSelection() {
+  state.selectedMessageUser = null;
+  if (els.messageToUserId) els.messageToUserId.value = "";
+  if (els.messageToUserSearch) els.messageToUserSearch.value = "";
+  if (els.messageUserResults) {
+    els.messageUserResults.hidden = true;
+    els.messageUserResults.innerHTML = "";
+  }
+}
+
+async function searchMessageRecipients(query) {
+  const q = String(query || "").trim();
+  if (!els.messageUserResults) return;
+  if (q.length < 2) {
+    els.messageUserResults.hidden = true;
+    els.messageUserResults.innerHTML = "";
+    return;
+  }
+  els.messageUserResults.hidden = false;
+  els.messageUserResults.innerHTML = `<div class="simple-item"><span>Searching…</span></div>`;
+  const res = await apiFetch(`/messages/users?q=${encodeURIComponent(q)}`);
+  if (!res.ok) {
+    els.messageUserResults.innerHTML = `<div class="simple-item"><span>Could not search users.</span></div>`;
+    return;
+  }
+  const json = await res.json();
+  const rows = Array.isArray(json.rows) ? json.rows : [];
+  if (!rows.length) {
+    els.messageUserResults.innerHTML = `<div class="simple-item"><span>No users match “${escapeHtml(q)}”.</span></div>`;
+    return;
+  }
+  els.messageUserResults.innerHTML = rows
+    .map(
+      (u) => `
+        <button type="button" class="simple-item message-user-result" data-pick-user="${escapeHtml(u.id)}" data-pick-user-name="${escapeHtml(u.name)}" data-pick-user-email="${escapeHtml(u.email)}">
+          <strong>${escapeHtml(u.name)}</strong>
+          <span class="small-note">${escapeHtml(u.email)}</span>
+        </button>
+      `,
+    )
+    .join("");
 }
 
 function renderConversationList() {
@@ -537,16 +564,37 @@ function renderConversationThread() {
     ? rows
         .map((m) => {
           const mine = m.sender?.id === state.user?.id;
+          const shared = m.resource
+            ? `
+              <div class="message-shared-resource">
+                <button type="button" data-open-shared-resource="${escapeHtml(m.resource.id)}">Shared resource: ${escapeHtml(m.resource.title || "Resource")}</button>
+                <p class="small-note">${escapeHtml([m.resource.type, m.resource.country, m.resource.category].filter(Boolean).join(" · "))}</p>
+              </div>
+            `
+            : "";
           return `
             <div class="simple-item ${mine ? "message-mine" : "message-theirs"}">
               <strong>${escapeHtml(m.sender?.name || "Member")}</strong>
               <span class="message-body">${escapeHtml(m.body || "")}</span>
+              ${shared}
               <span class="small-note">${formatDate(m.created_at)}</span>
             </div>
           `;
         })
         .join("")
     : `<div class="simple-item"><span>No messages yet. Send the first message below.</span></div>`;
+}
+
+function renderMessageShareBanner() {
+  if (!els.messagesShareBanner) return;
+  if (!state.pendingSharedResource) {
+    els.messagesShareBanner.hidden = true;
+    els.messagesShareBanner.textContent = "";
+    return;
+  }
+  const r = state.pendingSharedResource;
+  els.messagesShareBanner.hidden = false;
+  els.messagesShareBanner.textContent = `Ready to share resource: ${r.title || "Resource"} (send a message to attach it)`;
 }
 
 async function openConversation(conversationId) {
@@ -566,7 +614,7 @@ async function openConversation(conversationId) {
 }
 
 async function startConversationFromComposer() {
-  const participantUserId = String(els.messageToUser?.value || "").trim();
+  const participantUserId = String(els.messageToUserId?.value || "").trim();
   const text = String(els.messageBody?.value || "").trim();
   if (!participantUserId) {
     showStatus(els.messagesSendStatus, "Choose a user", false);
@@ -580,13 +628,15 @@ async function startConversationFromComposer() {
   const res = await apiFetch("/messages/conversations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ participantUserId, body: text }),
+    body: JSON.stringify({ participantUserId, body: text, resourceId: state.pendingSharedResource?.id || undefined }),
   });
   if (!res.ok) {
     showStatus(els.messagesSendStatus, await errorText(res, "Could not start conversation"), false);
     return;
   }
   if (els.messageBody) els.messageBody.value = "";
+  state.pendingSharedResource = null;
+  renderMessageShareBanner();
   showStatus(els.messagesSendStatus, "Conversation started", true);
   await refreshConversations();
 }
@@ -602,13 +652,15 @@ async function sendConversationReply() {
   const res = await apiFetch(`/messages/conversations/${encodeURIComponent(state.activeConversationId)}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ body: text }),
+    body: JSON.stringify({ body: text, resourceId: state.pendingSharedResource?.id || undefined }),
   });
   if (!res.ok) {
     showStatus(els.messagesSendStatus, await errorText(res, "Could not send message"), false);
     return;
   }
   if (els.messageReplyBody) els.messageReplyBody.value = "";
+  state.pendingSharedResource = null;
+  renderMessageShareBanner();
   showStatus(els.messagesSendStatus, "Sent", true);
   await refreshConversations();
 }
@@ -1455,6 +1507,7 @@ function detailHtml(resource) {
   const canRecommend = state.user ? hasPermission("recommend_content") : false;
   const canComment = state.user ? hasPermission("comment_resources") : false;
   const canEditResource = Boolean(state.user && (resource.uploaded_by?.id === state.user.id || hasPermission("edit_resources")));
+  const canShare = Boolean(state.user && hasPermission("message_users"));
 
   const allTags = [resource.category, resource.country, resource.type].filter(Boolean);
   if (resource.productDetail) allTags.push(resource.productDetail);
@@ -1503,6 +1556,7 @@ function detailHtml(resource) {
         <div class="detail-actions">
           <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download${resource.file?.sizeBytes ? ` (${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB)` : ""}</button>
           <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend (${recommendationCount(resource.id)})</button>
+          ${canShare ? `<button type="button" class="secondary-btn" data-share-resource="${escapeHtml(resource.id)}">Send to someone</button>` : ""}
           ${canUpload ? `<button type="button" class="secondary-btn" data-open-upload-inline="1">Upload similar</button>` : ""}
           ${canEditResource ? `<button type="button" class="secondary-btn" data-edit-resource="${escapeHtml(resource.id)}">Edit</button>` : ""}
           ${canEditResource ? `<button type="button" class="secondary-btn" data-delete-resource="${escapeHtml(resource.id)}">Delete</button>` : ""}
@@ -1995,6 +2049,21 @@ function bindEvents() {
     void sendConversationReply();
   });
 
+  els.messageToUserSearch?.addEventListener("input", () => {
+    const q = String(els.messageToUserSearch.value || "");
+    window.clearTimeout(state.messageUserSearchTimer);
+    state.messageUserSearchTimer = window.setTimeout(() => {
+      void searchMessageRecipients(q);
+    }, 180);
+  });
+
+  els.messageToUserSearch?.addEventListener("focus", () => {
+    const q = String(els.messageToUserSearch.value || "");
+    if (q.trim().length >= 2) {
+      void searchMessageRecipients(q);
+    }
+  });
+
   els.profileAvatar?.addEventListener("change", async () => {
     const file = els.profileAvatar?.files?.[0];
     if (!file || !state.token) return;
@@ -2104,6 +2173,45 @@ function bindEvents() {
       const id = downloadButton.getAttribute("data-download-resource");
       const resource = state.resources.find((item) => item.id === id);
       triggerResourceDownload(resource);
+      return;
+    }
+
+    const shareButton = event.target.closest("[data-share-resource]");
+    if (shareButton) {
+      const id = shareButton.getAttribute("data-share-resource");
+      const resource = state.resources.find((item) => item.id === id);
+      if (!resource) return;
+      if (!state.user || !hasPermission("message_users")) {
+        showToast("Sign in to send resources in messages.", false);
+        setRoute("profile");
+        return;
+      }
+      state.pendingSharedResource = { id: resource.id, title: resource.title };
+      closeDetailModal();
+      setRoute("messages");
+      showToast("Pick a conversation and send a message to attach this resource.", true);
+      return;
+    }
+
+    const openSharedResource = event.target.closest("[data-open-shared-resource]");
+    if (openSharedResource) {
+      const id = openSharedResource.getAttribute("data-open-shared-resource");
+      openDetail(id);
+      return;
+    }
+
+    const pickUserButton = event.target.closest("[data-pick-user]");
+    if (pickUserButton) {
+      const id = pickUserButton.getAttribute("data-pick-user");
+      const name = pickUserButton.getAttribute("data-pick-user-name") || "";
+      const email = pickUserButton.getAttribute("data-pick-user-email") || "";
+      state.selectedMessageUser = { id, name, email };
+      if (els.messageToUserId) els.messageToUserId.value = id;
+      if (els.messageToUserSearch) els.messageToUserSearch.value = `${name} (${email})`.trim();
+      if (els.messageUserResults) {
+        els.messageUserResults.hidden = true;
+        els.messageUserResults.innerHTML = "";
+      }
       return;
     }
 

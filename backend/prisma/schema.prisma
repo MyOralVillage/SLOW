@@ -91,12 +91,15 @@ model ConversationMessage {
   read_at         DateTime?
   conversation_id String
   sender_id       String
+  resource_id     String?
 
   conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   sender       User         @relation("ConversationMessagesSent", fields: [sender_id], references: [id], onDelete: Cascade)
+  resource     Resource?    @relation(fields: [resource_id], references: [id], onDelete: SetNull)
 
   @@index([conversation_id, created_at])
   @@index([sender_id, created_at])
+  @@index([resource_id])
 }
 
 model Session {
@@ -139,6 +142,7 @@ model Resource {
   original_filename String?
   sha256            String?
   file_bytes        Bytes?
+  conversationMessages ConversationMessage[]
 
   @@index([country])
   @@index([category])

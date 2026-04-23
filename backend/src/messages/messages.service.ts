@@ -32,11 +32,21 @@ export class MessagesService {
     return user;
   }
 
-  async listRecipients(currentUserId: string) {
+  async listRecipients(currentUserId: string, query: string) {
+    const q = String(query || "").trim().toLowerCase();
+    const shouldFilter = q.length >= 2;
     const rows = await this.prisma.user.findMany({
       where: {
         id: { not: currentUserId },
         status: { not: UserStatus.disabled },
+        ...(shouldFilter
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { email: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
       },
       orderBy: [{ name: "asc" }],
       select: {
@@ -45,7 +55,7 @@ export class MessagesService {
         email: true,
         role: true,
       },
-      take: 200,
+      take: shouldFilter ? 25 : 0,
     });
     return { rows };
   }
@@ -75,6 +85,7 @@ export class MessagesService {
           take: 1,
           include: {
             sender: { select: { id: true, name: true } },
+            resource: { select: { id: true, title: true, type: true, country: true, category: true } },
           },
         },
       },
@@ -114,6 +125,7 @@ export class MessagesService {
                 body: last.body,
                 created_at: last.created_at,
                 sender: last.sender,
+                resource: last.resource || null,
               }
             : null,
           unread_count: unreadByConversation.get(c.id) || 0,
@@ -147,6 +159,7 @@ export class MessagesService {
             sender: {
               select: { id: true, name: true, email: true },
             },
+            resource: { select: { id: true, title: true, type: true, country: true, category: true } },
           },
         },
       },
@@ -184,15 +197,21 @@ export class MessagesService {
         created_at: m.created_at,
         read_at: m.read_at,
         sender: m.sender,
+        resource: m.resource || null,
       })),
     };
   }
 
-  async createConversation(currentUserId: string, participantUserId: string, body?: string) {
+  async createConversation(currentUserId: string, participantUserId: string, body?: string, resourceId?: string) {
     const toUserId = String(participantUserId || "").trim();
     if (!toUserId) throw new BadRequestException("Choose a user to message.");
     if (currentUserId === toUserId) throw new BadRequestException("Cannot message yourself.");
     await this.requireActiveRecipient(toUserId);
+
+    const resource = resourceId
+      ? await this.prisma.resource.findUnique({ where: { id: resourceId }, select: { id: true } })
+      : null;
+    if (resourceId && !resource) throw new NotFoundException("Resource not found.");
 
     const existing = await this.prisma.conversation.findFirst({
       where: {
@@ -210,7 +229,7 @@ export class MessagesService {
     });
     if (existing) {
       if (String(body || "").trim()) {
-        await this.sendMessage(existing.id, currentUserId, String(body));
+        await this.sendMessage(existing.id, currentUserId, String(body), resourceId);
       }
       return await this.getConversation(existing.id, currentUserId);
     }
@@ -224,24 +243,31 @@ export class MessagesService {
       select: { id: true },
     });
     if (String(body || "").trim()) {
-      await this.sendMessage(created.id, currentUserId, String(body));
+      await this.sendMessage(created.id, currentUserId, String(body), resourceId);
     }
     return await this.getConversation(created.id, currentUserId);
   }
 
-  async sendMessage(conversationId: string, senderId: string, body: string) {
+  async sendMessage(conversationId: string, senderId: string, body: string, resourceId?: string) {
     const text = String(body || "").trim();
     if (!text) throw new BadRequestException("Message cannot be empty.");
     await this.requireConversationMembership(conversationId, senderId);
+
+    const resource = resourceId
+      ? await this.prisma.resource.findUnique({ where: { id: resourceId }, select: { id: true } })
+      : null;
+    if (resourceId && !resource) throw new NotFoundException("Resource not found.");
 
     const row = await this.prisma.conversationMessage.create({
       data: {
         conversation_id: conversationId,
         sender_id: senderId,
         body: text,
+        resource_id: resourceId || null,
       },
       include: {
         sender: { select: { id: true, name: true, email: true } },
+        resource: { select: { id: true, title: true, type: true, country: true, category: true } },
       },
     });
     await this.prisma.conversation.update({
@@ -254,6 +280,7 @@ export class MessagesService {
       body: row.body,
       created_at: row.created_at,
       sender: row.sender,
+      resource: row.resource || null,
     };
   }
 }
