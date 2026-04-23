@@ -1,4 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { User, UserRole, UserStatus } from "@prisma/client";
 import * as crypto from "crypto";
 import * as fs from "fs";
@@ -9,6 +16,7 @@ import { DiskStorage } from "../storage/disk.storage";
 import { effectivePermissions, normalizePermissionGrants } from "./permissions";
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS || "14");
+const DEFAULT_WEB_APP_URL = "http://127.0.0.1:8080";
 
 function normalizeEmail(value: string) {
   return String(value || "").trim().toLowerCase();
@@ -53,11 +61,23 @@ function ownerEmailsFromEnv() {
 
 @Injectable()
 export class AuthService {
+  private readonly log = new Logger(AuthService.name);
+  private warnedAboutDefaultWebAppUrl = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly disk: DiskStorage,
   ) {}
+
+  private webAppBaseUrl() {
+    const base = String(process.env.WEB_APP_URL || DEFAULT_WEB_APP_URL).replace(/\/$/, "");
+    if (!this.warnedAboutDefaultWebAppUrl && /127\.0\.0\.1|localhost/.test(base)) {
+      this.warnedAboutDefaultWebAppUrl = true;
+      this.log.warn(`WEB_APP_URL is using the local fallback (${base}). Password reset and verification links will not work for real users until this is set to your public frontend URL.`);
+    }
+    return base;
+  }
 
   private serializeUser(user: User) {
     return {
@@ -151,9 +171,13 @@ export class AuthService {
     });
 
     if (verifyToken) {
-      const base = (process.env.WEB_APP_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+      const base = this.webAppBaseUrl();
       const link = `${base}/?email_verify=${encodeURIComponent(verifyToken)}`;
-      void this.mail.sendVerificationEmail(email, link);
+      try {
+        await this.mail.sendVerificationEmail(email, link);
+      } catch (e) {
+        this.log.error("Verification email not sent (check Resend/SMTP or logs for link)", e);
+      }
     }
 
     return await this.createSession(user);
@@ -305,9 +329,13 @@ export class AuthService {
         password_reset_expires: resetExpires,
       },
     });
-    const base = (process.env.WEB_APP_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+    const base = this.webAppBaseUrl();
     const link = `${base}/?reset_password=${encodeURIComponent(resetToken)}`;
-    void this.mail.sendPasswordResetEmail(user.email, link);
+    try {
+      await this.mail.sendPasswordResetEmail(user.email, link);
+    } catch (e) {
+      this.log.error("Password reset email not sent (configure RESEND_API_KEY or SMTP; link may be in MailService logs)", e);
+    }
     return generic;
   }
 
@@ -383,9 +411,13 @@ export class AuthService {
       where: { id: userId },
       data: { email_verification_token: verifyToken, email_verification_expires: verifyExpires },
     });
-    const base = (process.env.WEB_APP_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+    const base = this.webAppBaseUrl();
     const link = `${base}/?email_verify=${encodeURIComponent(verifyToken)}`;
-    void this.mail.sendVerificationEmail(user.email, link);
+    try {
+      await this.mail.sendVerificationEmail(user.email, link);
+    } catch (e) {
+      this.log.error("Verification resend failed", e);
+    }
     return { ok: true };
   }
 

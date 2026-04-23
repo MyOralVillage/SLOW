@@ -135,7 +135,15 @@
             <h2>Profile</h2>
           </div>
 
-          <div id="auth-panels" class="profile-grid">
+          <div id="auth-loading-card" class="card-panel auth-loading-card">
+            <div class="auth-loading-spinner" aria-hidden="true"></div>
+            <div>
+              <h3 class="panel-title">Checking your session</h3>
+              <p class="panel-subtitle">We are restoring your profile and sign-in state.</p>
+            </div>
+          </div>
+
+          <div id="auth-panels" class="profile-grid" hidden>
             <form id="signin-form" class="card-panel" novalidate>
               <h3 class="panel-title">Sign in</h3>
               <p class="panel-subtitle">Already have an account? Enter your email and password.</p>
@@ -235,15 +243,20 @@
             <div class="profile-top">
               <div>
                 <h3 class="panel-title">Edit profile</h3>
-                <p id="profile-summary" class="small-note"></p>
-                <p id="profile-permission-summary" class="small-note"></p>
-                <p id="profile-email-status" class="small-note" hidden></p>
+                <p id="profile-summary" class="profile-summary-line"></p>
+                <div class="profile-identity-list">
+                  <p id="profile-email-line" class="small-note"></p>
+                  <p id="profile-joined-line" class="small-note"></p>
+                  <p id="profile-permission-summary" class="small-note"></p>
+                </div>
+                <p id="profile-email-status" class="auth-notice" hidden></p>
                 <p id="profile-avatar-wrap" class="profile-avatar-wrap" hidden>
                   <img id="profile-avatar-preview" class="profile-avatar-img" width="64" height="64" alt="" />
                 </p>
-                <p class="small-note" id="btn-request-verification-p" hidden>
+                <div class="verify-actions" id="btn-request-verification-p" hidden>
                   <button type="button" class="secondary-btn" id="btn-request-verification">Send verification email</button>
-                </p>
+                  <button type="button" class="secondary-btn" id="btn-refresh-verification">Refresh verification status</button>
+                </div>
               </div>
               <div class="profile-top-actions">
                 <button type="button" class="secondary-btn" id="btn-goto-home">Home</button>
@@ -441,6 +454,7 @@
 
     <script src="./countries.js"></script>
     <script src="./metadata.js"></script>
+    <script src="./auth.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

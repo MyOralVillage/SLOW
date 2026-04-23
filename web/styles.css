@@ -444,6 +444,12 @@ a.app-home-link,
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  width: 100%;
+}
+
+.profile-top-actions .secondary-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .profile-avatar-wrap {
@@ -755,6 +761,72 @@ a.text-link-btn {
   padding: 16px 14px;
 }
 
+.auth-loading-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.auth-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(34, 87, 122, 0.2);
+  border-top-color: var(--accent);
+  animation: spin-auth 0.9s linear infinite;
+}
+
+.profile-summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.profile-identity-list {
+  display: grid;
+  gap: 4px;
+}
+
+.auth-notice {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ead38b;
+  background: #fff6d9;
+  color: #7d5d00;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auth-notice.ok {
+  border-color: #9bc9b3;
+  background: #eaf8f0;
+  color: #226343;
+}
+
+.auth-notice.warn {
+  border-color: #ead38b;
+  background: #fff6d9;
+  color: #7d5d00;
+}
+
+.verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.verify-actions .secondary-btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .card-panel + .card-panel {
   margin-top: 12px;
 }
@@ -858,6 +930,12 @@ a.text-link-btn {
 .role-tag.role-specialist { background: #5c3d8f; color: #fff; }
 .role-tag.role-member { background: var(--accent); color: #fff; }
 .role-tag.role-none { background: var(--muted); color: #fff; }
+
+@keyframes spin-auth {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .permission-details {
   margin-bottom: 10px;
@@ -1484,6 +1562,15 @@ a.text-link-btn {
     min-height: 30px;
     padding: 4px 10px;
     font-size: 12px;
+  }
+
+  .profile-top-actions {
+    width: auto;
+  }
+
+  .profile-top-actions .secondary-btn,
+  .verify-actions .secondary-btn {
+    width: auto;
   }
 }
 
