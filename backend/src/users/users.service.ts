@@ -126,6 +126,8 @@ export class UsersService {
         name: true,
         email: true,
         country: true,
+        role: true,
+        status: true,
       },
       orderBy: [{ name: "asc" }],
       take: 25,

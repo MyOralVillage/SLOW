@@ -44,6 +44,7 @@ export class MessagesService {
               OR: [
                 { name: { contains: q, mode: "insensitive" } },
                 { email: { contains: q, mode: "insensitive" } },
+                { country: { contains: q, mode: "insensitive" } },
               ],
             }
           : {}),
@@ -53,7 +54,9 @@ export class MessagesService {
         id: true,
         name: true,
         email: true,
+        country: true,
         role: true,
+        status: true,
       },
       take: shouldFilter ? 25 : 0,
     });
@@ -75,7 +78,9 @@ export class MessagesService {
                 id: true,
                 name: true,
                 email: true,
+                country: true,
                 role: true,
+                status: true,
               },
             },
           },
@@ -147,7 +152,9 @@ export class MessagesService {
                 id: true,
                 name: true,
                 email: true,
+                country: true,
                 role: true,
+                status: true,
               },
             },
           },
