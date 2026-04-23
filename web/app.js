@@ -112,6 +112,7 @@ const state = {
   messageUserSearchTimer: null,
   selectedMessageUser: null,
   pendingSharedResource: null,
+  messageMobileThreadOpen: false,
 };
 
 const els = {
@@ -219,6 +220,15 @@ const els = {
   messagesThreadList: document.getElementById("messages-thread-list"),
   messagesThreadTitle: document.getElementById("messages-thread-title"),
   messagesShareBanner: document.getElementById("messages-share-banner"),
+  messagesLayout: document.querySelector(".messages-layout"),
+  messagesConversationsPanel: document.getElementById("messages-conversations-panel"),
+  messagesThreadPanel: document.getElementById("messages-thread-panel"),
+  messagesThreadTopbar: document.getElementById("messages-thread-topbar"),
+  messagesThreadAvatar: document.getElementById("messages-thread-avatar"),
+  messagesThreadName: document.getElementById("messages-thread-name"),
+  messagesThreadStatus: document.getElementById("messages-thread-status"),
+  btnMessagesBack: document.getElementById("btn-messages-back"),
+  btnShareResourceInline: document.getElementById("btn-share-resource-inline"),
   signinMainBlock: document.getElementById("signin-main-block"),
   forgotPasswordBlock: document.getElementById("forgot-password-block"),
   resetPasswordCard: document.getElementById("reset-password-card"),
@@ -252,6 +262,31 @@ function formatDate(value) {
   } catch {
     return "No date";
   }
+}
+
+function formatTimeAgo(value) {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    const diff = Date.now() - d.getTime();
+    if (diff < 60 * 1000) return "now";
+    if (diff < 60 * 60 * 1000) return `${Math.floor(diff / (60 * 1000))}m`;
+    if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / (60 * 60 * 1000))}h`;
+    if (diff < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(diff / (24 * 60 * 60 * 1000))}d`;
+    return d.toLocaleDateString();
+  } catch {
+    return "";
+  }
+}
+
+function avatarLetter(name) {
+  const c = String(name || "?").trim().charAt(0).toUpperCase();
+  return c || "?";
+}
+
+function updateMessagesLayoutMode() {
+  if (!els.messagesLayout) return;
+  els.messagesLayout.classList.toggle("mobile-thread-open", Boolean(state.messageMobileThreadOpen));
 }
 
 function syncAuthState(snapshot = auth?.getSnapshot?.()) {
@@ -443,12 +478,16 @@ async function loadMessages() {
     els.messagesList.innerHTML = `<div class="simple-item"><span>Sign in to see messages.</span></div>`;
     if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = true;
     if (els.messagesThreadWrap) els.messagesThreadWrap.hidden = true;
+    state.messageMobileThreadOpen = false;
+    updateMessagesLayoutMode();
     return;
   }
   if (!hasPermission("message_users")) {
     els.messagesList.innerHTML = `<div class="simple-item"><span>Your role does not include messaging yet.</span></div>`;
     if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = true;
     if (els.messagesThreadWrap) els.messagesThreadWrap.hidden = true;
+    state.messageMobileThreadOpen = false;
+    updateMessagesLayoutMode();
     return;
   }
   if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = false;
@@ -469,6 +508,8 @@ async function loadMessages() {
   renderConversationList();
   clearMessageRecipientSelection();
   renderMessageShareBanner();
+  state.messageMobileThreadOpen = false;
+  updateMessagesLayoutMode();
 
   if (state.messageConversations.length && !state.activeConversationId) {
     await openConversation(state.messageConversations[0].id);
@@ -503,7 +544,7 @@ async function searchMessageRecipients(query) {
   }
   els.messageUserResults.hidden = false;
   els.messageUserResults.innerHTML = `<div class="simple-item"><span>Searching…</span></div>`;
-  const res = await apiFetch(`/messages/users?q=${encodeURIComponent(q)}`);
+  const res = await apiFetch(`/users/search?q=${encodeURIComponent(q)}`);
   if (!res.ok) {
     els.messageUserResults.innerHTML = `<div class="simple-item"><span>Could not search users.</span></div>`;
     return;
@@ -519,7 +560,7 @@ async function searchMessageRecipients(query) {
       (u) => `
         <button type="button" class="simple-item message-user-result" data-pick-user="${escapeHtml(u.id)}" data-pick-user-name="${escapeHtml(u.name)}" data-pick-user-email="${escapeHtml(u.email)}">
           <strong>${escapeHtml(u.name)}</strong>
-          <span class="small-note">${escapeHtml(u.email)}</span>
+          <span class="small-note">${escapeHtml(u.country || u.email || "")}</span>
         </button>
       `,
     )
@@ -536,13 +577,18 @@ function renderConversationList() {
   els.messagesList.innerHTML = rows
     .map((conv) => {
       const name = conv.counterpart?.name || conv.participants?.find((p) => p.id !== state.user?.id)?.name || "Conversation";
-      const preview = conv.last_message?.body || "No messages yet";
+      const preview = conv.last_message?.resource
+        ? `Shared: ${conv.last_message.resource.title || "Resource"}`
+        : conv.last_message?.body || "No messages yet";
       const isActive = conv.id === state.activeConversationId;
       return `
         <button type="button" class="simple-item message-inbox-item ${isActive ? "is-active" : ""}" data-open-conversation="${escapeHtml(conv.id)}">
-          <strong>${escapeHtml(name)}</strong>
+          <div class="messages-row-head">
+            <span class="messages-avatar">${escapeHtml(avatarLetter(name))}</span>
+            <strong>${escapeHtml(name)}</strong>
+            <span class="small-note">${conv.last_message?.created_at ? formatTimeAgo(conv.last_message.created_at) : "New"}</span>
+          </div>
           <span class="message-body">${escapeHtml(preview)}</span>
-          <span class="small-note">${conv.last_message?.created_at ? formatDate(conv.last_message.created_at) : "New"}</span>
           ${conv.unread_count ? `<span class="tag">${escapeHtml(String(conv.unread_count))} unread</span>` : ""}
         </button>
       `;
@@ -554,10 +600,17 @@ function renderConversationThread() {
   if (!els.messagesThreadWrap || !els.messagesThreadList || !els.messagesThreadTitle) return;
   if (!state.activeConversation || !state.activeConversationId) {
     els.messagesThreadWrap.hidden = true;
+    if (els.messagesThreadTopbar) els.messagesThreadTopbar.hidden = true;
+    if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = false;
     return;
   }
+  if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = true;
   const counterpart = state.activeConversation.participants?.find((p) => p.id !== state.user?.id);
   els.messagesThreadTitle.textContent = counterpart ? `Conversation with ${counterpart.name}` : "Conversation";
+  if (els.messagesThreadTopbar) els.messagesThreadTopbar.hidden = false;
+  if (els.messagesThreadAvatar) els.messagesThreadAvatar.textContent = avatarLetter(counterpart?.name || "Conversation");
+  if (els.messagesThreadName) els.messagesThreadName.textContent = counterpart?.name || "Conversation";
+  if (els.messagesThreadStatus) els.messagesThreadStatus.textContent = "Last seen recently";
   els.messagesThreadWrap.hidden = false;
   const rows = state.activeConversationMessages || [];
   els.messagesThreadList.innerHTML = rows.length
@@ -577,12 +630,13 @@ function renderConversationThread() {
               <strong>${escapeHtml(m.sender?.name || "Member")}</strong>
               <span class="message-body">${escapeHtml(m.body || "")}</span>
               ${shared}
-              <span class="small-note">${formatDate(m.created_at)}</span>
+              <span class="small-note">${formatTimeAgo(m.created_at)}</span>
             </div>
           `;
         })
         .join("")
     : `<div class="simple-item"><span>No messages yet. Send the first message below.</span></div>`;
+  els.messagesThreadList.scrollTop = els.messagesThreadList.scrollHeight;
 }
 
 function renderMessageShareBanner() {
@@ -609,6 +663,8 @@ async function openConversation(conversationId) {
   state.activeConversationId = id;
   state.activeConversation = json.conversation || null;
   state.activeConversationMessages = Array.isArray(json.messages) ? json.messages : [];
+  state.messageMobileThreadOpen = true;
+  updateMessagesLayoutMode();
   renderConversationList();
   renderConversationThread();
 }
@@ -639,6 +695,7 @@ async function startConversationFromComposer() {
   renderMessageShareBanner();
   showStatus(els.messagesSendStatus, "Conversation started", true);
   await refreshConversations();
+  if (state.activeConversationId) await openConversation(state.activeConversationId);
 }
 
 async function sendConversationReply() {
@@ -1268,6 +1325,8 @@ function applyRoute(route) {
   if (next === "messages" && state.user) {
     void loadMessages();
   } else {
+    state.messageMobileThreadOpen = false;
+    updateMessagesLayoutMode();
     stopMessagesPolling();
   }
 }
@@ -2054,13 +2113,41 @@ function bindEvents() {
     window.clearTimeout(state.messageUserSearchTimer);
     state.messageUserSearchTimer = window.setTimeout(() => {
       void searchMessageRecipients(q);
-    }, 180);
+    }, 250);
   });
 
   els.messageToUserSearch?.addEventListener("focus", () => {
     const q = String(els.messageToUserSearch.value || "");
     if (q.trim().length >= 2) {
       void searchMessageRecipients(q);
+    }
+  });
+
+  els.btnMessagesBack?.addEventListener("click", () => {
+    state.messageMobileThreadOpen = false;
+    updateMessagesLayoutMode();
+  });
+
+  els.btnShareResourceInline?.addEventListener("click", () => {
+    if (state.pendingSharedResource) {
+      showToast(`Sharing ready: ${state.pendingSharedResource.title || "Resource"}`, true);
+      return;
+    }
+    showToast("Open a resource and click Send to someone to attach it in chat.", true);
+    setRoute("home");
+  });
+
+  els.messageBody?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void startConversationFromComposer();
+    }
+  });
+
+  els.messageReplyBody?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void sendConversationReply();
     }
   });
 

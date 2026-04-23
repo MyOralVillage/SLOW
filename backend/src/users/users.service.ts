@@ -107,4 +107,29 @@ export class UsersService {
       permissions: effectivePermissions(row.role, row.permission_grants),
     };
   }
+
+  async searchForMessaging(currentUserId: string, query: string) {
+    const q = String(query || "").trim().toLowerCase();
+    if (q.length < 2) return { rows: [] };
+    const rows = await this.prisma.user.findMany({
+      where: {
+        id: { not: currentUserId },
+        status: { not: UserStatus.disabled },
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { country: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        country: true,
+      },
+      orderBy: [{ name: "asc" }],
+      take: 25,
+    });
+    return { rows };
+  }
 }

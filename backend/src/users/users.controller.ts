@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from "@nestjs/common";
 import { UserRole, UserStatus } from "@prisma/client";
 
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
@@ -26,6 +26,16 @@ export class UsersController {
   @RequirePermission("manage_users")
   async listUsers() {
     return { rows: await this.users.listUsers() };
+  }
+
+  @Get("search")
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("message_users")
+  async searchUsers(
+    @Req() req: { authUser?: RequestAuthUser },
+    @Query("q") q?: string,
+  ) {
+    return await this.users.searchForMessaging(req.authUser!.id, String(q || ""));
   }
 
   @Patch(":id")

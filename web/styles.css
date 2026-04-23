@@ -525,18 +525,66 @@ a.text-link-btn {
 .messages-thread-panel {
   display: grid;
   gap: 10px;
+  align-content: start;
 }
 
 .messages-thread-list {
   display: grid;
   gap: 8px;
-  max-height: 300px;
+  max-height: 360px;
   overflow-y: auto;
+}
+
+.messages-thread-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 10px;
+}
+
+.messages-back-btn {
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
+.messages-thread-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.messages-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-light);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.messages-thread-name {
+  margin: 0;
+  font-weight: 700;
 }
 
 .message-user-result {
   width: 100%;
   text-align: left;
+}
+
+.messages-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.messages-row-head .small-note {
+  margin-left: auto;
 }
 
 .message-shared-resource {
@@ -563,14 +611,22 @@ a.text-link-btn {
   background: var(--accent-soft);
 }
 
+.messages-composer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .message-mine {
   border-color: #b8d4e7;
   background: #eef6fb;
+  margin-left: 18%;
 }
 
 .message-theirs {
   border-color: var(--border-light);
   background: #fff;
+  margin-right: 18%;
 }
 
 .resource-thumb--has-image {
@@ -1654,6 +1710,29 @@ a.text-link-btn {
   .messages-layout {
     grid-template-columns: minmax(250px, 320px) 1fr;
     align-items: start;
+  }
+
+  .messages-back-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 759px) {
+  .messages-layout.mobile-thread-open #messages-conversations-panel {
+    display: none;
+  }
+  .messages-layout.mobile-thread-open #messages-thread-panel {
+    display: grid;
+  }
+  .messages-layout:not(.mobile-thread-open) #messages-thread-panel {
+    display: none;
+  }
+  .messages-layout.mobile-thread-open .messages-back-btn {
+    display: inline-flex;
+  }
+  .messages-thread-list {
+    max-height: calc(100vh - 360px);
+    max-height: calc(100dvh - 360px);
   }
 }
 
