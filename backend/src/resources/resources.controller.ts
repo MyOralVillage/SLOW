@@ -165,9 +165,15 @@ export class ResourcesController {
     const { row, stat, stream } = result as { row: any; stat: any; stream: any };
     res.setHeader("Content-Length", stat.size);
     res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("X-Content-Type-Options", "nosniff");
     const filename = row.original_filename || row.title || "download";
+    const safeFilename = String(filename).replace(/["\\\r\n]/g, "_");
     const disposition = download === "1" ? "attachment" : "inline";
-    res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
     stream.pipe(res);
     stream.on("close", () => {
       try {

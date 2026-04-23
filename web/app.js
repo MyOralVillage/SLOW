@@ -633,11 +633,11 @@ function colorForText(text) {
   return colors[total % colors.length];
 }
 
-function fallbackThumb(resource) {
-  const typeInitial = escapeHtml((resource.type || "Item").slice(0, 1).toUpperCase());
+function fallbackThumb(resource, label = null) {
+  const badge = escapeHtml(label || (resource.type || "Item").slice(0, 1).toUpperCase());
   return `
     <div class="thumb-fallback" style="background:${colorForText(resource.category || resource.title)}">
-      <span>${typeInitial}</span>
+      <span>${badge}</span>
       <p>${escapeHtml(resource.title)}</p>
     </div>
   `;
@@ -649,12 +649,34 @@ function backendAssetUrl(path) {
   return new URL(path, `${apiBase()}/`).toString();
 }
 
+function fileNameFromMeta(file) {
+  return file?.originalFilename || file?.original_filename || "";
+}
+
+function fileMimeFromMeta(file) {
+  return (file?.mimeType || file?.mime_type || "").toLowerCase();
+}
+
 function isImageFileMeta(file) {
   if (!file) return false;
-  const m = (file.mimeType || "").toLowerCase();
+  const m = fileMimeFromMeta(file);
   if (m.startsWith("image/")) return true;
-  const n = (file.originalFilename || file.original_filename || "").toLowerCase();
+  const n = fileNameFromMeta(file).toLowerCase();
   return /\.(png|jpe?g|gif|webp|svg|ico)$/i.test(n);
+}
+
+function isPdfFileMeta(file) {
+  if (!file) return false;
+  const m = fileMimeFromMeta(file);
+  if (m === "application/pdf") return true;
+  return /\.pdf$/i.test(fileNameFromMeta(file).toLowerCase());
+}
+
+function fileLabel(resource) {
+  const filename = fileNameFromMeta(resource?.file);
+  if (/\.pdf$/i.test(filename) || isPdfFileMeta(resource?.file)) return "PDF";
+  if (isImageFileMeta(resource?.file)) return "Image";
+  return (resource?.type || "File").slice(0, 12);
 }
 
 function resourceImageUrl(resource) {
@@ -670,6 +692,45 @@ function resourceDownloadUrl(resource) {
   const url = backendAssetUrl(resource.file.url);
   if (url.startsWith("http") && !url.includes("/api/")) return url;
   return `${url}?download=1`;
+}
+
+function triggerResourceDownload(resource) {
+  const url = resourceDownloadUrl(resource);
+  if (!url) {
+    showToast("No file available for this resource.", false);
+    return;
+  }
+
+  const filename = fileNameFromMeta(resource?.file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noopener";
+  if (url.startsWith("http") && !url.includes("/api/")) {
+    link.target = "_blank";
+  } else if (filename) {
+    link.setAttribute("download", filename);
+  }
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function resourcePreviewUrl(resource) {
+  if (!resource?.file?.url) return "";
+  return backendAssetUrl(resource.file.url);
+}
+
+function resourcePreviewHtml(resource, mode = "detail") {
+  const previewUrl = resourcePreviewUrl(resource);
+  if (isImageFileMeta(resource?.file) && previewUrl) {
+    const cls = mode === "card" ? "resource-thumb-img" : "detail-preview-img";
+    const attr = mode === "card" ? `loading="lazy" data-thumb-for="${escapeHtml(resource.id)}"` : `data-detail-res="${escapeHtml(resource.id)}"`;
+    return `<img class="${cls}" src="${escapeHtml(previewUrl)}" alt="${escapeHtml(resource.title)}" ${attr} />`;
+  }
+  if (isPdfFileMeta(resource?.file) && previewUrl && mode === "detail") {
+    return `<iframe class="detail-preview-frame" src="${escapeHtml(previewUrl)}#view=FitH" title="${escapeHtml(resource.title)}"></iframe>`;
+  }
+  return fallbackThumb(resource, fileLabel(resource));
 }
 
 function normalizeFile(f) {
@@ -706,16 +767,11 @@ function cardTags(resource) {
 }
 
 function resourceCardHtml(resource) {
-  const imageUrl = resourceImageUrl(resource);
   return `
     <article class="resource-card">
       <button type="button" class="resource-card-hit" data-open-detail="${escapeHtml(resource.id)}">
-        <div class="resource-thumb${imageUrl ? " resource-thumb--has-image" : ""}">
-          ${
-            imageUrl
-              ? `<img class="resource-thumb-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" loading="lazy" data-thumb-for="${escapeHtml(resource.id)}" />`
-              : fallbackThumb(resource)
-          }
+        <div class="resource-thumb${resourceImageUrl(resource) ? " resource-thumb--has-image" : ""}">
+          ${resourcePreviewHtml(resource, "card")}
         </div>
         <div class="resource-card-body">
           <h3>${escapeHtml(resource.title)}</h3>
@@ -1141,10 +1197,14 @@ function renderUploadPreview() {
     return;
   }
 
-  const canPreview = file.type.startsWith("image/") || /\.svg$/i.test(file.name);
-  if (canPreview) {
+  const canPreviewImage = file.type.startsWith("image/") || /\.svg$/i.test(file.name);
+  const canPreviewPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  if (canPreviewImage) {
     state.uploadPreviewUrl = URL.createObjectURL(file);
     els.uploadPreviewFrame.innerHTML = `<img src="${escapeHtml(state.uploadPreviewUrl)}" alt="Upload preview" class="preview-image" />`;
+  } else if (canPreviewPdf) {
+    state.uploadPreviewUrl = URL.createObjectURL(file);
+    els.uploadPreviewFrame.innerHTML = `<iframe src="${escapeHtml(state.uploadPreviewUrl)}#view=FitH" title="Upload preview" class="preview-frame"></iframe>`;
   } else {
     els.uploadPreviewFrame.innerHTML = `<div class="preview-placeholder"><p>Preview not available for this file type</p></div>`;
   }
@@ -1152,7 +1212,6 @@ function renderUploadPreview() {
 }
 
 function detailHtml(resource) {
-  const imageUrl = resourceImageUrl(resource);
   const comments = commentsForResource(resource.id);
   const canDownload = true;
   const canUpload = hasPermission("upload_resources");
@@ -1171,9 +1230,9 @@ function detailHtml(resource) {
     ? `<p class="detail-meta">Uploaded by ${escapeHtml(resource.uploaded_by.name)} · ${formatDate(resource.created_at)}</p>`
     : `<p class="detail-meta">${formatDate(resource.created_at)}</p>`;
 
-  const ofn = resource.file?.originalFilename || resource.file?.original_filename || "";
+  const ofn = fileNameFromMeta(resource.file);
   const fileMeta = resource.file
-    ? `<p class="detail-meta">${escapeHtml(ofn)}${resource.file.sizeBytes ? ` · ${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB` : ""}</p>`
+    ? `<p class="detail-meta">${escapeHtml(ofn || fileLabel(resource))}${resource.file.sizeBytes ? ` · ${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB` : ""}</p>`
     : "";
 
   return `
@@ -1187,11 +1246,7 @@ function detailHtml(resource) {
       </div>
       <div class="detail-preview-wrap">
         <div class="detail-preview">
-          ${
-            imageUrl
-              ? `<img class="detail-preview-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" data-detail-res="${escapeHtml(resource.id)}" />`
-              : fallbackThumb(resource)
-          }
+          ${resourcePreviewHtml(resource, "detail")}
         </div>
       </div>
       <div class="detail-copy">
@@ -1810,12 +1865,7 @@ function bindEvents() {
     if (downloadButton) {
       const id = downloadButton.getAttribute("data-download-resource");
       const resource = state.resources.find((item) => item.id === id);
-      const url = resourceDownloadUrl(resource);
-      if (url) {
-        window.open(url, "_blank", "noopener");
-      } else {
-        showToast("No file available for this resource.", false);
-      }
+      triggerResourceDownload(resource);
       return;
     }
 
