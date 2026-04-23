@@ -1,11 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import * as fs from "fs";
-import * as path from "path";
 
 import { PrismaService } from "../prisma/prisma.service";
 import { DiskStorage } from "../storage/disk.storage";
 import { CreateResourceDto } from "./dto/create-resource.dto";
 import { SearchResourcesDto } from "./dto/search-resources.dto";
+import { isImageMime, resolveMime } from "./mime.util";
 
 function normalizeKeywords(list: string[] | undefined) {
   if (!list) return [];
@@ -46,6 +46,10 @@ export class ResourcesService {
   ) {}
 
   private toResourceResponse(row: any) {
+    const hasLocal = Boolean(row.storage_key || row.file_path);
+    const hasFile = Boolean(row.external_url || hasLocal);
+    const mime = row.mime_type || null;
+    const isImg = isImageMime(mime, row.original_filename);
     return {
       id: row.id,
       title: row.title,
@@ -66,17 +70,19 @@ export class ResourcesService {
             role: row.uploadedBy.role,
           }
         : null,
-      file: row.file_path || row.external_url
+      file: hasFile
         ? {
             url: row.external_url || `/api/resources/${row.id}/file`,
             thumbnailUrl: row.external_url
-              ? row.external_url
-              : row.mime_type && row.mime_type.startsWith("image/")
+              ? isImg
+                ? row.external_url
+                : null
+              : isImg
                 ? `/api/resources/${row.id}/file`
                 : null,
-            mimeType: row.mime_type,
+            mimeType: mime,
             originalFilename: row.original_filename,
-            sizeBytes: row.size_bytes ? row.size_bytes.toString() : null,
+            sizeBytes: row.size_bytes != null ? row.size_bytes.toString() : null,
           }
         : null,
     };
@@ -135,8 +141,8 @@ export class ResourcesService {
       const stored = await this.disk.writeResourceFile(id, file.originalname, file.buffer);
       data.file_storage = "disk";
       data.storage_key = stored.storageKey;
-      data.file_path = stored.absolutePath;
-      data.mime_type = file.mimetype || null;
+      data.file_path = stored.storageKey;
+      data.mime_type = resolveMime(file.mimetype, file.originalname) || file.mimetype || null;
       data.size_bytes = BigInt(stored.sizeBytes);
       data.original_filename = file.originalname || null;
       data.sha256 = stored.sha256;
@@ -156,6 +162,7 @@ export class ResourcesService {
       select: {
         id: true,
         file_path: true,
+        storage_key: true,
         uploaded_by: true,
       },
     });
@@ -164,9 +171,14 @@ export class ResourcesService {
       throw new ForbiddenException("You do not have permission to remove this resource.");
     }
 
+    const toUnlink = this.disk.resolveLocalPath({
+      storageKey: existing.storage_key,
+      filePath: existing.file_path,
+    });
+
     await this.prisma.resource.delete({ where: { id } });
-    if (existing.file_path) {
-      await fs.promises.unlink(existing.file_path).catch(() => undefined);
+    if (toUnlink) {
+      await fs.promises.unlink(toUnlink.abs).catch(() => undefined);
     }
     return { ok: true };
   }
@@ -187,8 +199,8 @@ export class ResourcesService {
       data: {
         file_storage: "disk",
         storage_key: stored.storageKey,
-        file_path: stored.absolutePath,
-        mime_type: file.mimetype || null,
+        file_path: stored.storageKey,
+        mime_type: resolveMime(file.mimetype, file.originalname) || file.mimetype || null,
         size_bytes: BigInt(stored.sizeBytes),
         original_filename: file.originalname || null,
         sha256: stored.sha256,
@@ -282,10 +294,14 @@ export class ResourcesService {
       return { row, externalUrl: row.external_url };
     }
 
-    const filePath = row.file_path || null;
-    if (!filePath) throw new NotFoundException("No file for this resource.");
-    const abs = path.resolve(filePath);
-    if (!fs.existsSync(abs)) throw new NotFoundException("File missing on disk.");
+    const resolved = this.disk.resolveLocalPath({
+      storageKey: row.storage_key,
+      filePath: row.file_path,
+    });
+    if (!resolved) {
+      throw new NotFoundException("File missing on disk. If the server was restarted, re-upload may be required.");
+    }
+    const abs = resolved.abs;
     const stat = await fs.promises.stat(abs);
     return { row, abs, stat, stream: fs.createReadStream(abs) };
   }

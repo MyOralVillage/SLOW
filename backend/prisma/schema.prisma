@@ -36,6 +36,10 @@ model User {
   country    String?
   why_interested String?
   avatar_name String?
+  avatar_storage_key String?
+  email_verified Boolean  @default(false)
+  email_verification_token String? @unique
+  email_verification_expires DateTime?
   whatsapp_phone String?
   biodata    String?
   social_handles String?
@@ -46,6 +50,8 @@ model User {
   sessions   Session[]
   resources  Resource[]  @relation("UploadedResources")
   comments   Comment[]
+  messagesSent     Message[] @relation("MessagesSent")
+  messagesReceived Message[] @relation("MessagesReceived")
 
   @@index([role])
   @@index([status])
@@ -113,4 +119,19 @@ model Comment {
 
   @@index([resource_id, created_at])
   @@index([user_id])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  body       String
+  created_at DateTime @default(now())
+  read_at    DateTime?
+
+  from_user_id String
+  to_user_id   String
+  fromUser     User @relation("MessagesSent", fields: [from_user_id], references: [id], onDelete: Cascade)
+  toUser       User @relation("MessagesReceived", fields: [to_user_id], references: [id], onDelete: Cascade)
+
+  @@index([to_user_id, created_at])
+  @@index([from_user_id, created_at])
 }

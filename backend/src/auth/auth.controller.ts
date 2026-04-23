@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Post, Req, UnauthorizedException, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Req, Res, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 
-import type { Request } from "express";
+import type { Request, Response } from "express";
 
 import { SessionAuthGuard } from "./guards/session-auth.guard";
 import { AuthService } from "./auth.service";
+import { inferMimeFromFilename } from "../resources/mime.util";
 
 type SignInBody = {
   name?: string;
@@ -33,6 +36,11 @@ function bearerToken(req: Request) {
   if (!header.toLowerCase().startsWith("bearer ")) return "";
   return header.slice(7).trim();
 }
+
+const avatarUpload = {
+  storage: memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 },
+};
 
 @Controller("auth")
 export class AuthController {
@@ -107,5 +115,42 @@ export class AuthController {
         socialHandles: body?.socialHandles || body?.social_handles,
       }),
     };
+  }
+
+  @Post("verify-email")
+  async verifyEmail(@Body() body: { token?: string }) {
+    return await this.auth.verifyEmail(String(body?.token || ""));
+  }
+
+  @Post("request-verification")
+  @UseGuards(SessionAuthGuard)
+  async requestVerification(@Req() req: Request & { authUser?: { id: string } }) {
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    return await this.auth.requestVerificationEmail(req.authUser.id);
+  }
+
+  @Get("avatar")
+  @UseGuards(SessionAuthGuard)
+  async getAvatar(
+    @Req() req: Request & { authUser?: { id: string } },
+    @Res() res: Response,
+  ) {
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    const { stream, filename } = await this.auth.openAvatarReadStream(req.authUser.id);
+    const mime = inferMimeFromFilename(filename) || "image/jpeg";
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    stream.pipe(res);
+  }
+
+  @Post("avatar")
+  @UseGuards(SessionAuthGuard)
+  @UseInterceptors(FileInterceptor("file", avatarUpload))
+  async postAvatar(
+    @Req() req: Request & { authUser?: { id: string } },
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    return await this.auth.saveAvatar(req.authUser.id, file);
   }
 }

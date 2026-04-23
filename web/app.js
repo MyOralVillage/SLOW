@@ -176,6 +176,19 @@ const els = {
   uploadPreviewMeta: document.getElementById("upload-preview-meta"),
   uploadSubmit: document.getElementById("btn-upload-submit"),
   toastRoot: document.getElementById("toast-root"),
+  profileEmailStatus: document.getElementById("profile-email-status"),
+  profileAvatarPreview: document.getElementById("profile-avatar-preview"),
+  profileAvatarWrap: document.getElementById("profile-avatar-wrap"),
+  btnRequestVerification: document.getElementById("btn-request-verification"),
+  btnRequestVerificationP: document.getElementById("btn-request-verification-p"),
+  btnGotoHome: document.getElementById("btn-goto-home"),
+  appHomeLink: document.getElementById("app-home-link"),
+  messageToEmail: document.getElementById("message-to-email"),
+  messageBody: document.getElementById("message-body"),
+  btnSendMessage: document.getElementById("btn-send-message"),
+  messagesSendStatus: document.getElementById("messages-send-status"),
+  messagesComposeNote: document.getElementById("messages-compose-note"),
+  messagesComposeWrap: document.getElementById("messages-compose-wrap"),
 };
 
 function apiBase() {
@@ -204,6 +217,102 @@ function showToast(message, ok = true) {
   node.textContent = message;
   els.toastRoot.appendChild(node);
   setTimeout(() => node.remove(), 3200);
+}
+
+function goHome() {
+  setRoute("home");
+}
+
+async function loadProfileAvatar() {
+  if (!els.profileAvatarPreview || !state.token) {
+    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
+    return;
+  }
+  if (!state.user?.has_avatar) {
+    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
+    return;
+  }
+  try {
+    const res = await apiFetch("/auth/avatar", { cache: "no-store" });
+    if (!res.ok) throw new Error("no avatar");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    if (els.profileAvatarPreview.dataset.blobUrl) {
+      URL.revokeObjectURL(els.profileAvatarPreview.dataset.blobUrl);
+    }
+    els.profileAvatarPreview.dataset.blobUrl = url;
+    els.profileAvatarPreview.src = url;
+    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = false;
+  } catch {
+    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
+  }
+}
+
+async function processEmailVerifyFromQuery() {
+  const p = new URLSearchParams(window.location.search);
+  const tok = p.get("email_verify");
+  if (!tok) return;
+  try {
+    const res = await apiFetch("/auth/verify-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: tok }),
+    });
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete("email_verify");
+    window.history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
+    if (!res.ok) {
+      showToast(await errorText(res, "Email verification failed"), false);
+      return;
+    }
+    const json = await res.json();
+    if (state.user && json.user && state.user.id === json.user.id) {
+      state.user = { ...state.user, ...json.user };
+    }
+    showToast("Email verified", true);
+    updateProfileUi();
+  } catch {
+    showToast("Could not verify email", false);
+  }
+}
+
+async function loadMessages() {
+  if (!els.messagesList) return;
+  if (!state.user) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>Sign in to see messages.</span></div>`;
+    if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = true;
+    return;
+  }
+  if (!hasPermission("message_users")) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>Your role does not include messaging yet.</span></div>`;
+    if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = true;
+    return;
+  }
+  if (els.messagesComposeWrap) els.messagesComposeWrap.hidden = false;
+  if (els.messagesSendStatus) els.messagesSendStatus.textContent = "";
+  els.messagesList.innerHTML = `<div class="simple-item"><span>Loading messages…</span></div>`;
+  const res = await apiFetch("/messages?box=inbox");
+  if (!res.ok) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>Could not load messages.</span></div>`;
+    return;
+  }
+  const json = await res.json();
+  const rows = Array.isArray(json.rows) ? json.rows : [];
+  if (!rows.length) {
+    els.messagesList.innerHTML = `<div class="simple-item"><span>No messages in your inbox yet. Send a message to another member by email below (they need an account).</span></div>`;
+    return;
+  }
+  els.messagesList.innerHTML = rows
+    .map(
+      (m) => `
+        <div class="simple-item message-inbox-item">
+          <strong>${escapeHtml(m.from?.name || "Member")}</strong>
+          <span class="message-body">${escapeHtml(m.body || "")}</span>
+          <span class="small-note">${formatDate(m.created_at)}</span>
+        </div>
+      `,
+    )
+    .join("");
 }
 
 function showStatus(target, message, ok = true) {
@@ -390,8 +499,20 @@ function backendAssetUrl(path) {
   return new URL(path, `${apiBase()}/`).toString();
 }
 
+function isImageFileMeta(file) {
+  if (!file) return false;
+  const m = (file.mimeType || "").toLowerCase();
+  if (m.startsWith("image/")) return true;
+  const n = (file.originalFilename || file.original_filename || "").toLowerCase();
+  return /\.(png|jpe?g|gif|webp|svg|ico)$/i.test(n);
+}
+
 function resourceImageUrl(resource) {
-  return resource?.file?.thumbnailUrl ? backendAssetUrl(resource.file.thumbnailUrl) : "";
+  const f = resource?.file;
+  if (!f) return "";
+  if (f.thumbnailUrl) return backendAssetUrl(f.thumbnailUrl);
+  if (isImageFileMeta(f) && f.url) return backendAssetUrl(f.url);
+  return "";
 }
 
 function resourceDownloadUrl(resource) {
@@ -399,6 +520,17 @@ function resourceDownloadUrl(resource) {
   const url = backendAssetUrl(resource.file.url);
   if (url.startsWith("http") && !url.includes("/api/")) return url;
   return `${url}?download=1`;
+}
+
+function normalizeFile(f) {
+  if (!f) return null;
+  return {
+    url: f.url,
+    thumbnailUrl: f.thumbnailUrl,
+    mimeType: f.mimeType || f.mime_type,
+    originalFilename: f.originalFilename || f.original_filename,
+    sizeBytes: f.sizeBytes != null ? f.sizeBytes : f.size_bytes,
+  };
 }
 
 function normalizeResource(resource) {
@@ -415,7 +547,7 @@ function normalizeResource(resource) {
     institution: resource.institution || "",
     created_at: resource.created_at || new Date().toISOString(),
     uploaded_by: resource.uploaded_by || null,
-    file: resource.file || null,
+    file: normalizeFile(resource.file) || null,
   };
 }
 
@@ -425,12 +557,15 @@ function cardTags(resource) {
 
 function resourceCardHtml(resource) {
   const imageUrl = resourceImageUrl(resource);
-  const desc = (resource.description || "").slice(0, 60);
   return `
     <article class="resource-card">
       <button type="button" class="resource-card-hit" data-open-detail="${escapeHtml(resource.id)}">
-        <div class="resource-thumb">
-          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" loading="lazy" />` : fallbackThumb(resource)}
+        <div class="resource-thumb${imageUrl ? " resource-thumb--has-image" : ""}">
+          ${
+            imageUrl
+              ? `<img class="resource-thumb-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" loading="lazy" data-thumb-for="${escapeHtml(resource.id)}" />`
+              : fallbackThumb(resource)
+          }
         </div>
         <div class="resource-card-body">
           <h3>${escapeHtml(resource.title)}</h3>
@@ -560,7 +695,7 @@ function renderUsers() {
           <div class="user-permission-head">
             <div>
               <strong>${escapeHtml(user.name)}</strong>
-              <p>${escapeHtml(user.email)}</p>
+              <p>${escapeHtml(user.email)}${user.email_verified ? " · ✓ verified" : ""}</p>
               <p class="small-note">${escapeHtml(user.country || "No country")} · ${escapeHtml(String(user.uploaded_resource_count || 0))} uploads · Joined ${escapeHtml(memberSince)}</p>
               ${user.why_interested ? `<p class="small-note">${escapeHtml(user.why_interested)}</p>` : ""}
             </div>
@@ -610,30 +745,7 @@ function renderUsers() {
 }
 
 function renderMessages() {
-  if (!state.user) {
-    els.messagesList.innerHTML = `<div class="simple-item"><span>Sign in to see messages.</span></div>`;
-    return;
-  }
-  if (!hasPermission("message_users")) {
-    els.messagesList.innerHTML = `<div class="simple-item"><span>Your role does not include messaging.</span></div>`;
-    return;
-  }
-  const allComments = Object.values(state.commentsByResource).flat();
-  els.messagesList.innerHTML = allComments.length
-    ? allComments
-        .slice()
-        .reverse()
-        .slice(0, 8)
-        .map(
-          (comment) => `
-            <div class="simple-item">
-              <strong>${escapeHtml(comment.user?.name || comment.name || "Member")}</strong>
-              <span>${escapeHtml(comment.body || comment.message || "")}</span>
-            </div>
-          `,
-        )
-        .join("")
-    : `<div class="simple-item"><span>No messages yet</span></div>`;
+  void loadMessages();
 }
 
 function renderNotifications() {
@@ -676,6 +788,9 @@ function applyRoute(route) {
     panel.classList.toggle("is-active", on);
   });
   els.bottomNavButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.route === next));
+  if (next === "messages" && state.user) {
+    void loadMessages();
+  }
 }
 
 function updateTopButtons() {
@@ -703,6 +818,12 @@ function updateProfileUi() {
   if (!signedIn) {
     if (els.profileSummary) els.profileSummary.textContent = "";
     if (els.profilePermissionSummary) els.profilePermissionSummary.textContent = "";
+    if (els.profileEmailStatus) {
+      els.profileEmailStatus.textContent = "";
+      els.profileEmailStatus.hidden = true;
+    }
+    if (els.btnRequestVerificationP) els.btnRequestVerificationP.hidden = true;
+    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
     return;
   }
 
@@ -711,6 +832,13 @@ function updateProfileUi() {
     const perms = userPermissions();
     els.profilePermissionSummary.textContent = perms.length ? `${perms.length} permissions active` : "No permissions assigned";
   }
+  if (els.profileEmailStatus) {
+    const v = state.user.email_verified === true;
+    els.profileEmailStatus.hidden = false;
+    els.profileEmailStatus.textContent = v ? "Email verified" : "Email not verified yet — check your inbox or resend below.";
+    if (els.btnRequestVerificationP) els.btnRequestVerificationP.hidden = v;
+  }
+  void loadProfileAvatar();
   els.profileName.value = state.user.name || profile?.name || "";
   els.profileEmail.value = state.user.email || profile?.email || "";
   els.profileWhatsapp.value = state.user.whatsapp_phone || profile?.whatsapp || "";
@@ -864,8 +992,9 @@ function detailHtml(resource) {
     ? `<p class="detail-meta">Uploaded by ${escapeHtml(resource.uploaded_by.name)} · ${formatDate(resource.created_at)}</p>`
     : `<p class="detail-meta">${formatDate(resource.created_at)}</p>`;
 
+  const ofn = resource.file?.originalFilename || resource.file?.original_filename || "";
   const fileMeta = resource.file
-    ? `<p class="detail-meta">${escapeHtml(resource.file.originalFilename || "")}${resource.file.sizeBytes ? ` · ${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB` : ""}</p>`
+    ? `<p class="detail-meta">${escapeHtml(ofn)}${resource.file.sizeBytes ? ` · ${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB` : ""}</p>`
     : "";
 
   return `
@@ -879,7 +1008,11 @@ function detailHtml(resource) {
       </div>
       <div class="detail-preview-wrap">
         <div class="detail-preview">
-          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" />` : fallbackThumb(resource)}
+          ${
+            imageUrl
+              ? `<img class="detail-preview-img" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(resource.title)}" data-detail-res="${escapeHtml(resource.id)}" />`
+              : fallbackThumb(resource)
+          }
         </div>
       </div>
       <div class="detail-copy">
@@ -1086,7 +1219,7 @@ async function handleSignIn(event) {
   if (!result) return;
   showStatus(els.signInStatus, "", true);
   showToast(`Welcome back, ${result.user?.name || ""}`, true);
-  setRoute("profile");
+  setRoute("home");
 }
 
 async function handleSignUp(event) {
@@ -1133,8 +1266,8 @@ async function handleSignUp(event) {
   if (els.signupCountry) els.signupCountry.value = country;
   updateProfileUi();
   showStatus(els.signupStatus, "", true);
-  showToast(`Welcome, ${name}! Account created.`, true);
-  setRoute("profile");
+  showToast(`Welcome, ${name}! Account created. Check your email to verify.`, true);
+  setRoute("home");
 }
 
 async function handleSignOut() {
@@ -1170,7 +1303,7 @@ function handleProfileSave(event) {
     whatsappPhone: els.profileWhatsapp.value.trim(),
     biodata: els.profileBiodata.value.trim(),
     socialHandles: els.profileSocials.value.trim(),
-    avatarName: els.profileAvatar.files?.[0]?.name || getSavedProfile(email)?.avatarName || "",
+    avatarName: state.user?.avatar_name || getSavedProfile(email)?.avatarName || "",
   };
   apiFetch("/auth/profile", {
     method: "POST",
@@ -1194,6 +1327,7 @@ function handleProfileSave(event) {
       showStatus(els.profileStatus, "Profile saved", true);
       updateTopButtons();
       updateProfileUi();
+      void loadProfileAvatar();
       showToast("Profile saved", true);
     })
     .catch((error) => {
@@ -1254,13 +1388,123 @@ async function handleUpload(event) {
 }
 
 function bindEvents() {
+  document.addEventListener(
+    "error",
+    (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLImageElement)) return;
+      if (t.classList.contains("resource-thumb-img")) {
+        const id = t.getAttribute("data-thumb-for");
+        const resource = state.resources.find((r) => r.id === id);
+        const wrap = t.closest(".resource-thumb");
+        if (wrap && resource) wrap.innerHTML = fallbackThumb(resource);
+        return;
+      }
+      if (t.classList.contains("detail-preview-img")) {
+        const id = t.getAttribute("data-detail-res");
+        const resource = state.resources.find((r) => r.id === id);
+        const wrap = t.closest(".detail-preview");
+        if (wrap && resource) wrap.innerHTML = fallbackThumb(resource);
+      }
+    },
+    true,
+  );
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest?.(".password-toggle");
+    if (!btn) return;
+    const id = btn.getAttribute("data-password-for");
+    const input = id ? document.getElementById(id) : null;
+    if (!input) return;
+    e.preventDefault();
+    const isPw = input.type === "password";
+    input.type = isPw ? "text" : "password";
+    btn.setAttribute("aria-pressed", isPw ? "true" : "false");
+    btn.textContent = isPw ? "Hide" : "Show";
+  });
+
+  els.appHomeLink?.addEventListener("click", (e) => {
+    e.preventDefault();
+    goHome();
+  });
+  els.btnGotoHome?.addEventListener("click", () => goHome());
+  document.querySelectorAll('a.back-home-link[href="#home"]').forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      goHome();
+    });
+  });
+
+  els.btnRequestVerification?.addEventListener("click", () => {
+    if (!state.token) return;
+    showStatus(els.profileStatus, "Sending…", true);
+    apiFetch("/auth/request-verification", { method: "POST" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await errorText(res, "Could not send email"));
+        showStatus(els.profileStatus, "Check your inbox for the link.", true);
+        showToast("Verification email sent", true);
+      })
+      .catch((err) => {
+        showStatus(els.profileStatus, err.message || "Could not send", false);
+        showToast(err.message || "Could not send", false);
+      });
+  });
+
+  els.btnSendMessage?.addEventListener("click", () => {
+    if (!state.token) {
+      setRoute("profile");
+      return;
+    }
+    const to = (els.messageToEmail?.value || "").trim();
+    const body = (els.messageBody?.value || "").trim();
+    if (!to || !body) {
+      if (els.messagesSendStatus) showStatus(els.messagesSendStatus, "Enter email and message", false);
+      return;
+    }
+    if (els.messagesSendStatus) showStatus(els.messagesSendStatus, "Sending…", true);
+    apiFetch("/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toEmail: to, body }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await errorText(res, "Could not send"));
+        if (els.messageBody) els.messageBody.value = "";
+        if (els.messagesSendStatus) showStatus(els.messagesSendStatus, "Sent", true);
+        showToast("Message sent", true);
+        void loadMessages();
+      })
+      .catch((err) => {
+        if (els.messagesSendStatus) showStatus(els.messagesSendStatus, err.message || "Error", false);
+        showToast(err.message || "Could not send", false);
+      });
+  });
+
+  els.profileAvatar?.addEventListener("change", async () => {
+    const file = els.profileAvatar?.files?.[0];
+    if (!file || !state.token) return;
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    try {
+      const res = await apiFetch("/auth/avatar", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(await errorText(res, "Upload failed"));
+      const json = await res.json();
+      state.user = json.user;
+      showToast("Photo saved", true);
+      updateProfileUi();
+    } catch (e) {
+      showToast(e.message || "Photo upload failed", false);
+    }
+    els.profileAvatar.value = "";
+  });
+
   els.bottomNavButtons.forEach((button) => {
     button.addEventListener("click", () => setRoute(button.dataset.route || "home"));
   });
 
   els.btnOpenUpload?.addEventListener("click", () => openUploadModal());
   els.btnHomeUpload?.addEventListener("click", () => openUploadModal());
-  els.btnTopSignin?.addEventListener("click", () => setRoute(state.user ? "profile" : "profile"));
+  els.btnTopSignin?.addEventListener("click", () => setRoute("profile"));
   els.btnClearSearch?.addEventListener("click", clearSearch);
   els.btnRefreshLibrary?.addEventListener("click", () => loadResources().catch(() => undefined));
   els.btnRefreshUsers?.addEventListener("click", () => loadUsers().catch(() => undefined));
@@ -1435,6 +1679,7 @@ function bindEvents() {
 async function bootstrap() {
   await loadConfig();
   initFields();
+  await processEmailVerifyFromQuery();
   renderCategoryTiles();
   bindEvents();
   await restoreSession();

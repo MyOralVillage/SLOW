@@ -16,7 +16,13 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import type { Request, Response } from "express";
+
+const uploadMemory = {
+  storage: memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+};
 
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
 import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
@@ -67,7 +73,7 @@ export class ResourcesController {
   @Post()
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("upload_resources")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", uploadMemory))
   async create(
     @Req() req: AuthenticatedRequest,
     @Body() body: Record<string, unknown>,
@@ -84,7 +90,7 @@ export class ResourcesController {
   @Post("upload")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("upload_resources")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", uploadMemory))
   async createWithFile(
     @Req() req: AuthenticatedRequest,
     @Body() body: Record<string, unknown>,
@@ -98,7 +104,7 @@ export class ResourcesController {
   @Put(":id")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("upload_resources")
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor("file", uploadMemory))
   async update(
     @Param("id") id: string,
     @Req() req: AuthenticatedRequest,

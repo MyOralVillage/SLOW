@@ -1,5 +1,7 @@
 window.SLOW_UPLOAD_OPTIONS = {
-  countries: ["Sierra Leone", "Ethiopia", "Pakistan", "Kenya", "Bangladesh", "East Timor", "Solomon Islands"],
+  countries: Array.isArray(window.SLOW_COUNTRIES) && window.SLOW_COUNTRIES.length
+    ? window.SLOW_COUNTRIES
+    : ["Sierra Leone", "Ethiopia", "Pakistan", "Kenya", "Bangladesh", "Timor-Leste", "Solomon Islands"],
   mainCategories: ["Group Loans", "Individual Loans", "Savings", "Payments", "Insurance", "Savings Groups"],
   crossCuttingCategories: ["Icons", "Templates", "Frames", "Digital", "Paper", "Documents - Manuals", "Documents - Research"],
   productDetails: ["Group", "Individual", "Agent", "Farmer", "Women", "Youth"],

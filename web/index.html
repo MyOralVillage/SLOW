@@ -15,10 +15,10 @@
   <body>
     <main class="app-shell">
       <header class="app-header">
-        <div class="app-title-wrap">
+        <a href="#home" class="app-title-wrap app-home-link" id="app-home-link" title="Back to home">
           <h1 class="app-title">Salone OIM Library</h1>
           <p class="app-subtitle">Icons, templates, and OIM resources.</p>
-        </div>
+        </a>
         <div class="top-status">
           <span id="backend-badge" class="status-pill">Checking connection</span>
           <button type="button" class="top-action" id="btn-open-upload">Upload</button>
@@ -96,15 +96,31 @@
 
       <section class="route-panel" data-route-panel="messages" hidden>
         <section class="section-block">
+          <p class="section-top-nav"><a href="#home" class="back-home-link">← Home</a></p>
           <div class="section-head">
             <h2>Messages</h2>
           </div>
+          <p class="small-note" id="messages-compose-note">Message another member by email. They must already have an account.</p>
+          <div class="card-panel" id="messages-compose-wrap" hidden>
+            <label class="field">
+              <span>Recipient email</span>
+              <input type="email" id="message-to-email" inputmode="email" autocomplete="email" placeholder="name@example.org" />
+            </label>
+            <label class="field field-wide">
+              <span>Your message</span>
+              <textarea id="message-body" rows="3" placeholder="Write a short message"></textarea>
+            </label>
+            <button type="button" class="primary-btn" id="btn-send-message">Send message</button>
+            <p id="messages-send-status" class="small-note"></p>
+          </div>
+          <p class="panel-subtitle" id="messages-box-label">Inbox</p>
           <div id="messages-list" class="simple-list"></div>
         </section>
       </section>
 
       <section class="route-panel" data-route-panel="notifications" hidden>
         <section class="section-block">
+          <p class="section-top-nav"><a href="#home" class="back-home-link">← Home</a></p>
           <div class="section-head">
             <h2>Notifications</h2>
           </div>
@@ -114,6 +130,7 @@
 
       <section class="route-panel" data-route-panel="profile" hidden>
         <section class="section-block">
+          <p class="section-top-nav"><a href="#home" class="back-home-link">← Home</a></p>
           <div class="section-head">
             <h2>Profile</h2>
           </div>
@@ -130,9 +147,12 @@
                 <span>Email</span>
                 <input id="signin-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
               </label>
-              <label class="field">
+              <label class="field field-password">
                 <span>Password</span>
-                <input id="signin-password" name="password" type="password" maxlength="120" required placeholder="Your password" />
+                <div class="password-row">
+                  <input id="signin-password" name="password" type="password" maxlength="120" required placeholder="Your password" autocomplete="current-password" />
+                  <button type="button" class="password-toggle" data-password-for="signin-password" aria-pressed="false" aria-label="Show password">Show</button>
+                </div>
               </label>
               <p id="signin-status" class="small-note"></p>
               <button type="submit" class="primary-btn wide-btn">Sign in</button>
@@ -149,9 +169,12 @@
                 <span>Email</span>
                 <input id="signup-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
               </label>
-              <label class="field">
+              <label class="field field-password">
                 <span>Password</span>
-                <input id="signup-password" name="password" type="password" maxlength="120" required placeholder="Create password" />
+                <div class="password-row">
+                  <input id="signup-password" name="password" type="password" maxlength="120" required placeholder="Create password" autocomplete="new-password" />
+                  <button type="button" class="password-toggle" data-password-for="signup-password" aria-pressed="false" aria-label="Show password">Show</button>
+                </div>
               </label>
               <label class="field">
                 <span>Country</span>
@@ -172,8 +195,18 @@
                 <h3 class="panel-title">Edit profile</h3>
                 <p id="profile-summary" class="small-note"></p>
                 <p id="profile-permission-summary" class="small-note"></p>
+                <p id="profile-email-status" class="small-note" hidden></p>
+                <p id="profile-avatar-wrap" class="profile-avatar-wrap" hidden>
+                  <img id="profile-avatar-preview" class="profile-avatar-img" width="64" height="64" alt="" />
+                </p>
+                <p class="small-note" id="btn-request-verification-p" hidden>
+                  <button type="button" class="secondary-btn" id="btn-request-verification">Send verification email</button>
+                </p>
               </div>
-              <button type="button" class="secondary-btn" id="btn-signout" hidden>Sign out</button>
+              <div class="profile-top-actions">
+                <button type="button" class="secondary-btn" id="btn-goto-home">Home</button>
+                <button type="button" class="secondary-btn" id="btn-signout" hidden>Sign out</button>
+              </div>
             </div>
             <form id="profile-form" class="profile-form" novalidate>
               <div class="profile-grid">
@@ -364,6 +397,7 @@
 
     <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
+    <script src="./countries.js"></script>
     <script src="./metadata.js"></script>
     <script src="./app.js"></script>
   </body>

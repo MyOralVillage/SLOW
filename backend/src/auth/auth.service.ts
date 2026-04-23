@@ -1,27 +1,14 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
-import { UserRole, UserStatus } from "@prisma/client";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { User, UserRole, UserStatus } from "@prisma/client";
 import * as crypto from "crypto";
+import * as fs from "fs";
 
+import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { DiskStorage } from "../storage/disk.storage";
 import { effectivePermissions, normalizePermissionGrants } from "./permissions";
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS || "14");
-
-export type AuthUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  status: UserStatus;
-  country?: string | null;
-  why_interested?: string | null;
-  avatar_name?: string | null;
-  whatsapp_phone?: string | null;
-  biodata?: string | null;
-  social_handles?: string | null;
-  permission_grants: string[];
-  created_at: Date;
-};
 
 function normalizeEmail(value: string) {
   return String(value || "").trim().toLowerCase();
@@ -66,9 +53,13 @@ function ownerEmailsFromEnv() {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+    private readonly disk: DiskStorage,
+  ) {}
 
-  private serializeUser(user: AuthUser) {
+  private serializeUser(user: User) {
     return {
       id: user.id,
       name: user.name,
@@ -78,6 +69,8 @@ export class AuthService {
       country: user.country || "",
       why_interested: user.why_interested || "",
       avatar_name: user.avatar_name || "",
+      has_avatar: Boolean(user.avatar_storage_key),
+      email_verified: user.email_verified,
       whatsapp_phone: user.whatsapp_phone || "",
       biodata: user.biodata || "",
       social_handles: user.social_handles || "",
@@ -87,7 +80,7 @@ export class AuthService {
     };
   }
 
-  private async createSession(user: AuthUser) {
+  private async createSession(user: User) {
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
@@ -135,6 +128,12 @@ export class AuthService {
       throw new ForbiddenException("An account with this email already exists. Please sign in.");
     }
 
+    const isTrusted = envRole === UserRole.owner || envRole === UserRole.admin;
+    const verifyToken = isTrusted
+      ? null
+      : crypto.randomBytes(32).toString("hex");
+    const verifyExpires = isTrusted ? null : new Date(Date.now() + 48 * 60 * 60 * 1000);
+
     const user = await this.prisma.user.create({
       data: {
         name: trimmedName || inferNameFromEmail(email),
@@ -145,8 +144,17 @@ export class AuthService {
         country: String(input.country || "").trim() || null,
         why_interested: String(input.whyInterested || "").trim() || null,
         permission_grants: [],
+        email_verified: isTrusted,
+        email_verification_token: verifyToken,
+        email_verification_expires: verifyExpires,
       },
     });
+
+    if (verifyToken) {
+      const base = (process.env.WEB_APP_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+      const link = `${base}/?email_verify=${encodeURIComponent(verifyToken)}`;
+      void this.mail.sendVerificationEmail(email, link);
+    }
 
     return await this.createSession(user);
   }
@@ -271,5 +279,85 @@ export class AuthService {
     if (!normalized) return { ok: true };
     await this.prisma.session.deleteMany({ where: { token: normalized } });
     return { ok: true };
+  }
+
+  async verifyEmail(token: string) {
+    const t = String(token || "").trim();
+    if (!t) throw new BadRequestException("Verification token is required.");
+
+    const user = await this.prisma.user.findFirst({
+      where: { email_verification_token: t },
+    });
+    if (!user) {
+      throw new NotFoundException("This verification link is not valid. Request a new one from your profile.");
+    }
+    if (user.email_verification_expires && user.email_verification_expires.getTime() < Date.now()) {
+      throw new BadRequestException("This verification link has expired. Request a new one from your profile.");
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        email_verified: true,
+        email_verification_token: null,
+        email_verification_expires: null,
+      },
+    });
+    return { user: this.serializeUser(updated) };
+  }
+
+  async requestVerificationEmail(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException("User not found.");
+    if (user.email_verified) throw new BadRequestException("Your email is already verified.");
+
+    const verifyToken = crypto.randomBytes(32).toString("hex");
+    const verifyExpires = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { email_verification_token: verifyToken, email_verification_expires: verifyExpires },
+    });
+    const base = (process.env.WEB_APP_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+    const link = `${base}/?email_verify=${encodeURIComponent(verifyToken)}`;
+    void this.mail.sendVerificationEmail(user.email, link);
+    return { ok: true };
+  }
+
+  async saveAvatar(userId: string, file: Express.Multer.File) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException("Choose an image file.");
+    }
+    const existing = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatar_storage_key: true },
+    });
+    if (existing?.avatar_storage_key) {
+      const old = this.disk.resolveLocalPath({ storageKey: existing.avatar_storage_key, filePath: null });
+      if (old) await fs.promises.unlink(old.abs).catch(() => undefined);
+    }
+    const stored = await this.disk.writeUserAvatar(userId, file.originalname || "avatar.png", file.buffer);
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar_storage_key: stored.storageKey, avatar_name: file.originalname || null },
+    });
+    return { user: this.serializeUser(user) };
+  }
+
+  async openAvatarReadStream(userId: string) {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatar_storage_key: true, avatar_name: true },
+    });
+    if (!u?.avatar_storage_key) {
+      throw new NotFoundException("No avatar for this user.");
+    }
+    const resolved = this.disk.resolveLocalPath({ storageKey: u.avatar_storage_key, filePath: null });
+    if (!resolved) {
+      throw new NotFoundException("Avatar file is missing. Please upload again.");
+    }
+    return {
+      stream: fs.createReadStream(resolved.abs),
+      filename: u.avatar_name || "avatar",
+    };
   }
 }

@@ -94,6 +94,27 @@ img {
   flex-wrap: wrap;
 }
 
+a.app-home-link,
+.app-home-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.app-home-link:hover .app-title,
+.app-home-link:focus-visible .app-title {
+  color: var(--accent);
+  outline: none;
+}
+
+.app-home-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 .app-title {
   margin: 0;
   font-family: var(--font-display);
@@ -379,6 +400,88 @@ img {
   resize: vertical;
 }
 
+.field-password .password-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.field-password .password-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.password-toggle {
+  flex: 0 0 auto;
+  min-width: 56px;
+  min-height: 48px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--panel-alt);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.profile-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.profile-top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-avatar-wrap {
+  margin: 8px 0 0;
+}
+
+.profile-avatar-img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid var(--border-light);
+  background: var(--panel-alt);
+}
+
+.section-top-nav {
+  margin: 0 0 8px;
+}
+
+.back-home-link {
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.back-home-link:hover {
+  text-decoration: underline;
+}
+
+.message-inbox-item .message-body {
+  display: block;
+  margin: 4px 0 2px;
+}
+
+.resource-thumb--has-image {
+  background: #f0ebe2;
+}
+
 .search-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -619,15 +722,6 @@ img {
 }
 
 /* ───── Profile / auth ───── */
-
-.profile-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: flex-start;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
 
 .card-panel {
   padding: 16px 14px;

@@ -21,6 +21,7 @@ export class UsersService {
         id: true,
         name: true,
         email: true,
+        email_verified: true,
         role: true,
         status: true,
         country: true,
