@@ -139,24 +139,66 @@
             <form id="signin-form" class="card-panel" novalidate>
               <h3 class="panel-title">Sign in</h3>
               <p class="panel-subtitle">Already have an account? Enter your email and password.</p>
-              <label class="field">
-                <span>Name</span>
-                <input id="signin-name" name="name" type="text" maxlength="120" placeholder="Your name" />
-              </label>
-              <label class="field">
-                <span>Email</span>
-                <input id="signin-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
-              </label>
+              <div id="signin-main-block">
+                <label class="field">
+                  <span>Name</span>
+                  <input id="signin-name" name="name" type="text" maxlength="120" placeholder="Your name" />
+                </label>
+                <label class="field">
+                  <span>Email</span>
+                  <input id="signin-email" name="email" type="email" maxlength="160" required placeholder="name@example.org" />
+                </label>
+                <label class="field field-password">
+                  <span>Password</span>
+                  <div class="password-row">
+                    <input id="signin-password" name="password" type="password" maxlength="120" required placeholder="Your password" autocomplete="current-password" />
+                    <button type="button" class="password-toggle" data-password-for="signin-password" aria-pressed="false" aria-label="Show password">Show</button>
+                  </div>
+                </label>
+                <p class="forgot-password-line">
+                  <button type="button" class="text-link-btn" id="btn-show-forgot">Forgot password?</button>
+                </p>
+                <p id="signin-status" class="small-note"></p>
+                <button type="submit" class="primary-btn wide-btn" id="btn-signin-submit">Sign in</button>
+              </div>
+              <div id="forgot-password-block" hidden>
+                <p class="panel-subtitle">We will email you a link to choose a new password (check spam).</p>
+                <label class="field">
+                  <span>Account email</span>
+                  <input id="forgot-email" name="forgot_email" type="email" maxlength="160" placeholder="name@example.org" autocomplete="email" />
+                </label>
+                <p id="forgot-status" class="small-note"></p>
+                <button type="button" class="primary-btn wide-btn" id="btn-send-reset">Send reset link</button>
+                <p class="forgot-back-line">
+                  <button type="button" class="text-link-btn" id="btn-cancel-forgot">Back to sign in</button>
+                </p>
+              </div>
+            </form>
+
+            <div id="reset-password-card" class="card-panel" hidden>
+              <h3 class="panel-title">Set a new password</h3>
+              <p class="panel-subtitle">Enter a new password for your account.</p>
+              <input type="hidden" id="reset-token-store" value="" />
               <label class="field field-password">
-                <span>Password</span>
+                <span>New password</span>
                 <div class="password-row">
-                  <input id="signin-password" name="password" type="password" maxlength="120" required placeholder="Your password" autocomplete="current-password" />
-                  <button type="button" class="password-toggle" data-password-for="signin-password" aria-pressed="false" aria-label="Show password">Show</button>
+                  <input id="reset-new-password" type="password" maxlength="120" autocomplete="new-password" placeholder="At least 6 characters" />
+                  <button type="button" class="password-toggle" data-password-for="reset-new-password" aria-pressed="false" aria-label="Show password">Show</button>
                 </div>
               </label>
-              <p id="signin-status" class="small-note"></p>
-              <button type="submit" class="primary-btn wide-btn">Sign in</button>
-            </form>
+              <label class="field field-password">
+                <span>Confirm new password</span>
+                <div class="password-row">
+                  <input id="reset-confirm-password" type="password" maxlength="120" autocomplete="new-password" placeholder="Same again" />
+                  <button type="button" class="password-toggle" data-password-for="reset-confirm-password" aria-pressed="false" aria-label="Show password">Show</button>
+                </div>
+              </label>
+              <p id="reset-password-status" class="small-note"></p>
+              <button type="button" class="primary-btn wide-btn" id="btn-apply-password-reset">Save new password</button>
+              <p class="forgot-back-line">
+                <a href="#profile" class="text-link-btn" id="link-reset-to-signin">Back to sign in</a>
+              </p>
+            </div>
 
             <form id="signup-form" class="card-panel" novalidate>
               <h3 class="panel-title">Sign up</h3>

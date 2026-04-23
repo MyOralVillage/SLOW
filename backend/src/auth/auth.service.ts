@@ -281,6 +281,72 @@ export class AuthService {
     return { ok: true };
   }
 
+  /**
+   * Always returns the same shape so email existence is not leaked.
+   */
+  async requestPasswordReset(emailInput: string) {
+    const email = normalizeEmail(emailInput);
+    const generic = { ok: true, message: "If an account exists for that email, you will receive a reset link." };
+    if (!email || !email.includes("@")) {
+      return generic;
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || user.status === UserStatus.disabled || !user.password_hash) {
+      return generic;
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password_reset_token: resetToken,
+        password_reset_expires: resetExpires,
+      },
+    });
+    const base = (process.env.WEB_APP_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
+    const link = `${base}/?reset_password=${encodeURIComponent(resetToken)}`;
+    void this.mail.sendPasswordResetEmail(user.email, link);
+    return generic;
+  }
+
+  async resetPasswordWithToken(token: string, newPassword: string) {
+    const t = String(token || "").trim();
+    const password = String(newPassword || "");
+    if (!t) {
+      throw new BadRequestException("Reset link is not valid. Request a new one.");
+    }
+    if (password.length < 6) {
+      throw new BadRequestException("Password must be at least 6 characters.");
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: { password_reset_token: t },
+    });
+    if (!user) {
+      throw new NotFoundException("This reset link is not valid. Request a new password reset from sign in.");
+    }
+    if (user.password_reset_expires && user.password_reset_expires.getTime() < Date.now()) {
+      throw new BadRequestException("This link has expired. Request a new password reset.");
+    }
+    if (user.status === UserStatus.disabled) {
+      throw new ForbiddenException("This account is disabled.");
+    }
+
+    const password_hash = hashPassword(password);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password_hash,
+        password_reset_token: null,
+        password_reset_expires: null,
+      },
+    });
+    await this.prisma.session.deleteMany({ where: { user_id: user.id } });
+    return { ok: true, message: "Your password was updated. Sign in with your new password." };
+  }
+
   async verifyEmail(token: string) {
     const t = String(token || "").trim();
     if (!t) throw new BadRequestException("Verification token is required.");

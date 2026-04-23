@@ -117,6 +117,16 @@ export class AuthController {
     };
   }
 
+  @Post("forgot-password")
+  async forgotPassword(@Body() body: { email?: string }) {
+    return await this.auth.requestPasswordReset(String(body?.email || ""));
+  }
+
+  @Post("reset-password")
+  async resetPassword(@Body() body: { token?: string; password?: string }) {
+    return await this.auth.resetPasswordWithToken(String(body?.token || ""), String(body?.password || ""));
+  }
+
   @Post("verify-email")
   async verifyEmail(@Body() body: { token?: string }) {
     return await this.auth.verifyEmail(String(body?.token || ""));

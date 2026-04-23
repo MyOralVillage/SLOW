@@ -97,6 +97,8 @@ const state = {
   profileStoreCache: readJsonStore(PROFILE_STORE_KEY),
   commentStoreCache: readJsonStore(COMMENT_STORE_KEY),
   recommendStoreCache: readJsonStore(RECOMMEND_STORE_KEY),
+  /** When set, show reset-password card (signed out). */
+  pendingPasswordResetToken: null,
 };
 
 const els = {
@@ -189,6 +191,20 @@ const els = {
   messagesSendStatus: document.getElementById("messages-send-status"),
   messagesComposeNote: document.getElementById("messages-compose-note"),
   messagesComposeWrap: document.getElementById("messages-compose-wrap"),
+  signinMainBlock: document.getElementById("signin-main-block"),
+  forgotPasswordBlock: document.getElementById("forgot-password-block"),
+  resetPasswordCard: document.getElementById("reset-password-card"),
+  forgotEmail: document.getElementById("forgot-email"),
+  forgotStatus: document.getElementById("forgot-status"),
+  btnShowForgot: document.getElementById("btn-show-forgot"),
+  btnCancelForgot: document.getElementById("btn-cancel-forgot"),
+  btnSendReset: document.getElementById("btn-send-reset"),
+  resetTokenStore: document.getElementById("reset-token-store"),
+  resetNewPassword: document.getElementById("reset-new-password"),
+  resetConfirmPassword: document.getElementById("reset-confirm-password"),
+  resetPasswordStatus: document.getElementById("reset-password-status"),
+  btnApplyPasswordReset: document.getElementById("btn-apply-password-reset"),
+  linkResetToSignin: document.getElementById("link-reset-to-signin"),
 };
 
 function apiBase() {
@@ -245,6 +261,107 @@ async function loadProfileAvatar() {
     if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = false;
   } catch {
     if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
+  }
+}
+
+function processPasswordResetFromQuery() {
+  const p = new URLSearchParams(window.location.search);
+  const tok = p.get("reset_password");
+  if (!tok) return;
+  if (state.token) {
+    state.token = "";
+    state.user = null;
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+  }
+  const clean = new URL(window.location.href);
+  clean.searchParams.delete("reset_password");
+  window.history.replaceState({}, "", clean.pathname + clean.search + clean.hash);
+  state.pendingPasswordResetToken = tok;
+  if (els.resetTokenStore) els.resetTokenStore.value = tok;
+  if (els.resetNewPassword) els.resetNewPassword.value = "";
+  if (els.resetConfirmPassword) els.resetConfirmPassword.value = "";
+  if (els.resetPasswordStatus) els.resetPasswordStatus.textContent = "";
+  setRoute("profile");
+  showToast("Enter a new password below.", true);
+  updateTopButtons();
+  updateProfileUi();
+}
+
+function showSigninForgotMode(show) {
+  if (els.signinMainBlock) els.signinMainBlock.hidden = Boolean(show);
+  if (els.forgotPasswordBlock) els.forgotPasswordBlock.hidden = !show;
+  if (show) {
+    const em = (els.signInEmail?.value || "").trim();
+    if (els.forgotEmail && em) els.forgotEmail.value = em;
+    if (els.forgotStatus) els.forgotStatus.textContent = "";
+  }
+}
+
+async function handleSendPasswordReset() {
+  const email = (els.forgotEmail?.value || "").trim();
+  if (!email) {
+    showStatus(els.forgotStatus, "Enter your account email", false);
+    return;
+  }
+  showStatus(els.forgotStatus, "Sending…", true);
+  try {
+    const res = await apiFetch("/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      showStatus(els.forgotStatus, await errorText(res, "Could not send request"), false);
+      return;
+    }
+    const json = await res.json();
+    const msg = json.message || "If an account exists for that email, you will receive a reset link.";
+    showStatus(els.forgotStatus, msg, true);
+    showToast("If an account exists, we sent a reset link.", true);
+  } catch (e) {
+    showStatus(els.forgotStatus, e.message || "Could not send", false);
+  }
+}
+
+async function handleApplyPasswordReset() {
+  const tok = state.pendingPasswordResetToken || (els.resetTokenStore?.value || "").trim();
+  if (!tok) {
+    showStatus(els.resetPasswordStatus, "This page is missing a valid reset link. Open the link from your email again.", false);
+    return;
+  }
+  const a = (els.resetNewPassword?.value || "").trim();
+  const b = (els.resetConfirmPassword?.value || "").trim();
+  if (a.length < 6) {
+    showStatus(els.resetPasswordStatus, "Use at least 6 characters", false);
+    return;
+  }
+  if (a !== b) {
+    showStatus(els.resetPasswordStatus, "Passwords do not match", false);
+    return;
+  }
+  showStatus(els.resetPasswordStatus, "Saving…", true);
+  try {
+    const res = await apiFetch("/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: tok, password: a }),
+    });
+    if (!res.ok) {
+      showStatus(els.resetPasswordStatus, await errorText(res, "Could not update password"), false);
+      return;
+    }
+    const json = await res.json();
+    state.pendingPasswordResetToken = null;
+    if (els.resetTokenStore) els.resetTokenStore.value = "";
+    if (els.resetNewPassword) els.resetNewPassword.value = "";
+    if (els.resetConfirmPassword) els.resetConfirmPassword.value = "";
+    if (els.resetPasswordStatus) els.resetPasswordStatus.textContent = "";
+    showStatus(els.resetPasswordStatus, json.message || "Done", true);
+    showToast(json.message || "Password updated. Sign in with your new password.", true);
+    updateProfileUi();
+    els.signInEmail?.focus();
+  } catch (e) {
+    showStatus(els.resetPasswordStatus, e.message || "Error", false);
   }
 }
 
@@ -809,8 +926,25 @@ function updateTopButtons() {
 function updateProfileUi() {
   const profile = getSavedProfile(state.user?.email || "");
   const signedIn = Boolean(state.user);
+  if (signedIn) state.pendingPasswordResetToken = null;
 
-  if (els.authPanels) els.authPanels.hidden = signedIn;
+  if (els.authPanels) {
+    if (signedIn) {
+      els.authPanels.hidden = true;
+    } else {
+      els.authPanels.hidden = false;
+      if (state.pendingPasswordResetToken) {
+        if (els.signInForm) els.signInForm.hidden = true;
+        if (els.signupForm) els.signupForm.hidden = true;
+        if (els.resetPasswordCard) els.resetPasswordCard.hidden = false;
+      } else {
+        if (els.signInForm) els.signInForm.hidden = false;
+        if (els.signupForm) els.signupForm.hidden = false;
+        if (els.resetPasswordCard) els.resetPasswordCard.hidden = true;
+        showSigninForgotMode(false);
+      }
+    }
+  }
   if (els.profileEditor) els.profileEditor.hidden = !signedIn;
   if (els.btnSignout) els.btnSignout.hidden = !signedIn;
   if (els.adminPanel) els.adminPanel.hidden = !hasPermission("manage_users");
@@ -1450,6 +1584,20 @@ function bindEvents() {
       });
   });
 
+  els.btnShowForgot?.addEventListener("click", () => showSigninForgotMode(true));
+  els.btnCancelForgot?.addEventListener("click", () => showSigninForgotMode(false));
+  els.btnSendReset?.addEventListener("click", handleSendPasswordReset);
+  els.btnApplyPasswordReset?.addEventListener("click", handleApplyPasswordReset);
+  els.linkResetToSignin?.addEventListener("click", (e) => {
+    e.preventDefault();
+    state.pendingPasswordResetToken = null;
+    if (els.resetTokenStore) els.resetTokenStore.value = "";
+    if (els.resetNewPassword) els.resetNewPassword.value = "";
+    if (els.resetConfirmPassword) els.resetConfirmPassword.value = "";
+    if (els.resetPasswordStatus) els.resetPasswordStatus.textContent = "";
+    updateProfileUi();
+  });
+
   els.btnSendMessage?.addEventListener("click", () => {
     if (!state.token) {
       setRoute("profile");
@@ -1683,6 +1831,7 @@ async function bootstrap() {
   renderCategoryTiles();
   bindEvents();
   await restoreSession();
+  processPasswordResetFromQuery();
   updateTopButtons();
   updateProfileUi();
   await loadResources();

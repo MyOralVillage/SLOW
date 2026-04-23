@@ -35,4 +35,32 @@ export class MailService {
 
     this.log.warn(`SMTP not configured. Verification link for ${to}:\n${verifyUrl}\n\n${text}`);
   }
+
+  async sendPasswordResetEmail(to: string, resetUrl: string) {
+    const subject = "Reset your SLOW password";
+    const text = `You asked to reset your password. Open this link (valid 1 hour):\n\n${resetUrl}\n\nIf you did not request this, you can ignore this email. Your password will not change.`;
+
+    if (process.env.SMTP_HOST) {
+      const nodemailer = await import("nodemailer");
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || "587"),
+        secure: String(process.env.SMTP_SECURE || "") === "true",
+        auth:
+          process.env.SMTP_USER && process.env.SMTP_PASS
+            ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+            : undefined,
+      });
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@localhost",
+        to,
+        subject,
+        text,
+      });
+      this.log.log(`Password reset email sent to ${to}`);
+      return;
+    }
+
+    this.log.warn(`SMTP not configured. Password reset link for ${to}:\n${resetUrl}\n\n${text}`);
+  }
 }

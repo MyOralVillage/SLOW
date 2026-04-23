@@ -40,6 +40,8 @@ model User {
   email_verified Boolean  @default(false)
   email_verification_token String? @unique
   email_verification_expires DateTime?
+  password_reset_token String? @unique
+  password_reset_expires DateTime?
   whatsapp_phone String?
   biodata    String?
   social_handles String?
