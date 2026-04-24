@@ -1377,7 +1377,20 @@ function resourceImageUrl(resource) {
 
 function resourceDownloadUrl(resource) {
   if (!resource?.id) return "";
-  return `${apiBase()}/resources/${encodeURIComponent(resource.id)}/file?download=1`;
+  return `${apiBase()}/resources/${encodeURIComponent(resource.id)}/download`;
+}
+
+function setResourceDownloadBusy(resourceId, busy) {
+  if (!resourceId) return;
+  document.querySelectorAll(`[data-download-resource="${resourceId}"]`).forEach((button) => {
+    const label = button.getAttribute("data-download-label") || button.textContent || "Download";
+    if (!button.getAttribute("data-download-label")) {
+      button.setAttribute("data-download-label", label);
+    }
+    button.disabled = busy;
+    button.textContent = busy ? "Starting..." : label;
+    button.setAttribute("aria-busy", busy ? "true" : "false");
+  });
 }
 
 function triggerResourceDownload(resource) {
@@ -1391,17 +1404,15 @@ function triggerResourceDownload(resource) {
     return;
   }
 
-  const filename = fileNameFromMeta(resource?.file);
+  setResourceDownloadBusy(resource.id, true);
   const link = document.createElement("a");
   link.href = url;
   link.rel = "noopener";
-  if (filename) {
-    link.setAttribute("download", filename);
-  }
   document.body.appendChild(link);
   link.click();
   link.remove();
   showToast("Download started", true);
+  window.setTimeout(() => setResourceDownloadBusy(resource.id, false), 1600);
 }
 
 function resourcePreviewUrl(resource) {

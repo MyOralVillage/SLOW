@@ -2,8 +2,8 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Put,
   Post,
@@ -27,6 +27,7 @@ const uploadMemory = {
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
 import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
 import { CreateResourceDto } from "./dto/create-resource.dto";
+import { inferMimeFromFilename } from "./mime.util";
 import { SearchResourcesDto } from "./dto/search-resources.dto";
 import { ResourcesService } from "./resources.service";
 
@@ -61,6 +62,27 @@ function ensureFilenameExtension(filename: string, mime: string | null | undefin
   return ext ? `${safe}${ext}` : safe;
 }
 
+function normalizeExternalFileUrl(input: string) {
+  const raw = String(input || "").trim();
+  if (!raw) return raw;
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "github.com") {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts.length >= 5 && parts[2] === "blob") {
+        const owner = parts[0];
+        const repo = parts[1];
+        const branch = parts[3];
+        const filePath = parts.slice(4).join("/");
+        return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
+      }
+    }
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
 function splitKeywords(value: unknown) {
   if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
   return String(value || "")
@@ -72,6 +94,80 @@ function splitKeywords(value: unknown) {
 @Controller("resources")
 export class ResourcesController {
   constructor(private readonly svc: ResourcesService) {}
+
+  private async sendResourceFile(id: string, asDownload: boolean, res: Response) {
+    const result = await this.svc.openFileStream(id);
+    const row = (result as any).row;
+    const inferredMime = inferMimeFromFilename(row.original_filename || row.external_url || "");
+    const resolvedMime = row.mime_type || inferredMime || "application/octet-stream";
+    const disposition = asDownload ? "attachment" : "inline";
+
+    if ("externalUrl" in result && result.externalUrl) {
+      const normalizedUrl = normalizeExternalFileUrl(result.externalUrl as string);
+      const upstream = await fetch(normalizedUrl);
+      if (!upstream.ok) {
+        throw new NotFoundException("This file is currently unavailable. Please re-upload it.");
+      }
+
+      const contentType = upstream.headers.get("content-type") || resolvedMime;
+      if (contentType.toLowerCase().includes("text/html")) {
+        throw new NotFoundException("Stored file link is not a direct downloadable file. Please re-upload it.");
+      }
+
+      const upstreamName = (() => {
+        try {
+          return decodeURIComponent(new URL(normalizedUrl).pathname.split("/").pop() || "");
+        } catch {
+          return "";
+        }
+      })();
+      const filename = ensureFilenameExtension(
+        row.original_filename || upstreamName || row.title || "download",
+        contentType,
+      );
+      const safeFilename = String(filename).replace(/["\\\r\n]/g, "_");
+      const contentLength = upstream.headers.get("content-length");
+
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader(
+        "Content-Disposition",
+        `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      );
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+
+      const arrayBuffer = await upstream.arrayBuffer();
+      return res.send(Buffer.from(arrayBuffer));
+    }
+
+    const filename = ensureFilenameExtension(row.original_filename || row.title || "download", resolvedMime);
+    const safeFilename = String(filename).replace(/["\\\r\n]/g, "_");
+
+    res.setHeader("Content-Type", resolvedMime);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader(
+      "Content-Disposition",
+      `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+
+    if ("buffer" in (result as any) && (result as any).buffer) {
+      const buffer = Buffer.from((result as any).buffer as Uint8Array);
+      res.setHeader("Content-Length", buffer.length);
+      return res.send(buffer);
+    }
+
+    const { stat, stream } = result as { stat: { size: number }; stream: NodeJS.ReadableStream & { destroy?: () => void } };
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Accept-Ranges", "bytes");
+    stream.pipe(res);
+    stream.on("close", () => {
+      try {
+        stream.destroy?.();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
 
   private createDtoFromBody(body: Record<string, unknown>, file?: Express.Multer.File): CreateResourceDto {
     return {
@@ -175,54 +271,11 @@ export class ResourcesController {
 
   @Get(":id/file")
   async file(@Param("id") id: string, @Query("download") download: string | undefined, @Res() res: Response) {
-    const result = await this.svc.openFileStream(id);
-    const row = (result as any).row;
-    const resolvedMime = row.mime_type || "application/octet-stream";
-    const filename = ensureFilenameExtension(row.original_filename || row.title || "download", resolvedMime);
-    const safeFilename = String(filename).replace(/["\\\r\n]/g, "_");
-    const disposition = download === "1" ? "attachment" : "inline";
+    return this.sendResourceFile(id, download === "1", res);
+  }
 
-    if ("externalUrl" in result && result.externalUrl) {
-      const upstream = await fetch(result.externalUrl as string);
-      if (!upstream.ok) {
-        throw new ForbiddenException("This file is currently unavailable. Please re-upload it.");
-      }
-      const contentType = upstream.headers.get("content-type") || resolvedMime;
-      const contentLength = upstream.headers.get("content-length");
-      res.setHeader("Content-Type", contentType);
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader(
-        "Content-Disposition",
-        `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-      );
-      if (contentLength) res.setHeader("Content-Length", contentLength);
-      const arrayBuffer = await upstream.arrayBuffer();
-      return res.send(Buffer.from(arrayBuffer));
-    }
-
-    res.setHeader("Content-Type", resolvedMime);
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader(
-      "Content-Disposition",
-      `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-    );
-
-    if ("buffer" in (result as any) && (result as any).buffer) {
-      const buffer = (result as any).buffer as Buffer;
-      res.setHeader("Content-Length", buffer.length);
-      return res.send(buffer);
-    }
-
-    const { stat, stream } = result as { stat: any; stream: any };
-    res.setHeader("Content-Length", stat.size);
-    res.setHeader("Accept-Ranges", "bytes");
-    stream.pipe(res);
-    stream.on("close", () => {
-      try {
-        stream.destroy();
-      } catch {
-        /* ignore */
-      }
-    });
+  @Get(":id/download")
+  async download(@Param("id") id: string, @Res() res: Response) {
+    return this.sendResourceFile(id, true, res);
   }
 }
