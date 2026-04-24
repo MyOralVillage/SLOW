@@ -1357,10 +1357,8 @@ function resourceImageUrl(resource) {
 }
 
 function resourceDownloadUrl(resource) {
-  if (!resource?.file?.url) return "";
-  const url = backendAssetUrl(resource.file.url);
-  if (url.startsWith("http") && !url.includes("/api/")) return url;
-  return `${url}?download=1`;
+  if (!resource?.id) return "";
+  return `${apiBase()}/resources/${encodeURIComponent(resource.id)}/file?download=1`;
 }
 
 function triggerResourceDownload(resource) {
@@ -1375,17 +1373,7 @@ function triggerResourceDownload(resource) {
   }
 
   const filename = fileNameFromMeta(resource?.file);
-  if (url.startsWith("http") && !url.includes("/api/")) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.rel = "noopener";
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    return;
-  }
-  apiFetch(`/resources/${encodeURIComponent(resource.id)}/file?download=1`)
+  apiFetch(`/resources/${encodeURIComponent(resource.id)}/file?download=1`, { timeoutMs: 20000 })
     .then(async (res) => {
       if (!res.ok) {
         throw new Error(await errorText(res, "This file is currently unavailable. Please re-upload it."));
@@ -2048,10 +2036,6 @@ function detailHtml(resource) {
     <div class="detail-hero">
       <div class="detail-side">
         <div class="detail-category">${escapeHtml(resource.category || "Resource")}</div>
-        <div class="detail-side-actions">
-          <button type="button" class="secondary-btn detail-side-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download</button>
-          <button type="button" class="secondary-btn detail-side-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend</button>
-        </div>
       </div>
       <div class="detail-preview-wrap">
         <div class="detail-preview">
