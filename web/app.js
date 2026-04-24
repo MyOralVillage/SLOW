@@ -2362,6 +2362,21 @@ function bindEvents() {
     btn.textContent = isPw ? "Hide" : "Show";
   });
 
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!els.shareResourceModal?.hidden) {
+      closeShareResourceModal();
+      return;
+    }
+    if (!els.detailModal?.hidden) {
+      closeDetailModal();
+      return;
+    }
+    if (!els.uploadModal?.hidden) {
+      closeUploadModal();
+    }
+  });
+
   els.appHomeLink?.addEventListener("click", (e) => {
     e.preventDefault();
     goHome();

@@ -137,6 +137,7 @@ a.app-home-link,
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  width: 100%;
 }
 
 /* ───── Pills & tags ───── */
@@ -181,6 +182,8 @@ a.app-home-link,
   padding: 8px 12px;
   font-size: 13px;
   min-height: 40px;
+  flex: 1 1 0;
+  justify-content: center;
 }
 
 .top-action,
@@ -709,6 +712,7 @@ a.text-link-btn {
   gap: 12px;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .messages-thread-actions {
@@ -737,6 +741,9 @@ a.text-link-btn {
 .messages-thread-name {
   margin: 0;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .messages-thread-list {
@@ -951,7 +958,7 @@ a.text-link-btn {
 
 .search-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -962,10 +969,17 @@ a.text-link-btn {
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+  width: 100%;
 }
 
 .section-actions {
   flex-shrink: 0;
+}
+
+.section-actions > *,
+.profile-actions > *,
+.detail-actions > * {
+  flex: 1 1 100%;
 }
 
 /* ───── Resource grid ───── */
@@ -1010,13 +1024,12 @@ a.text-link-btn {
 }
 
 .resource-card-actions {
-  display: flex;
+  display: grid;
   gap: 8px;
   padding: 0 12px 12px;
 }
 
 .resource-card-actions .secondary-btn {
-  flex: 1;
   min-height: 42px;
   justify-content: center;
 }
@@ -1454,7 +1467,8 @@ a.text-link-btn {
   padding: 6px 4px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.1;
   transition: background var(--transition), border-color var(--transition);
 }
 
@@ -1478,7 +1492,7 @@ a.text-link-btn {
   inset: 0;
   z-index: 20;
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: center;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -1635,11 +1649,12 @@ a.text-link-btn {
 
 .detail-actions {
   gap: 6px;
+  flex-direction: column;
 }
 
 .detail-actions .primary-btn,
 .detail-actions .secondary-btn {
-  flex: 1 1 auto;
+  flex: 1 1 100%;
   min-width: 0;
   font-size: 14px;
   padding: 10px 12px;
@@ -1839,6 +1854,10 @@ a.text-link-btn {
   .app-shell {
     padding: 12px 12px 110px;
   }
+
+  .resource-card-actions {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -1897,6 +1916,10 @@ a.text-link-btn {
     padding: 20px 18px;
   }
 
+  .search-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .detail-top h2 {
     font-size: 1.2rem;
   }
@@ -1924,6 +1947,18 @@ a.text-link-btn {
 
   #auth-panels .card-panel + .card-panel {
     margin-top: 0;
+  }
+
+  .section-actions,
+  .profile-actions,
+  .detail-actions {
+    width: auto;
+  }
+
+  .section-actions > *,
+  .profile-actions > *,
+  .detail-actions > * {
+    flex: 0 1 auto;
   }
 }
 
@@ -2018,6 +2053,7 @@ a.text-link-btn {
   .bottom-nav-btn {
     font-size: 14px;
     min-height: 50px;
+    white-space: nowrap;
   }
 
   .tag, .chip {
@@ -2060,6 +2096,44 @@ a.text-link-btn {
 }
 
 @media (max-width: 759px) {
+  .app-shell {
+    padding: 10px 10px 108px;
+  }
+
+  .app-header {
+    gap: 12px;
+  }
+
+  .top-action {
+    min-height: 44px;
+  }
+
+  .modal-shell {
+    padding: 0 0 calc(0px + var(--safe-bottom));
+  }
+
+  .detail-panel,
+  .upload-panel {
+    min-height: 100vh;
+    min-height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding: 14px 12px calc(22px + var(--safe-bottom));
+  }
+
+  .detail-top {
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+    z-index: 2;
+  }
+
+  .detail-preview {
+    min-height: 160px;
+  }
+
   .messages-layout {
     min-height: calc(100vh - 170px);
     min-height: calc(100dvh - 170px);
@@ -2108,6 +2182,134 @@ a.text-link-btn {
   }
   .share-resource-summary-card {
     grid-template-columns: 1fr;
+  }
+
+  .profile-top {
+    gap: 14px;
+  }
+
+  .verify-actions .secondary-btn,
+  .profile-top-actions .secondary-btn,
+  .profile-actions .primary-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .app-shell {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .app-header,
+  .section-block,
+  .card-panel {
+    border-radius: 16px;
+  }
+
+  .section-block {
+    padding: 14px 10px;
+  }
+
+  .resource-card-hit {
+    grid-template-columns: 88px 1fr;
+  }
+
+  .resource-card-body {
+    padding: 10px 10px 8px;
+  }
+
+  .resource-card-actions {
+    padding: 0 10px 10px;
+  }
+
+  .messages-thread-list {
+    min-height: calc(100vh - 448px);
+    min-height: calc(100dvh - 448px);
+    max-height: calc(100vh - 448px);
+    max-height: calc(100dvh - 448px);
+  }
+
+  .bottom-nav {
+    gap: 6px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .bottom-nav-btn {
+    font-size: 12px;
+    min-height: 50px;
+    padding: 6px 2px;
+  }
+}
+
+@media (max-width: 390px) {
+  .top-status {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .status-pill {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .detail-copy h3 {
+    font-size: 1.05rem;
+  }
+
+  .field input,
+  .field textarea,
+  .field select,
+  .primary-btn,
+  .secondary-btn,
+  .top-action {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 360px) {
+  .resource-card-hit {
+    grid-template-columns: 78px 1fr;
+  }
+
+  .messages-thread-topbar {
+    gap: 8px;
+  }
+
+  .messages-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .messages-avatar.small {
+    width: 34px;
+    height: 34px;
+  }
+
+  .messages-thread-actions .secondary-btn,
+  .messages-composer-actions .primary-btn {
+    min-height: 44px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: 320px) {
+  .top-status {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-card-hit {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-thumb {
+    aspect-ratio: 4 / 3;
+  }
+
+  .detail-top h2 {
+    font-size: 1rem;
   }
 }
 
