@@ -3,8 +3,10 @@ const COMMENT_STORE_KEY = "slow_comment_store_v1";
 const RECOMMEND_STORE_KEY = "slow_recommend_store_v1";
 const RESOURCE_CACHE_KEY = "slow_resource_cache_v1";
 const USERS_CACHE_KEY = "slow_users_cache_v1";
+const NOTIFICATIONS_CACHE_KEY = "slow_notifications_cache_v1";
 const RESOURCE_CACHE_TTL_MS = 5 * 60 * 1000;
 const USERS_CACHE_TTL_MS = 2 * 60 * 1000;
+const NOTIFICATIONS_CACHE_TTL_MS = 30 * 1000;
 
 const PRODUCTION_API = "https://slow-57j2.onrender.com/api";
 const LOCAL_API = "http://127.0.0.1:3001/api";
@@ -122,6 +124,11 @@ const state = {
   usersLoading: false,
   resourcesPromise: null,
   usersPromise: null,
+  notifications: [],
+  notificationsUnreadCount: 0,
+  notificationsPollTimer: null,
+  notificationsLoading: false,
+  notificationsPromise: null,
 };
 
 const els = {
@@ -146,6 +153,9 @@ const els = {
   bottomNavButtons: Array.from(document.querySelectorAll(".bottom-nav-btn")),
   messagesList: document.getElementById("messages-list"),
   notificationsList: document.getElementById("notifications-list"),
+  notificationsStatus: document.getElementById("notifications-status"),
+  btnNotificationsReadAll: document.getElementById("btn-notifications-read-all"),
+  notificationsBadge: document.getElementById("notifications-badge"),
   authLoadingCard: document.getElementById("auth-loading-card"),
   authStateNote: document.getElementById("auth-state-note"),
   authStateActions: document.getElementById("auth-state-actions"),
@@ -363,11 +373,17 @@ function updateMessagesLayoutMode() {
 
 function syncAuthState(snapshot = auth?.getSnapshot?.()) {
   if (!snapshot) return;
+  const hadUser = Boolean(state.user?.id);
   state.token = snapshot.token || "";
   state.user = snapshot.currentUser || null;
   state.authLoading = Boolean(snapshot.authLoading);
   state.authError = String(snapshot.authError || "");
   state.pendingPasswordResetToken = snapshot.pendingResetToken || null;
+  if (hadUser && !state.user) {
+    clearNotificationState();
+    stopNotificationsPolling();
+    updateNotificationBadge();
+  }
 }
 
 async function fetchWithTimeout(url, options = {}) {
@@ -898,6 +914,7 @@ async function openConversation(conversationId) {
   updateMessagesLayoutMode();
   renderConversationList();
   renderConversationThread();
+  await refreshNotifications({ includeList: state.route === "notifications", force: true });
 }
 
 async function ensureConversationForUser(userLike) {
@@ -1077,6 +1094,129 @@ function stopMessagesPolling() {
   }
 }
 
+async function loadNotificationCount(force = false) {
+  if (!state.user) {
+    clearNotificationState();
+    updateNotificationBadge();
+    return 0;
+  }
+
+  if (!force) {
+    const cached = readTimedCache(NOTIFICATIONS_CACHE_KEY, NOTIFICATIONS_CACHE_TTL_MS);
+    if (cached && typeof cached.unreadCount === "number") {
+      state.notificationsUnreadCount = cached.unreadCount;
+      updateNotificationBadge();
+    }
+  }
+
+  try {
+    const res = await apiFetch("/notifications/unread-count", { timeoutMs: 5000 });
+    if (!res.ok) throw new Error(await errorText(res, "Could not load notifications"));
+    const json = await res.json();
+    state.notificationsUnreadCount = Number(json.count || 0);
+    writeTimedCache(NOTIFICATIONS_CACHE_KEY, {
+      unreadCount: state.notificationsUnreadCount,
+      rows: state.notifications,
+    });
+    updateNotificationBadge();
+    return state.notificationsUnreadCount;
+  } catch (error) {
+    if (els.notificationsStatus && state.route === "notifications") {
+      showStatus(els.notificationsStatus, error?.message || "Could not load notifications", false);
+    }
+    updateNotificationBadge();
+    return state.notificationsUnreadCount;
+  }
+}
+
+async function loadNotifications(force = false) {
+  if (!state.user) {
+    clearNotificationState();
+    updateNotificationBadge();
+    renderNotifications();
+    return;
+  }
+  if (state.notificationsPromise && !force) return await state.notificationsPromise;
+
+  const cached = !force ? readTimedCache(NOTIFICATIONS_CACHE_KEY, NOTIFICATIONS_CACHE_TTL_MS) : null;
+  if (!force && !state.notifications.length && Array.isArray(cached?.rows) && cached.rows.length) {
+    state.notifications = cached.rows.map(normalizeNotification);
+    if (typeof cached.unreadCount === "number") {
+      state.notificationsUnreadCount = cached.unreadCount;
+    }
+    updateNotificationBadge();
+    renderNotifications();
+  }
+
+  state.notificationsLoading = true;
+  renderNotifications();
+  state.notificationsPromise = (async () => {
+    try {
+      const res = await apiFetch("/notifications?limit=50", { timeoutMs: 6000 });
+      if (!res.ok) throw new Error(await errorText(res, "Could not load notifications"));
+      const json = await res.json();
+      state.notifications = (Array.isArray(json.rows) ? json.rows : []).map(normalizeNotification);
+      state.notificationsUnreadCount = state.notifications.filter((item) => !item.is_read).length;
+      writeTimedCache(NOTIFICATIONS_CACHE_KEY, {
+        unreadCount: state.notificationsUnreadCount,
+        rows: state.notifications,
+      });
+      updateNotificationBadge();
+      if (els.notificationsStatus) {
+        showStatus(
+          els.notificationsStatus,
+          state.notifications.length ? `${state.notifications.length} notifications` : "No notifications yet",
+          true,
+        );
+      }
+    } catch (error) {
+      if (els.notificationsStatus) {
+        showStatus(els.notificationsStatus, error?.message || "Could not load notifications", false);
+      }
+    } finally {
+      state.notificationsLoading = false;
+      renderNotifications();
+    }
+  })();
+
+  try {
+    await state.notificationsPromise;
+  } finally {
+    state.notificationsPromise = null;
+  }
+}
+
+async function refreshNotifications(options = {}) {
+  const { includeList = state.route === "notifications", force = false } = options;
+  if (!state.user) {
+    clearNotificationState();
+    updateNotificationBadge();
+    renderNotifications();
+    return;
+  }
+  if (includeList) {
+    await loadNotifications(force);
+  } else {
+    await loadNotificationCount(force);
+  }
+}
+
+function startNotificationsPolling() {
+  stopNotificationsPolling();
+  if (!state.user) return;
+  state.notificationsPollTimer = window.setInterval(() => {
+    if (!state.user || document.hidden) return;
+    void refreshNotifications({ includeList: state.route === "notifications", force: true });
+  }, 15000);
+}
+
+function stopNotificationsPolling() {
+  if (state.notificationsPollTimer) {
+    window.clearInterval(state.notificationsPollTimer);
+    state.notificationsPollTimer = null;
+  }
+}
+
 function showStatus(target, message, ok = true) {
   if (!target) return;
   target.textContent = message || "";
@@ -1196,6 +1336,43 @@ function recommendResource(resourceId) {
 
 function recommendationCount(resourceId) {
   return Number(recommendationsStore()[resourceId] || 0);
+}
+
+function clearNotificationState() {
+  state.notifications = [];
+  state.notificationsUnreadCount = 0;
+  removeTimedCache(NOTIFICATIONS_CACHE_KEY);
+}
+
+function normalizeNotification(row) {
+  return {
+    id: row?.id || "",
+    type: row?.type || "notice",
+    title: row?.title || "Notification",
+    body: row?.body || "",
+    data: row?.data || row?.data_json || null,
+    is_read: row?.is_read === true,
+    read_at: row?.read_at || null,
+    created_at: row?.created_at || new Date().toISOString(),
+  };
+}
+
+function unreadNotificationCountLabel(count) {
+  const value = Number(count || 0);
+  if (value <= 0) return "";
+  return value > 99 ? "99+" : String(value);
+}
+
+function updateNotificationBadge() {
+  if (!els.notificationsBadge) return;
+  const label = unreadNotificationCountLabel(state.notificationsUnreadCount);
+  els.notificationsBadge.hidden = !label;
+  els.notificationsBadge.textContent = label || "0";
+}
+
+function notificationIcon(type) {
+  if (type === "message") return "💬";
+  return "🔔";
 }
 
 function userPermissions(user = state.user) {
@@ -1694,29 +1871,120 @@ function renderMessages() {
 
 function renderNotifications() {
   if (!state.user) {
+    updateNotificationBadge();
+    if (els.notificationsStatus) showStatus(els.notificationsStatus, "", true);
+    if (els.btnNotificationsReadAll) els.btnNotificationsReadAll.disabled = true;
     els.notificationsList.innerHTML = `<div class="simple-item"><span>Sign in to see notifications.</span></div>`;
     return;
   }
-  const items = state.resources
-    .map((resource) => ({
-      title: resource.title,
-      count: recommendationCount(resource.id),
-    }))
-    .filter((item) => item.count > 0)
-    .slice(0, 8);
 
+  updateNotificationBadge();
+  const items = state.notifications || [];
+  if (els.btnNotificationsReadAll) {
+    els.btnNotificationsReadAll.disabled = !items.some((item) => !item.is_read);
+  }
+  if (state.notificationsLoading && !items.length) {
+    if (els.notificationsStatus) showStatus(els.notificationsStatus, "Loading notifications…", true);
+    els.notificationsList.innerHTML = `<div class="simple-item"><span>Loading notifications…</span></div>`;
+    return;
+  }
+  if (els.notificationsStatus && !els.notificationsStatus.textContent) {
+    showStatus(els.notificationsStatus, items.length ? `${items.length} notifications` : "No notifications yet", true);
+  }
   els.notificationsList.innerHTML = items.length
     ? items
-        .map(
-          (item) => `
-            <div class="simple-item">
-              <strong>${escapeHtml(item.title)}</strong>
-              <span>${escapeHtml(String(item.count))} recommendations</span>
-            </div>
-          `,
-        )
+        .map((item) => {
+          const preview = item.body || "Open to view this update.";
+          return `
+            <button type="button" class="simple-item notification-item ${item.is_read ? "" : "is-unread"}" data-open-notification="${escapeHtml(item.id)}">
+              <span class="notification-icon" aria-hidden="true">${escapeHtml(notificationIcon(item.type))}</span>
+              <span class="notification-main">
+                <span class="notification-title-row">
+                  ${item.is_read ? "" : `<span class="notification-dot" aria-hidden="true"></span>`}
+                  <strong>${escapeHtml(item.title)}</strong>
+                </span>
+                <span class="notification-preview">${escapeHtml(preview)}</span>
+              </span>
+              <span class="notification-meta">${escapeHtml(formatTimeAgo(item.created_at))}</span>
+            </button>
+          `;
+        })
         .join("")
     : `<div class="simple-item"><span>No notifications yet</span></div>`;
+}
+
+async function markNotificationRead(notificationId, options = {}) {
+  const id = String(notificationId || "").trim();
+  if (!id || !state.user) return false;
+  const { silent = false } = options;
+  const current = state.notifications.find((item) => item.id === id);
+  if (current && !current.is_read) {
+    current.is_read = true;
+    state.notificationsUnreadCount = Math.max(0, state.notificationsUnreadCount - 1);
+    writeTimedCache(NOTIFICATIONS_CACHE_KEY, {
+      unreadCount: state.notificationsUnreadCount,
+      rows: state.notifications,
+    });
+    renderNotifications();
+  }
+  try {
+    const res = await apiFetch(`/notifications/${encodeURIComponent(id)}/read`, {
+      method: "POST",
+      timeoutMs: 5000,
+    });
+    if (!res.ok) throw new Error(await errorText(res, "Could not mark notification as read"));
+    const json = await res.json();
+    state.notificationsUnreadCount = Number(json.unread_count || 0);
+    writeTimedCache(NOTIFICATIONS_CACHE_KEY, {
+      unreadCount: state.notificationsUnreadCount,
+      rows: state.notifications,
+    });
+    updateNotificationBadge();
+    return true;
+  } catch (error) {
+    if (!silent) showToast(error?.message || "Could not update notification", false);
+    return false;
+  }
+}
+
+async function markAllNotificationsRead() {
+  if (!state.user) return;
+  try {
+    const res = await apiFetch("/notifications/read-all", { method: "POST", timeoutMs: 6000 });
+    if (!res.ok) throw new Error(await errorText(res, "Could not mark all notifications as read"));
+    state.notifications = state.notifications.map((item) => ({ ...item, is_read: true, read_at: item.read_at || new Date().toISOString() }));
+    state.notificationsUnreadCount = 0;
+    writeTimedCache(NOTIFICATIONS_CACHE_KEY, {
+      unreadCount: 0,
+      rows: state.notifications,
+    });
+    renderNotifications();
+    if (els.notificationsStatus) showStatus(els.notificationsStatus, "All notifications marked as read", true);
+  } catch (error) {
+    if (els.notificationsStatus) showStatus(els.notificationsStatus, error?.message || "Could not mark all as read", false);
+    showToast(error?.message || "Could not mark all as read", false);
+  }
+}
+
+async function openNotification(notificationId) {
+  const id = String(notificationId || "").trim();
+  if (!id) return;
+  const item = state.notifications.find((entry) => entry.id === id);
+  if (!item) return;
+  await markNotificationRead(id, { silent: true });
+  const data = item.data || {};
+  if (item.type === "message" && data.conversationId) {
+    state.activeConversationId = String(data.conversationId);
+    setRoute("messages");
+    try {
+      await openConversation(state.activeConversationId);
+      await refreshNotifications({ includeList: state.route === "notifications", force: true });
+    } catch (error) {
+      showToast(error?.message || "Could not open message", false);
+    }
+    return;
+  }
+  setRoute("notifications");
 }
 
 function applyRoute(route) {
@@ -1734,10 +2002,15 @@ function applyRoute(route) {
   els.bottomNavButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.route === next));
   if (next === "messages" && state.user) {
     void loadMessages();
+    startNotificationsPolling();
+  } else if (next === "notifications" && state.user) {
+    void loadNotifications(true);
+    startNotificationsPolling();
   } else {
     state.messageMobileThreadOpen = false;
     updateMessagesLayoutMode();
     stopMessagesPolling();
+    if (state.user) startNotificationsPolling();
   }
 }
 
@@ -2371,6 +2644,7 @@ async function handleSignUp(event) {
 async function handleSignOut() {
   await auth.logout(apiFetch);
   stopMessagesPolling();
+  stopNotificationsPolling();
   syncAuthState();
   state.authFormMode = "signin";
   state.users = [];
@@ -2379,6 +2653,7 @@ async function handleSignOut() {
   state.activeConversationId = null;
   state.activeConversation = null;
   state.activeConversationMessages = [];
+  clearNotificationState();
   removeTimedCache(USERS_CACHE_KEY);
   updateTopButtons();
   renderProfilePage();
@@ -2687,9 +2962,16 @@ function bindEvents() {
     button.addEventListener("click", () => setRoute(button.dataset.route || "home"));
   });
 
+  els.btnNotificationsReadAll?.addEventListener("click", () => {
+    void markAllNotificationsRead();
+  });
+
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && state.route === "messages" && state.user) {
-      void refreshConversations();
+    if (!document.hidden && state.user) {
+      if (state.route === "messages") {
+        void refreshConversations();
+      }
+      void refreshNotifications({ includeList: state.route === "notifications", force: true });
     }
   });
 
@@ -2747,6 +3029,12 @@ function bindEvents() {
     const conversationButton = event.target.closest("[data-open-conversation]");
     if (conversationButton) {
       void openConversation(conversationButton.getAttribute("data-open-conversation"));
+      return;
+    }
+
+    const notificationButton = event.target.closest("[data-open-notification]");
+    if (notificationButton) {
+      void openNotification(notificationButton.getAttribute("data-open-notification"));
       return;
     }
 
@@ -2925,9 +3213,20 @@ function bindEvents() {
 
 async function bootstrap() {
   auth.subscribe((snapshot) => {
+    const prevUserId = state.user?.id || "";
     syncAuthState(snapshot);
     updateTopButtons();
     renderProfilePage();
+    if (state.user?.id) {
+      startNotificationsPolling();
+      if (state.user.id !== prevUserId) {
+        void refreshNotifications({ includeList: state.route === "notifications", force: true });
+      }
+    } else {
+      stopNotificationsPolling();
+      clearNotificationState();
+      renderNotifications();
+    }
   });
   syncAuthState();
   renderProfilePage();
@@ -2943,6 +3242,8 @@ async function bootstrap() {
   renderProfilePage();
   await Promise.allSettled([loadResources(), loadUsers()]);
   renderMessages();
+  await refreshNotifications({ includeList: true, force: true });
+  startNotificationsPolling();
   renderNotifications();
   renderAdmin();
   applyRoute(routeFromHash());

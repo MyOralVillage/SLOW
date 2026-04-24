@@ -170,8 +170,14 @@
       <section class="route-panel" data-route-panel="notifications" hidden>
         <section class="section-block">
           <p class="section-top-nav"><a href="#home" class="back-home-link">← Home</a></p>
-          <div class="section-head">
-            <h2>Notifications</h2>
+          <div class="section-head section-head-stack">
+            <div>
+              <h2>Notifications</h2>
+              <p id="notifications-status" class="small-note">Checking for alerts</p>
+            </div>
+            <div class="section-actions">
+              <button type="button" class="secondary-btn" id="btn-notifications-read-all">Mark all as read</button>
+            </div>
           </div>
           <div id="notifications-list" class="simple-list"></div>
         </section>
@@ -404,7 +410,11 @@
       <nav class="bottom-nav" aria-label="Main navigation">
         <button type="button" class="bottom-nav-btn is-active" data-route="home">Home</button>
         <button type="button" class="bottom-nav-btn" data-route="messages">Messages</button>
-        <button type="button" class="bottom-nav-btn" data-route="notifications">Notifications</button>
+        <button type="button" class="bottom-nav-btn nav-bell-btn" data-route="notifications" aria-label="Notifications">
+          <span class="nav-bell-icon" aria-hidden="true">🔔</span>
+          <span class="nav-bell-label">Notifications</span>
+          <span id="notifications-badge" class="nav-badge" hidden>0</span>
+        </button>
         <button type="button" class="bottom-nav-btn" data-route="profile">Profile</button>
       </nav>
     </main>
