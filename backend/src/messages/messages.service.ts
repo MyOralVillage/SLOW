@@ -1,11 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { UserStatus } from "@prisma/client";
 
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class MessagesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async requireConversationMembership(conversationId: string, userId: string) {
     const participant = await this.prisma.conversationParticipant.findUnique({
@@ -190,6 +194,7 @@ export class MessagesService {
       },
       data: { last_read_at: new Date() },
     });
+    await this.notifications.markMessageNotificationsRead(userId, conversationId);
 
     return {
       conversation: {
@@ -265,6 +270,15 @@ export class MessagesService {
       : null;
     if (resourceId && !resource) throw new NotFoundException("Resource not found.");
 
+    const participants = await this.prisma.conversationParticipant.findMany({
+      where: { conversation_id: conversationId },
+      include: {
+        user: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
     const row = await this.prisma.conversationMessage.create({
       data: {
         conversation_id: conversationId,
@@ -281,6 +295,20 @@ export class MessagesService {
       where: { id: conversationId },
       data: { updated_at: new Date() },
     });
+    await Promise.all(
+      participants
+        .filter((participant) => participant.user_id !== senderId)
+        .map((participant) =>
+          this.notifications.createMessageNotification(participant.user_id, {
+            senderId: row.sender.id,
+            senderName: row.sender.name || "Someone",
+            conversationId,
+            messageId: row.id,
+            body: row.body,
+            resourceId: row.resource?.id || null,
+          }),
+        ),
+    );
 
     return {
       id: row.id,
