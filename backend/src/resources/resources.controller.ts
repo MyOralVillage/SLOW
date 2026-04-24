@@ -157,15 +157,29 @@ export class ResourcesController {
   @Get(":id/file")
   async file(@Param("id") id: string, @Query("download") download: string | undefined, @Res() res: Response) {
     const result = await this.svc.openFileStream(id);
-
-    if ("externalUrl" in result && result.externalUrl) {
-      return res.redirect(result.externalUrl as string);
-    }
-
     const row = (result as any).row;
     const filename = row.original_filename || row.title || "download";
     const safeFilename = String(filename).replace(/["\\\r\n]/g, "_");
     const disposition = download === "1" ? "attachment" : "inline";
+
+    if ("externalUrl" in result && result.externalUrl) {
+      const upstream = await fetch(result.externalUrl as string);
+      if (!upstream.ok) {
+        throw new ForbiddenException("This file is currently unavailable. Please re-upload it.");
+      }
+      const contentType = upstream.headers.get("content-type") || row.mime_type || "application/octet-stream";
+      const contentLength = upstream.headers.get("content-length");
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader(
+        "Content-Disposition",
+        `${disposition}; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      );
+      if (contentLength) res.setHeader("Content-Length", contentLength);
+      const arrayBuffer = await upstream.arrayBuffer();
+      return res.send(Buffer.from(arrayBuffer));
+    }
+
     res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader(

@@ -83,14 +83,8 @@ export class ResourcesService {
         : null,
       file: hasFile
         ? {
-            url: row.external_url || `/api/resources/${row.id}/file`,
-            thumbnailUrl: row.external_url
-              ? isImg
-                ? row.external_url
-                : null
-              : isImg
-                ? `/api/resources/${row.id}/file`
-                : null,
+            url: `/api/resources/${row.id}/file`,
+            thumbnailUrl: isImg ? `/api/resources/${row.id}/file` : null,
             mimeType: mime,
             originalFilename: row.original_filename,
             sizeBytes: row.size_bytes != null ? row.size_bytes.toString() : null,
