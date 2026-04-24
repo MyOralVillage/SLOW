@@ -1373,25 +1373,16 @@ function triggerResourceDownload(resource) {
   }
 
   const filename = fileNameFromMeta(resource?.file);
-  apiFetch(`/resources/${encodeURIComponent(resource.id)}/file?download=1`, { timeoutMs: 20000 })
-    .then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await errorText(res, "This file is currently unavailable. Please re-upload it."));
-      }
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.setAttribute("download", filename || `${resource?.title || "resource"}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-      showToast("Download started", true);
-    })
-    .catch((err) => {
-      showToast(err.message || "This file is currently unavailable. Please re-upload it.", false);
-    });
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noopener";
+  if (filename) {
+    link.setAttribute("download", filename);
+  }
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  showToast("Download started", true);
 }
 
 function resourcePreviewUrl(resource) {
