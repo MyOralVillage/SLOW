@@ -1405,9 +1405,13 @@ function triggerResourceDownload(resource) {
   }
 
   setResourceDownloadBusy(resource.id, true);
+  const filename = fileNameFromMeta(resource?.file) || inferredDownloadFilename(resource);
   const link = document.createElement("a");
   link.href = url;
   link.rel = "noopener";
+  if (filename) {
+    link.setAttribute("download", filename);
+  }
   document.body.appendChild(link);
   link.click();
   link.remove();
