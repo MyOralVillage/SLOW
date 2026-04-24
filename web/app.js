@@ -162,7 +162,6 @@ const els = {
   btnAuthRetrySession: document.getElementById("btn-auth-retry-session"),
   authPanels: document.getElementById("auth-panels"),
   signInForm: document.getElementById("signin-form"),
-  signInName: document.getElementById("signin-name"),
   signInEmail: document.getElementById("signin-email"),
   signInPassword: document.getElementById("signin-password"),
   signInStatus: document.getElementById("signin-status"),
@@ -2464,9 +2463,9 @@ function clearSearch() {
   applySearch();
 }
 
-async function doAuth(name, email, statusEl) {
+async function doAuth(email, statusEl) {
   try {
-    const result = await auth.login(apiFetch, { name, email, password: els.signInPassword?.value.trim() || "" });
+    const result = await auth.login(apiFetch, { email, password: els.signInPassword?.value.trim() || "" });
     if (!result.ok) {
       showStatus(statusEl, await errorText(result.response, "Could not sign in"), false);
       return null;
@@ -2548,7 +2547,6 @@ async function handleSignIn(event) {
   auth.clearAuthError?.();
   setButtonBusy(els.btnSigninSubmit, true, "Signing in...");
   showStatus(els.signupStatus, "", true);
-  const name = els.signInName.value.trim();
   const email = els.signInEmail.value.trim();
   const password = els.signInPassword.value.trim();
   if (!email) {
@@ -2564,7 +2562,7 @@ async function handleSignIn(event) {
     return;
   }
   showStatus(els.signInStatus, "Signing in…", true);
-  const result = await doAuth(name, email, els.signInStatus);
+  const result = await doAuth(email, els.signInStatus);
   if (!result) {
     setButtonBusy(els.btnSigninSubmit, false);
     return;
