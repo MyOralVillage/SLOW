@@ -42,6 +42,25 @@ type CommentBody = {
   body?: string;
 };
 
+function extensionFromMime(mime: string | null | undefined) {
+  const value = String(mime || "").toLowerCase();
+  if (value === "image/png") return ".png";
+  if (value === "image/jpeg") return ".jpg";
+  if (value === "image/webp") return ".webp";
+  if (value === "image/gif") return ".gif";
+  if (value === "image/svg+xml") return ".svg";
+  if (value === "image/x-icon") return ".ico";
+  if (value === "application/pdf") return ".pdf";
+  return "";
+}
+
+function ensureFilenameExtension(filename: string, mime: string | null | undefined) {
+  const safe = String(filename || "download").trim() || "download";
+  if (/\.[a-z0-9]{2,8}$/i.test(safe)) return safe;
+  const ext = extensionFromMime(mime);
+  return ext ? `${safe}${ext}` : safe;
+}
+
 function splitKeywords(value: unknown) {
   if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
   return String(value || "")
@@ -158,7 +177,8 @@ export class ResourcesController {
   async file(@Param("id") id: string, @Query("download") download: string | undefined, @Res() res: Response) {
     const result = await this.svc.openFileStream(id);
     const row = (result as any).row;
-    const filename = row.original_filename || row.title || "download";
+    const resolvedMime = row.mime_type || "application/octet-stream";
+    const filename = ensureFilenameExtension(row.original_filename || row.title || "download", resolvedMime);
     const safeFilename = String(filename).replace(/["\\\r\n]/g, "_");
     const disposition = download === "1" ? "attachment" : "inline";
 
@@ -167,7 +187,7 @@ export class ResourcesController {
       if (!upstream.ok) {
         throw new ForbiddenException("This file is currently unavailable. Please re-upload it.");
       }
-      const contentType = upstream.headers.get("content-type") || row.mime_type || "application/octet-stream";
+      const contentType = upstream.headers.get("content-type") || resolvedMime;
       const contentLength = upstream.headers.get("content-length");
       res.setHeader("Content-Type", contentType);
       res.setHeader("X-Content-Type-Options", "nosniff");
@@ -180,7 +200,7 @@ export class ResourcesController {
       return res.send(Buffer.from(arrayBuffer));
     }
 
-    res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
+    res.setHeader("Content-Type", resolvedMime);
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader(
       "Content-Disposition",

@@ -1322,6 +1322,25 @@ function fileMimeFromMeta(file) {
   return (file?.mimeType || file?.mime_type || "").toLowerCase();
 }
 
+function extensionFromMime(mime) {
+  const value = String(mime || "").toLowerCase();
+  if (value === "image/png") return ".png";
+  if (value === "image/jpeg") return ".jpg";
+  if (value === "image/webp") return ".webp";
+  if (value === "image/gif") return ".gif";
+  if (value === "image/svg+xml") return ".svg";
+  if (value === "image/x-icon") return ".ico";
+  if (value === "application/pdf") return ".pdf";
+  return "";
+}
+
+function inferredDownloadFilename(resource) {
+  const raw = fileNameFromMeta(resource?.file) || String(resource?.title || "download").trim() || "download";
+  if (/\.[a-z0-9]{2,8}$/i.test(raw)) return raw;
+  const ext = extensionFromMime(fileMimeFromMeta(resource?.file));
+  return ext ? `${raw}${ext}` : raw;
+}
+
 function isImageFileMeta(file) {
   if (!file) return false;
   const m = fileMimeFromMeta(file);
@@ -1338,7 +1357,7 @@ function isPdfFileMeta(file) {
 }
 
 function fileLabel(resource) {
-  const filename = fileNameFromMeta(resource?.file);
+  const filename = inferredDownloadFilename(resource);
   if (/\.pdf$/i.test(filename) || isPdfFileMeta(resource?.file)) return "PDF";
   if (isImageFileMeta(resource?.file)) return "Image";
   return (resource?.type || "File").slice(0, 12);
