@@ -156,6 +156,7 @@ const els = {
   signInEmail: document.getElementById("signin-email"),
   signInPassword: document.getElementById("signin-password"),
   signInStatus: document.getElementById("signin-status"),
+  btnSigninSubmit: document.getElementById("btn-signin-submit"),
   signupForm: document.getElementById("signup-form"),
   signupName: document.getElementById("signup-name"),
   signupEmail: document.getElementById("signup-email"),
@@ -163,6 +164,7 @@ const els = {
   signupCountry: document.getElementById("signup-country"),
   signupInterest: document.getElementById("signup-interest"),
   signupStatus: document.getElementById("signup-status"),
+  btnSignupSubmit: document.getElementById("btn-signup-submit"),
   profileEditor: document.getElementById("profile-editor"),
   profileForm: document.getElementById("profile-form"),
   profileSummary: document.getElementById("profile-summary"),
@@ -178,6 +180,7 @@ const els = {
   profileInterest: document.getElementById("profile-interest"),
   profileSocials: document.getElementById("profile-socials"),
   profileStatus: document.getElementById("profile-status"),
+  btnProfileSave: document.getElementById("btn-profile-save"),
   btnSignout: document.getElementById("btn-signout"),
   adminPanel: document.getElementById("admin-panel"),
   adminStatus: document.getElementById("admin-status"),
@@ -1132,6 +1135,23 @@ function writeTimedCache(key, value) {
   }
 }
 
+function removeTimedCache(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore cache removal failure */
+  }
+}
+
+function setButtonBusy(button, busy, busyLabel) {
+  if (!button) return;
+  if (!button.dataset.defaultLabel) {
+    button.dataset.defaultLabel = button.textContent || "";
+  }
+  button.disabled = busy;
+  button.textContent = busy ? busyLabel : button.dataset.defaultLabel;
+}
+
 function profileStore() {
   return state.profileStoreCache;
 }
@@ -1882,7 +1902,11 @@ async function loadResources(force = false) {
 }
 
 async function loadUsers(force = false) {
-  if (!hasPermission("manage_users")) return;
+  if (!hasPermission("manage_users")) {
+    state.users = [];
+    removeTimedCache(USERS_CACHE_KEY);
+    return;
+  }
   if (state.usersPromise && !force) return await state.usersPromise;
 
   const cached = !force ? readTimedCache(USERS_CACHE_KEY, USERS_CACHE_TTL_MS) : null;
@@ -1952,6 +1976,9 @@ function prefillUploadFromResource(resource) {
 function closeUploadModal() {
   els.uploadModal.hidden = true;
   state.editingResourceId = null;
+  showStatus(els.uploadStatus, "", true);
+  els.uploadForm?.reset();
+  renderUploadPreview();
 }
 
 function closeDetailModal() {
@@ -2093,7 +2120,7 @@ function detailHtml(resource) {
 
 async function loadResourceComments(resourceId) {
   try {
-    const res = await apiFetch(`/resources/${encodeURIComponent(resourceId)}/comments`);
+    const res = await apiFetch(`/resources/${encodeURIComponent(resourceId)}/comments`, { timeoutMs: 6000 });
     if (!res.ok) throw new Error(await errorText(res, "Could not load comments"));
     const json = await res.json();
     state.commentsByResource[resourceId] = Array.isArray(json.rows) ? json.rows : [];
@@ -2110,7 +2137,10 @@ async function openDetail(resourceId) {
   state.activeDetailId = resourceId;
 
   try {
-    const [resourceRes] = await Promise.all([apiFetch(`/resources/${encodeURIComponent(resourceId)}`), loadResourceComments(resourceId)]);
+    const [resourceRes] = await Promise.all([
+      apiFetch(`/resources/${encodeURIComponent(resourceId)}`, { timeoutMs: 7000 }),
+      loadResourceComments(resourceId),
+    ]);
     if (resourceRes.ok) {
       const fresh = normalizeResource(await resourceRes.json());
       state.resources = state.resources.map((item) => (item.id === resourceId ? fresh : item));
@@ -2234,6 +2264,7 @@ async function saveUserPermissions(userId) {
 async function handleSignIn(event) {
   event.preventDefault();
   auth.clearAuthError?.();
+  setButtonBusy(els.btnSigninSubmit, true, "Signing in...");
   showStatus(els.signupStatus, "", true);
   const name = els.signInName.value.trim();
   const email = els.signInEmail.value.trim();
@@ -2241,25 +2272,32 @@ async function handleSignIn(event) {
   if (!email) {
     showStatus(els.signInStatus, "Enter your email address", false);
     els.signInEmail.focus();
+    setButtonBusy(els.btnSigninSubmit, false);
     return;
   }
   if (!password) {
     showStatus(els.signInStatus, "Enter your password", false);
     els.signInPassword.focus();
+    setButtonBusy(els.btnSigninSubmit, false);
     return;
   }
   showStatus(els.signInStatus, "Signing in…", true);
   const result = await doAuth(name, email, els.signInStatus);
-  if (!result) return;
+  if (!result) {
+    setButtonBusy(els.btnSigninSubmit, false);
+    return;
+  }
   state.authFormMode = "signin";
   showStatus(els.signInStatus, "", true);
   showToast(`Welcome back, ${result.user?.name || ""}`, true);
+  setButtonBusy(els.btnSigninSubmit, false);
   setRoute("home");
 }
 
 async function handleSignUp(event) {
   event.preventDefault();
   auth.clearAuthError?.();
+  setButtonBusy(els.btnSignupSubmit, true, "Creating...");
   showStatus(els.signInStatus, "", true);
   const name = els.signupName.value.trim();
   const email = els.signupEmail.value.trim();
@@ -2269,16 +2307,19 @@ async function handleSignUp(event) {
   if (!name) {
     showStatus(els.signupStatus, "Enter your name", false);
     els.signupName.focus();
+    setButtonBusy(els.btnSignupSubmit, false);
     return;
   }
   if (!email) {
     showStatus(els.signupStatus, "Enter your email address", false);
     els.signupEmail.focus();
+    setButtonBusy(els.btnSignupSubmit, false);
     return;
   }
   if (!password) {
     showStatus(els.signupStatus, "Create a password", false);
     els.signupPassword.focus();
+    setButtonBusy(els.btnSignupSubmit, false);
     return;
   }
   showStatus(els.signupStatus, "Creating account…", true);
@@ -2287,7 +2328,10 @@ async function handleSignUp(event) {
     { name, email, password, country, whyInterested: interest },
     els.signupStatus,
   );
-  if (!result) return;
+  if (!result) {
+    setButtonBusy(els.btnSignupSubmit, false);
+    return;
+  }
   state.authFormMode = "signin";
   saveProfile(email, {
     name,
@@ -2311,6 +2355,7 @@ async function handleSignUp(event) {
     showStatus(els.signupStatus, "", true);
     showToast(`Welcome, ${name}! Account created. Check your email to verify.`, true);
   }
+  setButtonBusy(els.btnSignupSubmit, false);
   setRoute("home");
 }
 
@@ -2325,6 +2370,7 @@ async function handleSignOut() {
   state.activeConversationId = null;
   state.activeConversation = null;
   state.activeConversationMessages = [];
+  removeTimedCache(USERS_CACHE_KEY);
   updateTopButtons();
   renderProfilePage();
   renderResources();
@@ -2336,9 +2382,11 @@ async function handleSignOut() {
 
 function handleProfileSave(event) {
   event.preventDefault();
+  setButtonBusy(els.btnProfileSave, true, "Saving...");
   const email = (els.profileEmail.value || state.user?.email || "").trim();
   if (!email) {
     showStatus(els.profileStatus, "Email is required", false);
+    setButtonBusy(els.btnProfileSave, false);
     return;
   }
   const payload = {
@@ -2378,7 +2426,8 @@ function handleProfileSave(event) {
     })
     .catch((error) => {
       showStatus(els.profileStatus, error.message || "Could not save profile", false);
-    });
+    })
+    .finally(() => setButtonBusy(els.btnProfileSave, false));
 }
 
 async function handleUpload(event) {
@@ -2412,7 +2461,7 @@ async function handleUpload(event) {
   if (file) formData.append("file", file, file.name);
   const isEditing = Boolean(state.editingResourceId);
 
-  els.uploadSubmit.disabled = true;
+  setButtonBusy(els.uploadSubmit, true, isEditing ? "Saving..." : "Uploading...");
   showStatus(els.uploadStatus, isEditing ? "Saving changes" : "Uploading", true);
 
   try {
@@ -2421,15 +2470,13 @@ async function handleUpload(event) {
     const res = await apiFetch(path, { method, body: formData });
     if (!res.ok) throw new Error(await errorText(res, isEditing ? "Update failed" : "Upload failed"));
     closeUploadModal();
-    els.uploadForm.reset();
-    renderUploadPreview();
     await loadResources(true);
     showToast(isEditing ? "Resource updated" : "Resource uploaded", true);
   } catch (error) {
     showStatus(els.uploadStatus, error.message || (isEditing ? "Update failed" : "Upload failed"), false);
   } finally {
     state.editingResourceId = null;
-    els.uploadSubmit.disabled = false;
+    setButtonBusy(els.uploadSubmit, false);
   }
 }
 
@@ -2808,6 +2855,7 @@ function bindEvents() {
           if (!res.ok) throw new Error(await errorText(res, "Could not delete resource"));
           state.resources = state.resources.filter((item) => item.id !== id);
           state.filteredResources = filterResources(state.resources);
+          writeTimedCache(RESOURCE_CACHE_KEY, state.resources);
           closeDetailModal();
           renderResources();
           renderAdmin();
