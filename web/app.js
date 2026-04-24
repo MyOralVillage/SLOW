@@ -1,6 +1,10 @@
 const PROFILE_STORE_KEY = "slow_profile_store_v1";
 const COMMENT_STORE_KEY = "slow_comment_store_v1";
 const RECOMMEND_STORE_KEY = "slow_recommend_store_v1";
+const RESOURCE_CACHE_KEY = "slow_resource_cache_v1";
+const USERS_CACHE_KEY = "slow_users_cache_v1";
+const RESOURCE_CACHE_TTL_MS = 5 * 60 * 1000;
+const USERS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 const PRODUCTION_API = "https://slow-57j2.onrender.com/api";
 const LOCAL_API = "http://127.0.0.1:3001/api";
@@ -114,6 +118,10 @@ const state = {
   selectedMessageUser: null,
   pendingSharedResource: null,
   messageMobileThreadOpen: false,
+  resourcesLoading: false,
+  usersLoading: false,
+  resourcesPromise: null,
+  usersPromise: null,
 };
 
 const els = {
@@ -1103,6 +1111,27 @@ function writeJsonStore(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function readTimedCache(key, ttlMs) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed.savedAt || Date.now() - Number(parsed.savedAt) > ttlMs) return null;
+    return parsed.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTimedCache(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), value }));
+  } catch {
+    /* ignore cache write failure */
+  }
+}
+
 function profileStore() {
   return state.profileStoreCache;
 }
@@ -1366,7 +1395,9 @@ function resourcePreviewHtml(resource, mode = "detail") {
   const previewUrl = resourcePreviewUrl(resource);
   if (isImageFileMeta(resource?.file) && previewUrl) {
     const cls = mode === "card" ? "resource-thumb-img" : "detail-preview-img";
-    const attr = mode === "card" ? `loading="lazy" data-thumb-for="${escapeHtml(resource.id)}"` : `data-detail-res="${escapeHtml(resource.id)}"`;
+    const attr = mode === "card"
+      ? `loading="lazy" decoding="async" fetchpriority="low" data-thumb-for="${escapeHtml(resource.id)}"`
+      : `loading="eager" decoding="async" data-detail-res="${escapeHtml(resource.id)}"`;
     return `<img class="${cls}" src="${escapeHtml(previewUrl)}" alt="${escapeHtml(resource.title)}" ${attr} />`;
   }
   if (isPdfFileMeta(resource?.file) && previewUrl && mode === "detail") {
@@ -1477,6 +1508,29 @@ function filterResources(resources) {
 function renderResources() {
   const resources = state.filteredResources;
   if (!els.resourceGrid) return;
+  if (state.resourcesLoading && !resources.length && !state.resources.length) {
+    els.resourceGrid.innerHTML = new Array(6)
+      .fill(0)
+      .map(
+        () => `
+          <article class="resource-card resource-card-skeleton" aria-hidden="true">
+            <div class="resource-card-hit">
+              <div class="resource-thumb skeleton-block"></div>
+              <div class="resource-card-body">
+                <div class="skeleton-line skeleton-title"></div>
+                <div class="skeleton-line"></div>
+                <div class="tag-row">
+                  <span class="tag skeleton-chip"></span>
+                  <span class="tag skeleton-chip"></span>
+                </div>
+              </div>
+            </div>
+          </article>
+        `,
+      )
+      .join("");
+    return;
+  }
   if (!resources.length) {
     const canUpload = hasPermission("upload_resources");
     const hasFilter = (els.searchQuery?.value || "").trim() || els.filterCountry?.value || els.filterCrossCutting?.value;
@@ -1779,39 +1833,92 @@ async function restoreSession() {
   syncAuthState();
 }
 
-async function loadResources() {
-  try {
-    const res = await apiFetch("/resources?limit=100&offset=0");
-    if (!res.ok) throw new Error(await errorText(res, "Could not load resources"));
-    const json = await res.json();
-    state.resources = (Array.isArray(json.rows) ? json.rows : []).map(normalizeResource);
-    state.backendReachable = true;
-  } catch {
-    if (!state.backendReachable && !state.resources.length) {
-      state.resources = metadata.sampleResources.map(normalizeResource);
-    }
-    state.backendReachable = false;
+async function loadResources(force = false) {
+  if (state.resourcesPromise && !force) return await state.resourcesPromise;
+
+  const cached = !force ? readTimedCache(RESOURCE_CACHE_KEY, RESOURCE_CACHE_TTL_MS) : null;
+  if (!force && !state.resources.length && Array.isArray(cached) && cached.length) {
+    state.resources = cached.map(normalizeResource);
+    state.filteredResources = filterResources(state.resources);
+    showStatus(els.browseStatus, `${state.filteredResources.length} resources · showing saved library`, true);
+    renderResources();
+    renderNotifications();
+    renderAdmin();
   }
-  state.filteredResources = filterResources(state.resources);
-  showStatus(els.browseStatus, `${state.filteredResources.length} resources`, true);
-  updateTopButtons();
+
+  state.resourcesLoading = true;
   renderResources();
-  renderNotifications();
-  renderAdmin();
+
+  state.resourcesPromise = (async () => {
+    try {
+      const res = await apiFetch("/resources?limit=100&offset=0", { timeoutMs: 7000 });
+      if (!res.ok) throw new Error(await errorText(res, "Could not load resources"));
+      const json = await res.json();
+      const rows = (Array.isArray(json.rows) ? json.rows : []).map(normalizeResource);
+      state.resources = rows;
+      writeTimedCache(RESOURCE_CACHE_KEY, rows);
+      state.backendReachable = true;
+    } catch {
+      if (!state.backendReachable && !state.resources.length) {
+        state.resources = metadata.sampleResources.map(normalizeResource);
+      }
+      state.backendReachable = false;
+    } finally {
+      state.resourcesLoading = false;
+    }
+    state.filteredResources = filterResources(state.resources);
+    showStatus(els.browseStatus, `${state.filteredResources.length} resources`, true);
+    updateTopButtons();
+    renderResources();
+    renderNotifications();
+    renderAdmin();
+  })();
+
+  try {
+    await state.resourcesPromise;
+  } finally {
+    state.resourcesPromise = null;
+  }
 }
 
-async function loadUsers() {
+async function loadUsers(force = false) {
   if (!hasPermission("manage_users")) return;
-  showStatus(els.adminStatus, "Loading users", true);
-  const res = await apiFetch("/users");
-  if (!res.ok) {
-    showStatus(els.adminStatus, await errorText(res, "Could not load users"), false);
-    return;
+  if (state.usersPromise && !force) return await state.usersPromise;
+
+  const cached = !force ? readTimedCache(USERS_CACHE_KEY, USERS_CACHE_TTL_MS) : null;
+  if (!force && !state.users.length && Array.isArray(cached) && cached.length) {
+    state.users = cached;
+    renderUsers();
+    showStatus(els.adminStatus, `${state.users.length} users · cached`, true);
   }
-  const json = await res.json();
-  state.users = json.rows || [];
-  renderUsers();
-  showStatus(els.adminStatus, `${state.users.length} users`, true);
+
+  state.usersLoading = true;
+  showStatus(els.adminStatus, state.users.length ? "Refreshing users" : "Loading users", true);
+
+  state.usersPromise = (async () => {
+    try {
+      const res = await apiFetch("/users", { timeoutMs: 7000 });
+      if (!res.ok) {
+        showStatus(els.adminStatus, await errorText(res, "Could not load users"), false);
+        return;
+      }
+      const json = await res.json();
+      state.users = json.rows || [];
+      writeTimedCache(USERS_CACHE_KEY, state.users);
+      renderUsers();
+      showStatus(els.adminStatus, `${state.users.length} users`, true);
+    } catch (error) {
+      showStatus(els.adminStatus, error?.message || "Could not load users", false);
+    } finally {
+      state.usersLoading = false;
+    }
+  })();
+
+  try {
+    await state.usersPromise;
+  } finally {
+    state.usersPromise = null;
+  }
 }
 
 function openUploadModal() {
@@ -2058,7 +2165,7 @@ async function doAuth(name, email, statusEl) {
     renderResources();
     renderMessages();
     renderNotifications();
-    await loadUsers();
+    await loadUsers(true);
     return result.data;
   } catch (error) {
     showStatus(statusEl, error.message || "Could not reach the server", false);
@@ -2080,7 +2187,7 @@ async function doAuthRequest(path, payload, statusEl) {
     renderResources();
     renderMessages();
     renderNotifications();
-    await loadUsers();
+    await loadUsers(true);
     return result.data;
   } catch (error) {
     showStatus(statusEl, error.message || "Could not reach the server", false);
@@ -2113,7 +2220,7 @@ async function saveUserPermissions(userId) {
     return;
   }
 
-  await loadUsers();
+  await loadUsers(true);
   if (state.user?.id === userId) {
     await restoreSession();
     updateTopButtons();
@@ -2316,7 +2423,7 @@ async function handleUpload(event) {
     closeUploadModal();
     els.uploadForm.reset();
     renderUploadPreview();
-    await loadResources();
+    await loadResources(true);
     showToast(isEditing ? "Resource updated" : "Resource uploaded", true);
   } catch (error) {
     showStatus(els.uploadStatus, error.message || (isEditing ? "Update failed" : "Upload failed"), false);
@@ -2534,8 +2641,8 @@ function bindEvents() {
   els.btnHomeUpload?.addEventListener("click", () => openUploadModal());
   els.btnTopSignin?.addEventListener("click", () => setRoute("profile"));
   els.btnClearSearch?.addEventListener("click", clearSearch);
-  els.btnRefreshLibrary?.addEventListener("click", () => loadResources().catch(() => undefined));
-  els.btnRefreshUsers?.addEventListener("click", () => loadUsers().catch(() => undefined));
+  els.btnRefreshLibrary?.addEventListener("click", () => loadResources(true).catch(() => undefined));
+  els.btnRefreshUsers?.addEventListener("click", () => loadUsers(true).catch(() => undefined));
   document.getElementById("admin-user-search")?.addEventListener("input", () => renderUsers());
   els.signInForm?.addEventListener("submit", handleSignIn);
   els.signupForm?.addEventListener("submit", handleSignUp);

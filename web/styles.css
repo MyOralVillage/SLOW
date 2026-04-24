@@ -235,6 +235,8 @@ a.app-home-link,
 .section-block {
   margin-top: 12px;
   padding: 16px 12px;
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 600px;
 }
 
 .section-block + .section-block {
@@ -996,6 +998,8 @@ a.text-link-btn {
   overflow: hidden;
   background: #fff;
   transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition);
+  content-visibility: auto;
+  contain-intrinsic-size: 200px;
 }
 
 .resource-card:hover {
@@ -1032,6 +1036,47 @@ a.text-link-btn {
 .resource-card-actions .secondary-btn {
   min-height: 42px;
   justify-content: center;
+}
+
+.resource-card-skeleton {
+  pointer-events: none;
+}
+
+.skeleton-block,
+.skeleton-line,
+.skeleton-chip {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #eee8dc 0%, #f8f5ec 50%, #eee8dc 100%);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.2s linear infinite;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+}
+
+.skeleton-title {
+  height: 16px;
+  width: 70%;
+}
+
+.skeleton-chip {
+  display: inline-flex;
+  width: 72px;
+  height: 24px;
+  border: none;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -20% 0;
+  }
 }
 
 .resource-thumb {
