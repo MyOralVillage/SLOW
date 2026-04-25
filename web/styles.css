@@ -2626,6 +2626,139 @@ a.text-link-btn {
 }
 
 /* ═══════════════════════════════════════════
+   Wiki-like layout refresh
+   ═══════════════════════════════════════════ */
+
+:root {
+  --bg: #f6f4ef;
+  --panel: #ffffff;
+  --panel-alt: #fbfaf7;
+  --border: #cfc8bb;
+  --border-light: #ddd5c8;
+  --shadow: none;
+  --shadow-lg: none;
+  --radius: 10px;
+  --radius-sm: 8px;
+}
+
+.app-shell {
+  max-width: 1240px;
+  padding: 12px 14px 96px;
+}
+
+.app-header,
+.section-block,
+.card-panel,
+.detail-panel,
+.upload-panel {
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.app-header {
+  position: static;
+  border-bottom: 2px solid var(--border);
+  background: var(--panel);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.app-title {
+  font-size: clamp(1.35rem, 2.2vw, 2rem);
+}
+
+.app-subtitle {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.section-block {
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.section-head h2,
+.panel-title {
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.tile-group-title,
+.field span {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.category-tile {
+  border-radius: 8px;
+  border-width: 1px;
+  background: #fff;
+  box-shadow: none;
+  min-height: 64px;
+}
+
+.category-tile:hover,
+.category-tile:focus {
+  box-shadow: none;
+}
+
+.resource-grid {
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.resource-card {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.resource-thumb {
+  border-bottom: 1px solid var(--border-light);
+  background: #f7f4ed;
+}
+
+.messages-layout {
+  grid-template-columns: minmax(290px, 340px) 1fr;
+  gap: 12px;
+}
+
+.messages-conversations-panel,
+.messages-thread-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.message-inbox-item,
+.message-user-result,
+.share-target-row {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.message-bubble {
+  border-radius: 12px;
+}
+
+.bottom-nav {
+  left: 0;
+  right: 0;
+  transform: none;
+  width: 100%;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  box-shadow: none;
+  background: #f3efe6;
+}
+
+.bottom-nav-btn {
+  border-radius: 8px;
+}
+
+/* ═══════════════════════════════════════════
    UI polish pass
    ═══════════════════════════════════════════ */
 
