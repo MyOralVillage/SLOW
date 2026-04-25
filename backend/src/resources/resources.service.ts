@@ -1,8 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
 import * as fs from "fs";
 
+import { canDeleteResource } from "../auth/permissions";
 import { PrismaService } from "../prisma/prisma.service";
 import { DiskStorage } from "../storage/disk.storage";
+import { serializePublicUser } from "../users/user-view.util";
 import { CreateResourceDto } from "./dto/create-resource.dto";
 import { SearchResourcesDto } from "./dto/search-resources.dto";
 import { isImageMime, resolveMime } from "./mime.util";
@@ -73,14 +76,7 @@ export class ResourcesService {
       type: row.type,
       keywords: row.keywords || [],
       created_at: row.created_at,
-      uploaded_by: row.uploadedBy
-        ? {
-            id: row.uploadedBy.id,
-            name: row.uploadedBy.name,
-            email: row.uploadedBy.email,
-            role: row.uploadedBy.role,
-          }
-        : null,
+      uploaded_by: row.uploadedBy ? serializePublicUser(row.uploadedBy) : null,
       file: hasFile
         ? {
             url: `/api/resources/${row.id}/file`,
@@ -103,6 +99,10 @@ export class ResourcesService {
           name: true,
           email: true,
           role: true,
+          status: true,
+          country: true,
+          avatar_name: true,
+          avatar_storage_key: true,
         },
       },
     } as const;
@@ -164,7 +164,7 @@ export class ResourcesService {
     return this.toResourceResponse(row);
   }
 
-  async remove(id: string, auth: { userId: string; permissions?: string[] }) {
+  async remove(id: string, auth: { userId: string; role: UserRole; permissions?: string[] }) {
     const existing = await this.prisma.resource.findUnique({
       where: { id },
       select: {
@@ -175,7 +175,7 @@ export class ResourcesService {
       },
     });
     if (!existing) throw new NotFoundException("Resource not found.");
-    if (existing.uploaded_by !== auth.userId && !auth.permissions?.includes("edit_resources")) {
+    if (!canDeleteResource(auth.role, auth.permissions, auth.userId, existing.uploaded_by)) {
       throw new ForbiddenException("You do not have permission to remove this resource.");
     }
 
@@ -334,6 +334,10 @@ export class ResourcesService {
             id: true,
             name: true,
             role: true,
+            status: true,
+            country: true,
+            avatar_name: true,
+            avatar_storage_key: true,
           },
         },
       },
@@ -342,7 +346,7 @@ export class ResourcesService {
       id: row.id,
       body: row.body,
       created_at: row.created_at,
-      user: row.user,
+      user: serializePublicUser(row.user),
     }));
   }
 
@@ -364,6 +368,10 @@ export class ResourcesService {
             id: true,
             name: true,
             role: true,
+            status: true,
+            country: true,
+            avatar_name: true,
+            avatar_storage_key: true,
           },
         },
       },
@@ -372,7 +380,7 @@ export class ResourcesService {
       id: row.id,
       body: row.body,
       created_at: row.created_at,
-      user: row.user,
+      user: serializePublicUser(row.user),
     };
   }
 }

@@ -161,3 +161,39 @@ export function effectivePermissions(role: UserRole, grants?: string[]) {
 export function hasPermission(role: UserRole, grants: string[] | undefined, permission: PermissionName) {
   return effectivePermissions(role, grants).includes(permission);
 }
+
+export function canDeleteAnyResource(role: UserRole, grants?: string[]) {
+  return role === UserRole.owner || role === UserRole.admin || hasPermission(role, grants, "disable_resources");
+}
+
+export function canDeleteOwnResource(role: UserRole, grants?: string[]) {
+  return hasPermission(role, grants, "upload_resources");
+}
+
+export function canDeleteResource(role: UserRole, grants: string[] | undefined, actorUserId: string, ownerUserId?: string | null) {
+  return canDeleteAnyResource(role, grants) || (Boolean(ownerUserId) && ownerUserId === actorUserId && canDeleteOwnResource(role, grants));
+}
+
+export function canCreateCommunityPost(role: UserRole, grants?: string[]) {
+  return hasPermission(role, grants, "complete_profile");
+}
+
+export function canDeleteAnyCommunityPost(role: UserRole, grants?: string[]) {
+  return role === UserRole.owner || role === UserRole.admin || hasPermission(role, grants, "send_notifications");
+}
+
+export function canCreateForumThread(role: UserRole, grants?: string[]) {
+  return hasPermission(role, grants, "edit_resources");
+}
+
+export function canReplyForumThread(role: UserRole, grants?: string[]) {
+  return hasPermission(role, grants, "complete_profile");
+}
+
+export function canViewUserProfiles(role: UserRole, grants?: string[]) {
+  return hasPermission(role, grants, "view_content");
+}
+
+export function canManageUsers(role: UserRole, grants?: string[]) {
+  return hasPermission(role, grants, "manage_users");
+}

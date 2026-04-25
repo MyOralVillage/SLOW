@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Query, Req, Res, UnauthorizedException, UseGuards } from "@nestjs/common";
 import { UserRole, UserStatus } from "@prisma/client";
+import type { Response } from "express";
 
+import { AuthService } from "../auth/auth.service";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
 import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
 import { UsersService } from "./users.service";
+import { inferMimeFromFilename } from "../resources/mime.util";
 
 type UpdateUserBody = {
   role?: UserRole;
@@ -19,7 +22,10 @@ type RequestAuthUser = {
 
 @Controller("users")
 export class UsersController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Get()
   @UseGuards(SessionAuthGuard, PermissionGuard)
@@ -29,13 +35,32 @@ export class UsersController {
   }
 
   @Get("search")
-  @UseGuards(SessionAuthGuard, PermissionGuard)
-  @RequirePermission("message_users")
+  @UseGuards(SessionAuthGuard)
   async searchUsers(
     @Req() req: { authUser?: RequestAuthUser },
     @Query("q") q?: string,
   ) {
-    return await this.users.searchForMessaging(req.authUser!.id, String(q || ""));
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    return await this.users.searchProfiles(req.authUser.id, String(q || ""));
+  }
+
+  @Get(":id/avatar")
+  async getUserAvatar(@Param("id") id: string, @Res() res: Response) {
+    const { stream, filename } = await this.auth.openAvatarReadStream(id);
+    const mime = inferMimeFromFilename(filename) || "image/jpeg";
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Cache-Control", "public, max-age=600");
+    stream.pipe(res);
+  }
+
+  @Get(":id")
+  @UseGuards(SessionAuthGuard)
+  async getUserProfile(
+    @Req() req: { authUser?: RequestAuthUser },
+    @Param("id") id: string,
+  ) {
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    return await this.users.getPublicProfile(id, req.authUser);
   }
 
   @Patch(":id")

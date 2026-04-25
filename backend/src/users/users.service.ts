@@ -2,7 +2,8 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 import { UserRole, UserStatus } from "@prisma/client";
 
 import { PrismaService } from "../prisma/prisma.service";
-import { effectivePermissions, normalizePermissionGrants } from "../auth/permissions";
+import { canManageUsers, effectivePermissions, normalizePermissionGrants } from "../auth/permissions";
+import { serializePublicUser } from "./user-view.util";
 
 type ActingUser = {
   id: string;
@@ -26,8 +27,12 @@ export class UsersService {
         status: true,
         country: true,
         why_interested: true,
+        biodata: true,
+        social_handles: true,
         permission_grants: true,
         created_at: true,
+        avatar_name: true,
+        avatar_storage_key: true,
         _count: {
           select: {
             resources: true,
@@ -36,7 +41,7 @@ export class UsersService {
       },
     });
     return rows.map((row) => ({
-      ...row,
+      ...serializePublicUser(row),
       uploaded_resource_count: row._count.resources,
       permission_grants: normalizePermissionGrants(row.permission_grants),
       permissions: effectivePermissions(row.role, row.permission_grants),
@@ -90,8 +95,12 @@ export class UsersService {
         status: true,
         country: true,
         why_interested: true,
+        biodata: true,
+        social_handles: true,
         permission_grants: true,
         created_at: true,
+        avatar_name: true,
+        avatar_storage_key: true,
         _count: {
           select: {
             resources: true,
@@ -101,7 +110,7 @@ export class UsersService {
     });
 
     return {
-      ...row,
+      ...serializePublicUser(row),
       uploaded_resource_count: row._count.resources,
       permission_grants: normalizePermissionGrants(row.permission_grants),
       permissions: effectivePermissions(row.role, row.permission_grants),
@@ -128,10 +137,111 @@ export class UsersService {
         country: true,
         role: true,
         status: true,
+        avatar_name: true,
+        avatar_storage_key: true,
       },
       orderBy: [{ name: "asc" }],
       take: 25,
     });
-    return { rows };
+    return { rows: rows.map((row) => serializePublicUser(row)) };
+  }
+
+  async searchProfiles(currentUserId: string, query: string) {
+    const q = String(query || "").trim().toLowerCase();
+    if (q.length < 2) return { rows: [] };
+    const rows = await this.prisma.user.findMany({
+      where: {
+        id: { not: currentUserId },
+        status: { not: UserStatus.disabled },
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { country: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        country: true,
+        role: true,
+        status: true,
+        why_interested: true,
+        biodata: true,
+        social_handles: true,
+        avatar_name: true,
+        avatar_storage_key: true,
+        created_at: true,
+      },
+      orderBy: [{ name: "asc" }],
+      take: 12,
+    });
+    return { rows: rows.map((row) => serializePublicUser(row)) };
+  }
+
+  async getPublicProfile(id: string, actingUser?: ActingUser) {
+    if (!actingUser || !canManageUsers(actingUser.role, actingUser.permissions)) {
+      // signed-in users can still view profiles; only block anonymous callers at controller layer
+    }
+    const row = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        country: true,
+        why_interested: true,
+        biodata: true,
+        social_handles: true,
+        avatar_name: true,
+        avatar_storage_key: true,
+        email_verified: true,
+        created_at: true,
+        resources: {
+          orderBy: { created_at: "desc" },
+          take: 12,
+          select: {
+            id: true,
+            title: true,
+            category: true,
+            country: true,
+            type: true,
+            description: true,
+            created_at: true,
+            mime_type: true,
+            original_filename: true,
+            storage_key: true,
+            file_path: true,
+            external_url: true,
+            file_bytes: true,
+          },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException("User not found.");
+    return {
+      user: serializePublicUser(row),
+      resources: row.resources.map((resource) => ({
+        id: resource.id,
+        title: resource.title,
+        category: resource.category,
+        country: resource.country,
+        type: resource.type,
+        description: resource.description,
+        created_at: resource.created_at,
+        file: resource.storage_key || resource.file_path || resource.external_url || (resource.file_bytes && resource.file_bytes.length)
+          ? {
+              url: `/api/resources/${resource.id}/file`,
+              thumbnailUrl:
+                (String(resource.mime_type || "").startsWith("image/") ||
+                  /\.(png|jpe?g|gif|webp|svg|ico)$/i.test(String(resource.original_filename || "")))
+                  ? `/api/resources/${resource.id}/file`
+                  : null,
+            }
+          : null,
+      })),
+    };
   }
 }

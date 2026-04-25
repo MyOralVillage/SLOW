@@ -16,6 +16,7 @@ import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { DiskStorage } from "../storage/disk.storage";
 import { effectivePermissions, normalizePermissionGrants } from "./permissions";
+import { avatarUrlForUser } from "../users/user-view.util";
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS || "14");
 const DEFAULT_WEB_APP_URL = "http://127.0.0.1:8080";
@@ -109,6 +110,7 @@ export class AuthService {
       why_interested: user.why_interested || "",
       avatar_name: user.avatar_name || "",
       has_avatar: Boolean(user.avatar_storage_key),
+      avatar_url: avatarUrlForUser(user.id, Boolean(user.avatar_storage_key)),
       email_verified: user.email_verified,
       whatsapp_phone: user.whatsapp_phone || "",
       biodata: user.biodata || "",

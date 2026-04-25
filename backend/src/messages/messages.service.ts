@@ -3,6 +3,7 @@ import { UserStatus } from "@prisma/client";
 
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { serializePublicUser } from "../users/user-view.util";
 
 @Injectable()
 export class MessagesService {
@@ -61,10 +62,12 @@ export class MessagesService {
         country: true,
         role: true,
         status: true,
+        avatar_name: true,
+        avatar_storage_key: true,
       },
       take: shouldFilter ? 25 : 0,
     });
-    return { rows };
+    return { rows: rows.map((row) => serializePublicUser(row)) };
   }
 
   async listConversations(userId: string) {
@@ -85,6 +88,8 @@ export class MessagesService {
                 country: true,
                 role: true,
                 status: true,
+                avatar_name: true,
+                avatar_storage_key: true,
               },
             },
           },
@@ -126,8 +131,8 @@ export class MessagesService {
           id: c.id,
           created_at: c.created_at,
           updated_at: c.updated_at,
-          counterpart,
-          participants: c.participants.map((p) => p.user),
+          counterpart: counterpart ? serializePublicUser(counterpart) : null,
+          participants: c.participants.map((p) => serializePublicUser(p.user)),
           last_message: last
             ? {
                 id: last.id,
@@ -159,6 +164,8 @@ export class MessagesService {
                 country: true,
                 role: true,
                 status: true,
+                avatar_name: true,
+                avatar_storage_key: true,
               },
             },
           },
@@ -201,14 +208,14 @@ export class MessagesService {
         id: conversation.id,
         created_at: conversation.created_at,
         updated_at: conversation.updated_at,
-        participants: conversation.participants.map((p) => p.user),
+        participants: conversation.participants.map((p) => serializePublicUser(p.user)),
       },
       messages: conversation.messages.map((m) => ({
         id: m.id,
         body: m.body,
         created_at: m.created_at,
         read_at: m.read_at,
-        sender: m.sender,
+        sender: serializePublicUser(m.sender),
         resource: m.resource || null,
       })),
     };

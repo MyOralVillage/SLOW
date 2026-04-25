@@ -15,6 +15,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
+import { UserRole } from "@prisma/client";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 import type { Request, Response } from "express";
@@ -236,7 +237,11 @@ export class ResourcesController {
   @RequirePermission("upload_resources")
   async remove(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
     if (!req.authUser) throw new UnauthorizedException("Please sign in.");
-    return await this.svc.remove(id, { userId: req.authUser.id, permissions: req.authUser.permissions });
+    return await this.svc.remove(id, {
+      userId: req.authUser.id,
+      role: req.authUser.role as UserRole,
+      permissions: req.authUser.permissions,
+    });
   }
 
   @Get()
