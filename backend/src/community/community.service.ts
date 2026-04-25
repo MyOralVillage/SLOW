@@ -148,6 +148,22 @@ export class CommunityService {
             created_at: true,
           },
         },
+        resource: {
+          select: {
+            id: true,
+            title: true,
+            category: true,
+            country: true,
+            type: true,
+            description: true,
+            mime_type: true,
+            original_filename: true,
+            storage_key: true,
+            file_path: true,
+            external_url: true,
+            file_bytes: true,
+          },
+        },
         replies: {
           orderBy: { created_at: "asc" },
           include: {
@@ -176,9 +192,12 @@ export class CommunityService {
         id: row.id,
         title: row.title,
         body: row.body,
+        thread_kind: row.thread_kind || "general",
+        topic_label: row.topic_label || "",
         created_at: row.created_at,
         updated_at: row.updated_at,
         user: serializePublicUser(row.user),
+        resource: this.mapResource(row.resource),
         replies: row.replies.map((reply) => ({
           id: reply.id,
           body: reply.body,
@@ -197,19 +216,37 @@ export class CommunityService {
     return { thread };
   }
 
-  async createThread(auth: ActingUser, input: { title?: string; body?: string }) {
+  async createThread(auth: ActingUser, input: { title?: string; body?: string; kind?: string; topicLabel?: string; resourceId?: string }) {
     if (!canCreateForumThread(auth.role, auth.permissions)) {
       throw new ForbiddenException("Your role cannot create forum discussions.");
     }
     const title = String(input.title || "").trim();
     const body = String(input.body || "").trim();
+    const kind = ["general", "topic", "resource"].includes(String(input.kind || "").trim())
+      ? String(input.kind || "").trim()
+      : "general";
+    const topicLabel = String(input.topicLabel || "").trim() || null;
+    const resourceId = String(input.resourceId || "").trim() || null;
     if (!title) throw new BadRequestException("Thread title is required.");
     if (!body) throw new BadRequestException("Thread body is required.");
+    if (kind === "topic" && !topicLabel) {
+      throw new BadRequestException("Choose or enter a topic for this discussion.");
+    }
+    if (kind === "resource" && !resourceId) {
+      throw new BadRequestException("Choose a resource for this discussion.");
+    }
+    if (resourceId) {
+      const resource = await this.prisma.resource.findUnique({ where: { id: resourceId }, select: { id: true } });
+      if (!resource) throw new NotFoundException("Linked resource not found.");
+    }
     await this.prisma.forumThread.create({
       data: {
         title,
         body,
         user_id: auth.id,
+        thread_kind: kind,
+        topic_label: kind === "topic" ? topicLabel : null,
+        resource_id: kind === "resource" ? resourceId : null,
       },
     });
     return await this.listThreads();

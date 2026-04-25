@@ -165,6 +165,7 @@ model Resource {
   file_bytes        Bytes?
   conversationMessages ConversationMessage[]
   communityPosts    CommunityPost[]
+  forumThreads      ForumThread[]
 
   @@index([country])
   @@index([category])
@@ -195,15 +196,21 @@ model ForumThread {
   id         String   @id @default(uuid())
   title      String
   body       String
+  thread_kind String  @default("general")
+  topic_label String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   user_id    String
+  resource_id String?
 
   user    User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  resource Resource?   @relation(fields: [resource_id], references: [id], onDelete: SetNull)
   replies ForumReply[]
 
   @@index([created_at])
   @@index([user_id, created_at])
+  @@index([thread_kind, created_at])
+  @@index([resource_id])
 }
 
 model ForumReply {

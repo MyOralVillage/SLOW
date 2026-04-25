@@ -181,6 +181,11 @@ const els = {
   btnCommunityPost: document.getElementById("btn-community-post"),
   communityPostsList: document.getElementById("community-posts-list"),
   forumThreadForm: document.getElementById("forum-thread-form"),
+  forumThreadKind: document.getElementById("forum-thread-kind"),
+  forumThreadTopic: document.getElementById("forum-thread-topic"),
+  forumTopicWrap: document.getElementById("forum-topic-wrap"),
+  forumThreadResource: document.getElementById("forum-thread-resource"),
+  forumResourceWrap: document.getElementById("forum-resource-wrap"),
   forumThreadTitle: document.getElementById("forum-thread-title"),
   forumThreadBody: document.getElementById("forum-thread-body"),
   forumThreadStatus: document.getElementById("forum-thread-status"),
@@ -315,6 +320,15 @@ function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value == null ? "" : String(value);
   return div.innerHTML;
+}
+
+function iconSvg(name, extraClass = "") {
+  const classes = ["icon", extraClass].filter(Boolean).join(" ");
+  return `<svg class="${classes}" aria-hidden="true"><use href="#icon-${escapeHtml(name)}"></use></svg>`;
+}
+
+function buttonLabelWithIcon(iconName, label, extraClass = "") {
+  return `${iconSvg(iconName, ["btn-icon", extraClass].filter(Boolean).join(" "))}<span>${escapeHtml(label)}</span>`;
 }
 
 function formatDate(value) {
@@ -684,6 +698,18 @@ function relatedResources(resource, limit = 3) {
   return (state.resources || [])
     .filter((item) => item.id !== resource?.id && (item.category === resource?.category || item.country === resource?.country))
     .slice(0, limit);
+}
+
+function resourceDiscussionThreads(resourceId, limit = 3) {
+  const id = String(resourceId || "").trim();
+  if (!id) return [];
+  return (state.forumThreads || []).filter((thread) => thread.resource?.id === id).slice(0, limit);
+}
+
+function forumKindLabel(kind) {
+  if (kind === "resource") return "Resource";
+  if (kind === "topic") return "Topic";
+  return "General";
 }
 
 function renderMessageSearchResults(target, rows, query, mode = "pick") {
@@ -1487,8 +1513,8 @@ function updateNotificationBadge() {
 }
 
 function notificationIcon(type) {
-  if (type === "message") return "💬";
-  return "🔔";
+  if (type === "message") return iconSvg("message-square");
+  return iconSvg("bell");
 }
 
 function userPermissions(user = state.user) {
@@ -1572,7 +1598,13 @@ function initFields() {
 }
 
 function tileButtonHtml(label, kind) {
-  return `<button type="button" class="category-tile" data-category-kind="${escapeHtml(kind)}" data-category-value="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
+  const icon = kind === "cross" ? "users" : "folder";
+  return `
+    <button type="button" class="category-tile" data-category-kind="${escapeHtml(kind)}" data-category-value="${escapeHtml(label)}">
+      <span class="category-tile-icon">${iconSvg(icon)}</span>
+      <span class="category-tile-copy">${escapeHtml(label)}</span>
+    </button>
+  `;
 }
 
 function renderCategoryTiles() {
@@ -1676,12 +1708,12 @@ function resourceDownloadUrl(resource) {
 function setResourceDownloadBusy(resourceId, busy) {
   if (!resourceId) return;
   document.querySelectorAll(`[data-download-resource="${resourceId}"]`).forEach((button) => {
-    const label = button.getAttribute("data-download-label") || button.textContent || "Download";
+    const label = button.getAttribute("data-download-label") || button.innerHTML || "Download";
     if (!button.getAttribute("data-download-label")) {
       button.setAttribute("data-download-label", label);
     }
     button.disabled = busy;
-    button.textContent = busy ? "Starting..." : label;
+    button.innerHTML = busy ? `${iconSvg("download", "btn-icon")}<span>Starting...</span>` : label;
     button.setAttribute("aria-busy", busy ? "true" : "false");
   });
 }
@@ -1788,8 +1820,8 @@ function resourceCardHtml(resource) {
         </div>
       </button>
       <div class="resource-card-actions">
-        <button type="button" class="secondary-btn" data-open-detail="${escapeHtml(resource.id)}">Open</button>
-        ${canShare ? `<button type="button" class="secondary-btn" data-share-resource="${escapeHtml(resource.id)}">Share</button>` : ""}
+        <button type="button" class="secondary-btn" data-open-detail="${escapeHtml(resource.id)}">${buttonLabelWithIcon("library", "Open")}</button>
+        ${canShare ? `<button type="button" class="secondary-btn" data-share-resource="${escapeHtml(resource.id)}">${buttonLabelWithIcon("share", "Share")}</button>` : ""}
       </div>
     </article>
   `;
@@ -1861,12 +1893,12 @@ function renderResources() {
     const canUpload = hasPermission("upload_resources");
     const hasFilter = (els.searchQuery?.value || "").trim() || els.filterCountry?.value || els.filterCrossCutting?.value;
     els.resourceGrid.innerHTML = `
-      <div class="empty-card">
-        <div class="empty-card-icon" aria-hidden="true">${hasFilter ? "🔍" : "📂"}</div>
+        <div class="empty-card">
+        <div class="empty-card-icon" aria-hidden="true">${hasFilter ? iconSvg("search") : iconSvg("folder")}</div>
         <p class="empty-card-title">${hasFilter ? "No matching resources" : "No resources yet"}</p>
         <p>${hasFilter ? "Try a different search or clear your filters." : "Browse a category above or upload the first icon or template."}</p>
         ${hasFilter ? `<button type="button" class="secondary-btn" onclick="document.getElementById('btn-clear-search')?.click()">Clear filters</button>` : ""}
-        ${canUpload && !hasFilter ? `<button type="button" class="primary-btn" onclick="document.getElementById('btn-home-upload')?.click()">Upload a resource</button>` : ""}
+        ${canUpload && !hasFilter ? `<button type="button" class="primary-btn" onclick="document.getElementById('btn-home-upload')?.click()">${buttonLabelWithIcon("upload", "Upload a resource")}</button>` : ""}
       </div>
     `;
     return;
@@ -2016,7 +2048,7 @@ function renderNotifications() {
           const preview = item.body || "Open to view this update.";
           return `
             <button type="button" class="simple-item notification-item ${item.is_read ? "" : "is-unread"}" data-open-notification="${escapeHtml(item.id)}">
-              <span class="notification-icon" aria-hidden="true">${escapeHtml(notificationIcon(item.type))}</span>
+              <span class="notification-icon" aria-hidden="true">${notificationIcon(item.type)}</span>
               <span class="notification-main">
                 <span class="notification-title-row">
                   ${item.is_read ? "" : `<span class="notification-dot" aria-hidden="true"></span>`}
@@ -2214,6 +2246,36 @@ function renderCommunityResourceOptions() {
   if (current) els.communityPostResource.value = current;
 }
 
+function syncForumThreadFormFocus() {
+  const kind = String(els.forumThreadKind?.value || "general");
+  if (els.forumTopicWrap) els.forumTopicWrap.hidden = kind !== "topic";
+  if (els.forumResourceWrap) els.forumResourceWrap.hidden = kind !== "resource";
+  if (els.forumThreadTitle) {
+    els.forumThreadTitle.placeholder = kind === "resource"
+      ? "Discussion about this resource"
+      : kind === "topic"
+        ? "Start a discussion about a topic"
+        : "Start a general discussion";
+  }
+  if (els.forumThreadBody) {
+    els.forumThreadBody.placeholder = kind === "resource"
+      ? "Ask a question, request feedback, or add context for this resource"
+      : kind === "topic"
+        ? "Share context, questions, or guidance on this topic"
+        : "Start a conversation for the wider community";
+  }
+}
+
+function renderForumResourceOptions() {
+  if (!els.forumThreadResource) return;
+  const current = els.forumThreadResource.value;
+  const options = ['<option value="">Choose a resource</option>'].concat(
+    (state.resources || []).slice(0, 100).map((resource) => `<option value="${escapeHtml(resource.id)}">${escapeHtml(resource.title)}</option>`),
+  );
+  els.forumThreadResource.innerHTML = options.join("");
+  if (current) els.forumThreadResource.value = current;
+}
+
 function renderForumThreadDetail() {
   if (!els.forumThreadDetail) return;
   const thread = (state.forumThreads || []).find((item) => item.id === state.activeForumThreadId);
@@ -2223,12 +2285,19 @@ function renderForumThreadDetail() {
     return;
   }
   els.forumThreadDetail.hidden = false;
+  const focusMeta = thread.thread_kind === "resource"
+    ? `${forumKindLabel(thread.thread_kind)} · ${thread.resource?.title || "Linked resource"}`
+    : thread.thread_kind === "topic"
+      ? `${forumKindLabel(thread.thread_kind)} · ${thread.topic_label || "Topic"}`
+      : forumKindLabel(thread.thread_kind);
   els.forumThreadDetail.innerHTML = `
     <div class="section-head">
       <h4>${escapeHtml(thread.title)}</h4>
       ${canDeleteForumThread(thread) ? `<button type="button" class="secondary-btn" data-delete-thread="${escapeHtml(thread.id)}">Delete</button>` : ""}
     </div>
     <div class="simple-item forum-thread-open">
+      <div class="tag-row"><span class="tag">${escapeHtml(focusMeta)}</span></div>
+      ${thread.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip" data-open-detail="${escapeHtml(thread.resource.id)}"><strong>${escapeHtml(thread.resource.title)}</strong><span>${escapeHtml([thread.resource.category, thread.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
       <div class="comment-row">
         ${userAvatarHtml(thread.user, "small")}
         <div class="comment-copy">
@@ -2274,6 +2343,8 @@ function renderCommunity() {
   if (els.communityPostForm) els.communityPostForm.hidden = !canCreateCommunityPost();
   if (els.forumThreadForm) els.forumThreadForm.hidden = !canCreateForumThread();
   renderCommunityResourceOptions();
+  renderForumResourceOptions();
+  syncForumThreadFormFocus();
   if (els.communityPostsList) {
     els.communityPostsList.innerHTML = (state.communityPosts || []).length
       ? state.communityPosts.map((post) => `
@@ -2301,6 +2372,8 @@ function renderCommunity() {
       ? state.forumThreads.map((thread) => `
           <button type="button" class="simple-item forum-thread-card ${state.activeForumThreadId === thread.id ? "is-active" : ""}" data-open-thread="${escapeHtml(thread.id)}">
             <strong>${escapeHtml(thread.title)}</strong>
+            <span class="small-note">${escapeHtml(thread.thread_kind === "resource" ? `Resource · ${thread.resource?.title || "Linked resource"}` : thread.thread_kind === "topic" ? `Topic · ${thread.topic_label || ""}` : "General discussion")}</span>
+            <span class="thread-preview">${escapeHtml(String(thread.body || "").trim().slice(0, 140))}${String(thread.body || "").trim().length > 140 ? "..." : ""}</span>
             <span>${escapeHtml(thread.user?.name || "Member")} · ${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</span>
             <span class="small-note">${escapeHtml(String(thread.reply_count || thread.replies?.length || 0))} replies</span>
           </button>
@@ -2385,7 +2458,9 @@ function applyRoute(route) {
 
 function updateTopButtons() {
   if (els.btnTopSignin) {
-    els.btnTopSignin.textContent = state.user ? "Edit profile" : "Sign in";
+    els.btnTopSignin.innerHTML = state.user
+      ? `${iconSvg("user", "btn-icon")}<span>Edit profile</span>`
+      : `${iconSvg("user", "btn-icon")}<span>Sign in</span>`;
   }
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
@@ -2690,6 +2765,7 @@ function detailHtml(resource) {
   const canDeleteResourceEntry = canDeleteResource(resource);
   const canShare = Boolean(state.user && hasPermission("message_users"));
   const related = relatedResources(resource, 4);
+  const discussionThreads = resourceDiscussionThreads(resource.id, 3);
 
   const allTags = [resource.category, resource.country, resource.type].filter(Boolean);
   if (resource.productDetail) allTags.push(resource.productDetail);
@@ -2737,13 +2813,13 @@ function detailHtml(resource) {
           <div class="wiki-meta-row"><strong>History</strong><span>Version history coming soon</span></div>
         </div>
         <div class="detail-actions">
-          <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download${resource.file?.sizeBytes ? ` (${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB)` : ""}</button>
-          <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend (${recommendationCount(resource.id)})</button>
-          ${canShare ? `<button type="button" class="secondary-btn" data-share-resource="${escapeHtml(resource.id)}">Send to someone</button>` : ""}
-          <button type="button" class="secondary-btn" data-discuss-resource="${escapeHtml(resource.id)}">Community</button>
-          ${canUpload ? `<button type="button" class="secondary-btn" data-open-upload-inline="1">Upload similar</button>` : ""}
-          ${canEditResource ? `<button type="button" class="secondary-btn" data-edit-resource="${escapeHtml(resource.id)}">Edit</button>` : ""}
-          ${canDeleteResourceEntry ? `<button type="button" class="secondary-btn" data-delete-resource="${escapeHtml(resource.id)}">Delete</button>` : ""}
+          <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>${buttonLabelWithIcon("download", `Download${resource.file?.sizeBytes ? ` (${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB)` : ""}`)}</button>
+          <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>${buttonLabelWithIcon("comment", `Recommend (${recommendationCount(resource.id)})`)}</button>
+          ${canShare ? `<button type="button" class="secondary-btn" data-share-resource="${escapeHtml(resource.id)}">${buttonLabelWithIcon("share", "Send to someone")}</button>` : ""}
+          <button type="button" class="secondary-btn" data-discuss-resource="${escapeHtml(resource.id)}">${buttonLabelWithIcon("message-square", "Community")}</button>
+          ${canUpload ? `<button type="button" class="secondary-btn" data-open-upload-inline="1">${buttonLabelWithIcon("upload", "Upload similar")}</button>` : ""}
+          ${canEditResource ? `<button type="button" class="secondary-btn" data-edit-resource="${escapeHtml(resource.id)}">${buttonLabelWithIcon("library", "Edit")}</button>` : ""}
+          ${canDeleteResourceEntry ? `<button type="button" class="secondary-btn" data-delete-resource="${escapeHtml(resource.id)}">${buttonLabelWithIcon("trash", "Delete")}</button>` : ""}
         </div>
         ${
           related.length
@@ -2755,6 +2831,16 @@ function detailHtml(resource) {
               </div>`
             : ""
         }
+        <div class="related-resource-list">
+          <h4>Community discussions</h4>
+          <div class="simple-list compact-list">
+            ${
+              discussionThreads.length
+                ? discussionThreads.map((thread) => `<button type="button" class="simple-item related-resource-item" data-open-community-thread="${escapeHtml(thread.id)}"><strong>${escapeHtml(thread.title)}</strong><span>${escapeHtml(`${thread.reply_count || thread.replies?.length || 0} replies · ${formatTimeAgo(thread.updated_at || thread.created_at)}`)}</span></button>`).join("")
+                : `<div class="simple-item"><span>No forum discussions for this resource yet.</span><button type="button" class="secondary-btn" data-discuss-resource="${escapeHtml(resource.id)}">Start the first discussion</button></div>`
+            }
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3112,10 +3198,21 @@ async function handleForumThreadCreate(event) {
     showStatus(els.forumThreadStatus, "Your role cannot create forum discussions", false);
     return;
   }
+  const kind = String(els.forumThreadKind?.value || "general");
+  const topicLabel = String(els.forumThreadTopic?.value || "").trim();
+  const resourceId = String(els.forumThreadResource?.value || "").trim();
   const title = String(els.forumThreadTitle?.value || "").trim();
   const body = String(els.forumThreadBody?.value || "").trim();
   if (!title || !body) {
     showStatus(els.forumThreadStatus, "Add a title and opening post", false);
+    return;
+  }
+  if (kind === "topic" && !topicLabel) {
+    showStatus(els.forumThreadStatus, "Choose or enter a topic", false);
+    return;
+  }
+  if (kind === "resource" && !resourceId) {
+    showStatus(els.forumThreadStatus, "Choose a resource for this discussion", false);
     return;
   }
   setButtonBusy(els.btnForumThread, true, "Creating...");
@@ -3124,7 +3221,7 @@ async function handleForumThreadCreate(event) {
     const res = await apiFetch("/community/forum/threads", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, body }),
+      body: JSON.stringify({ title, body, kind, topicLabel, resourceId }),
       timeoutMs: 7000,
     });
     if (!res.ok) throw new Error(await errorText(res, "Could not create discussion"));
@@ -3134,6 +3231,9 @@ async function handleForumThreadCreate(event) {
     writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
     if (els.forumThreadTitle) els.forumThreadTitle.value = "";
     if (els.forumThreadBody) els.forumThreadBody.value = "";
+    if (els.forumThreadTopic) els.forumThreadTopic.value = "";
+    if (els.forumThreadResource) els.forumThreadResource.value = "";
+    if (els.forumThreadKind) els.forumThreadKind.value = "general";
     renderCommunity();
     showStatus(els.forumThreadStatus, "Discussion created", true);
     showToast("Forum discussion created", true);
@@ -3342,6 +3442,7 @@ function bindEvents() {
   els.btnSendReset?.addEventListener("click", handleSendPasswordReset);
   els.communityPostForm?.addEventListener("submit", handleCommunityPost);
   els.forumThreadForm?.addEventListener("submit", handleForumThreadCreate);
+  els.forumThreadKind?.addEventListener("change", () => syncForumThreadFormFocus());
   els.btnAuthRetrySession?.addEventListener("click", async () => {
     showStatus(els.authStateNote, "Retrying session check…", true);
     if (els.authStateActions) els.authStateActions.hidden = true;
@@ -3602,6 +3703,16 @@ function bindEvents() {
       return;
     }
 
+    const openCommunityThread = event.target.closest("[data-open-community-thread]");
+    if (openCommunityThread) {
+      const id = openCommunityThread.getAttribute("data-open-community-thread");
+      setRoute("community");
+      closeDetailModal();
+      state.activeForumThreadId = id;
+      renderCommunity();
+      return;
+    }
+
     const pickUserButton = event.target.closest("[data-pick-user]");
     if (pickUserButton) {
       const id = pickUserButton.getAttribute("data-pick-user");
@@ -3726,8 +3837,14 @@ function bindEvents() {
       const id = discussButton.getAttribute("data-discuss-resource");
       setRoute("community");
       closeDetailModal();
-      if (els.communityPostResource) els.communityPostResource.value = id || "";
-      document.getElementById("community-post-body")?.focus();
+      if (els.forumThreadKind) els.forumThreadKind.value = "resource";
+      if (els.forumThreadResource) els.forumThreadResource.value = id || "";
+      const resource = state.resources.find((item) => item.id === id);
+      if (els.forumThreadTitle && resource && !els.forumThreadTitle.value.trim()) {
+        els.forumThreadTitle.value = `Discussion about ${resource.title}`;
+      }
+      syncForumThreadFormFocus();
+      els.forumThreadBody?.focus();
       return;
     }
 

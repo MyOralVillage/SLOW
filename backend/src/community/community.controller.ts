@@ -41,7 +41,7 @@ export class CommunityController {
 
   @Post("forum/threads")
   @UseGuards(SessionAuthGuard)
-  async createThread(@Req() req: Authed, @Body() body: { title?: string; body?: string }) {
+  async createThread(@Req() req: Authed, @Body() body: { title?: string; body?: string; kind?: string; topicLabel?: string; resourceId?: string }) {
     if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
     return await this.community.createThread(req.authUser, body);
   }
