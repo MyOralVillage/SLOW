@@ -4,9 +4,11 @@ const RECOMMEND_STORE_KEY = "slow_recommend_store_v1";
 const RESOURCE_CACHE_KEY = "slow_resource_cache_v1";
 const USERS_CACHE_KEY = "slow_users_cache_v1";
 const NOTIFICATIONS_CACHE_KEY = "slow_notifications_cache_v1";
+const COMMUNITY_CACHE_KEY = "slow_community_cache_v1";
 const RESOURCE_CACHE_TTL_MS = 5 * 60 * 1000;
 const USERS_CACHE_TTL_MS = 2 * 60 * 1000;
 const NOTIFICATIONS_CACHE_TTL_MS = 30 * 1000;
+const COMMUNITY_CACHE_TTL_MS = 45 * 1000;
 
 const PRODUCTION_API = "https://slow-57j2.onrender.com/api";
 const LOCAL_API = "http://127.0.0.1:3001/api";
@@ -120,6 +122,9 @@ const state = {
   selectedMessageUser: null,
   pendingSharedResource: null,
   messageMobileThreadOpen: false,
+  topUserSearchTimer: null,
+  topUserSearchResults: [],
+  activeUserProfile: null,
   resourcesLoading: false,
   usersLoading: false,
   resourcesPromise: null,
@@ -129,10 +134,22 @@ const state = {
   notificationsPollTimer: null,
   notificationsLoading: false,
   notificationsPromise: null,
+  communityPosts: [],
+  forumThreads: [],
+  communityLoading: false,
+  communityPromise: null,
+  activeForumThreadId: null,
 };
 
 const els = {
   backendBadge: document.getElementById("backend-badge"),
+  topUserSearch: document.getElementById("top-user-search"),
+  topUserResults: document.getElementById("top-user-results"),
+  btnTopNotifications: document.getElementById("btn-top-notifications"),
+  topNotificationsBadge: document.getElementById("top-notifications-badge"),
+  btnTopProfile: document.getElementById("btn-top-profile"),
+  topAvatarSlot: document.getElementById("top-avatar-slot"),
+  topProfileLabel: document.getElementById("top-profile-label"),
   btnOpenUpload: document.getElementById("btn-open-upload"),
   btnHomeUpload: document.getElementById("btn-home-upload"),
   btnTopSignin: document.getElementById("btn-top-signin"),
@@ -156,6 +173,20 @@ const els = {
   notificationsStatus: document.getElementById("notifications-status"),
   btnNotificationsReadAll: document.getElementById("btn-notifications-read-all"),
   notificationsBadge: document.getElementById("notifications-badge"),
+  communityStatus: document.getElementById("community-status"),
+  communityPostForm: document.getElementById("community-post-form"),
+  communityPostBody: document.getElementById("community-post-body"),
+  communityPostResource: document.getElementById("community-post-resource"),
+  communityPostStatus: document.getElementById("community-post-status"),
+  btnCommunityPost: document.getElementById("btn-community-post"),
+  communityPostsList: document.getElementById("community-posts-list"),
+  forumThreadForm: document.getElementById("forum-thread-form"),
+  forumThreadTitle: document.getElementById("forum-thread-title"),
+  forumThreadBody: document.getElementById("forum-thread-body"),
+  forumThreadStatus: document.getElementById("forum-thread-status"),
+  btnForumThread: document.getElementById("btn-forum-thread"),
+  forumThreadsList: document.getElementById("forum-threads-list"),
+  forumThreadDetail: document.getElementById("forum-thread-detail"),
   authLoadingCard: document.getElementById("auth-loading-card"),
   authStateNote: document.getElementById("auth-state-note"),
   authStateActions: document.getElementById("auth-state-actions"),
@@ -257,6 +288,9 @@ const els = {
   shareResourceRecentList: document.getElementById("share-resource-recent-list"),
   shareResourceMessage: document.getElementById("share-resource-message"),
   shareResourceStatus: document.getElementById("share-resource-status"),
+  userProfileModal: document.getElementById("user-profile-modal"),
+  userProfileTitle: document.getElementById("user-profile-title"),
+  userProfileBody: document.getElementById("user-profile-body"),
   signinMainBlock: document.getElementById("signin-main-block"),
   forgotPasswordBlock: document.getElementById("forgot-password-block"),
   resetPasswordCard: document.getElementById("reset-password-card"),
@@ -310,6 +344,59 @@ function formatTimeAgo(value) {
 function avatarLetter(name) {
   const c = String(name || "?").trim().charAt(0).toUpperCase();
   return c || "?";
+}
+
+function avatarUrlForUser(user) {
+  return backendAssetUrl(user?.avatar_url || "");
+}
+
+function userAvatarHtml(user, size = "small", extraClass = "") {
+  const classes = ["messages-avatar", size === "small" ? "small" : "", extraClass].filter(Boolean).join(" ");
+  const url = avatarUrlForUser(user);
+  if (url) {
+    return `<span class="${classes} is-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(user?.name || "User")}" loading="lazy" decoding="async" /></span>`;
+  }
+  return `<span class="${classes}">${escapeHtml(avatarLetter(user?.name || "?"))}</span>`;
+}
+
+function canDeleteAnyResource(user = state.user) {
+  return Boolean(user && ["owner", "admin"].includes(String(user.role || "")));
+}
+
+function canDeleteOwnResource(user = state.user) {
+  return Boolean(user && hasPermission("upload_resources", user));
+}
+
+function canDeleteResource(resource, user = state.user) {
+  return Boolean(user && (canDeleteAnyResource(user) || (resource?.uploaded_by?.id === user.id && canDeleteOwnResource(user))));
+}
+
+function canCreateCommunityPost(user = state.user) {
+  return Boolean(user && hasPermission("complete_profile", user));
+}
+
+function canDeleteAnyCommunityPost(user = state.user) {
+  return Boolean(user && ["owner", "admin"].includes(String(user.role || "")));
+}
+
+function canCreateForumThread(user = state.user) {
+  return Boolean(user && ["owner", "admin", "vip", "specialist"].includes(String(user.role || "")));
+}
+
+function canReplyForumThread(user = state.user) {
+  return Boolean(user && hasPermission("complete_profile", user));
+}
+
+function canDeleteForumThread(thread, user = state.user) {
+  return Boolean(user && (["owner", "admin"].includes(String(user.role || "")) || thread?.user?.id === user.id));
+}
+
+function canViewUserProfiles(user = state.user) {
+  return Boolean(user);
+}
+
+function canManageUsers(user = state.user) {
+  return Boolean(user && hasPermission("manage_users", user));
 }
 
 function conversationCounterpart(conversation) {
@@ -568,7 +655,7 @@ function messageUserCardHtml(user, mode = "pick") {
   return `
     <button type="button" class="${mode === "share" ? "share-target-row" : "message-user-result"}" ${attr}>
       <div class="message-user-row">
-        <span class="messages-avatar small">${escapeHtml(avatarLetter(user.name))}</span>
+        ${userAvatarHtml(user, "small")}
         <div class="message-user-main">
           <span class="message-user-name">${escapeHtml(user.name || "Member")}</span>
           <span class="message-user-subtitle">${escapeHtml(subtitle)}</span>
@@ -577,6 +664,26 @@ function messageUserCardHtml(user, mode = "pick") {
       </div>
     </button>
   `;
+}
+
+function topUserSearchResultHtml(user) {
+  return `
+    <button type="button" class="message-user-result top-user-result" data-open-user-profile="${escapeHtml(user.id)}">
+      <div class="message-user-row">
+        ${userAvatarHtml(user, "small")}
+        <div class="message-user-main">
+          <span class="message-user-name">${escapeHtml(user.name || "Member")}</span>
+          <span class="message-user-subtitle">${escapeHtml([roleLabel(user.role || "member"), user.country].filter(Boolean).join(" · "))}</span>
+        </div>
+      </div>
+    </button>
+  `;
+}
+
+function relatedResources(resource, limit = 3) {
+  return (state.resources || [])
+    .filter((item) => item.id !== resource?.id && (item.category === resource?.category || item.country === resource?.country))
+    .slice(0, limit);
 }
 
 function renderMessageSearchResults(target, rows, query, mode = "pick") {
@@ -666,7 +773,7 @@ function renderShareResourceModal() {
             return `
               <button type="button" class="share-target-row" data-share-conversation="${escapeHtml(conversation.id)}">
                 <div class="message-conversation-row">
-                  <span class="messages-avatar small">${escapeHtml(avatarLetter(counterpart?.name || "Conversation"))}</span>
+                  ${userAvatarHtml(counterpart || { name: "Conversation" }, "small")}
                   <div class="message-conversation-main">
                     <span class="message-conversation-name">${escapeHtml(counterpart?.name || "Conversation")}</span>
                     <span class="message-conversation-preview">${escapeHtml(conversation.last_message?.body || "Share this resource in chat")}</span>
@@ -814,7 +921,7 @@ function renderConversationList() {
       return `
         <button type="button" class="message-inbox-item ${isActive ? "is-active" : ""}" data-open-conversation="${escapeHtml(conv.id)}">
           <div class="message-conversation-row">
-            <span class="messages-avatar small">${escapeHtml(avatarLetter(name))}</span>
+            ${userAvatarHtml(counterpart || { name }, "small")}
             <div class="message-conversation-main">
               <span class="message-conversation-name">${escapeHtml(name)}</span>
               <span class="message-user-status">${statusDotHtml(active)}${escapeHtml(label)}</span>
@@ -844,7 +951,12 @@ function renderConversationThread() {
   const { active, label } = userAvailability(counterpart);
   els.messagesThreadTitle.textContent = counterpart ? `Conversation with ${counterpart.name}` : "Conversation";
   if (els.messagesThreadTopbar) els.messagesThreadTopbar.hidden = false;
-  if (els.messagesThreadAvatar) els.messagesThreadAvatar.textContent = avatarLetter(counterpart?.name || "Conversation");
+  if (els.messagesThreadAvatar) {
+    els.messagesThreadAvatar.innerHTML = avatarUrlForUser(counterpart)
+      ? `<img src="${escapeHtml(avatarUrlForUser(counterpart))}" alt="${escapeHtml(counterpart?.name || "Conversation")}" loading="lazy" decoding="async" />`
+      : escapeHtml(avatarLetter(counterpart?.name || "Conversation"));
+    els.messagesThreadAvatar.classList.toggle("is-image", Boolean(avatarUrlForUser(counterpart)));
+  }
   if (els.messagesThreadName) els.messagesThreadName.textContent = counterpart?.name || "Conversation";
   if (els.messagesThreadStatus) els.messagesThreadStatus.innerHTML = `${statusDotHtml(active)}${escapeHtml(label)}`;
   els.messagesThreadWrap.hidden = false;
@@ -853,7 +965,7 @@ function renderConversationThread() {
     ? groupConversationMessages(rows)
         .map((group) => {
           const senderName = group.mine ? "You" : group.sender?.name || "Member";
-          const avatar = group.mine ? "" : `<span class="messages-avatar small">${escapeHtml(avatarLetter(senderName))}</span>`;
+          const avatar = group.mine ? "" : userAvatarHtml(group.messages?.[0]?.sender || { name: senderName }, "small");
           const bubbles = group.messages
             .map((message) => {
               const text = String(message.body || "").trim();
@@ -1363,10 +1475,15 @@ function unreadNotificationCountLabel(count) {
 }
 
 function updateNotificationBadge() {
-  if (!els.notificationsBadge) return;
   const label = unreadNotificationCountLabel(state.notificationsUnreadCount);
-  els.notificationsBadge.hidden = !label;
-  els.notificationsBadge.textContent = label || "0";
+  if (els.notificationsBadge) {
+    els.notificationsBadge.hidden = !label;
+    els.notificationsBadge.textContent = label || "0";
+  }
+  if (els.topNotificationsBadge) {
+    els.topNotificationsBadge.hidden = !label;
+    els.topNotificationsBadge.textContent = label || "0";
+  }
 }
 
 function notificationIcon(type) {
@@ -1813,11 +1930,14 @@ function renderUsers() {
         return `
         <article class="user-permission-card" data-user-card="${escapeHtml(user.id)}" ${ownerLocked ? `data-owner-locked="1"` : ""}>
           <div class="user-permission-head">
-            <div>
+            <div class="user-permission-profile">
+              ${userAvatarHtml(user, "small")}
+              <div>
               <strong>${escapeHtml(user.name)}</strong>
               <p>${escapeHtml(user.email)}${user.email_verified ? " · ✓ verified" : ""}</p>
               <p class="small-note">${escapeHtml(user.country || "No country")} · ${escapeHtml(String(user.uploaded_resource_count || 0))} uploads · Joined ${escapeHtml(memberSince)}</p>
               ${user.why_interested ? `<p class="small-note">${escapeHtml(user.why_interested)}</p>` : ""}
+              </div>
             </div>
             <div class="tag-row">
               <span class="tag role-tag role-${escapeHtml(user.role)}">${escapeHtml(roleLabel(user.role))}</span>
@@ -1986,25 +2106,275 @@ async function openNotification(notificationId) {
   setRoute("notifications");
 }
 
+function renderTopUserSearchResults(query) {
+  if (!els.topUserResults) return;
+  const rows = state.topUserSearchResults || [];
+  if (!canViewUserProfiles() || !query.trim()) {
+    els.topUserResults.hidden = true;
+    els.topUserResults.innerHTML = "";
+    return;
+  }
+  els.topUserResults.hidden = false;
+  els.topUserResults.innerHTML = rows.length
+    ? rows.map((user) => topUserSearchResultHtml(user)).join("")
+    : `<div class="simple-item"><span>No users found</span></div>`;
+}
+
+async function searchTopUsers(query) {
+  const q = String(query || "").trim();
+  if (!canViewUserProfiles() || q.length < 2) {
+    state.topUserSearchResults = [];
+    renderTopUserSearchResults("");
+    return;
+  }
+  try {
+    const res = await apiFetch(`/users/search?q=${encodeURIComponent(q)}`, { timeoutMs: 5000 });
+    if (!res.ok) throw new Error(await errorText(res, "Could not search users"));
+    const json = await res.json();
+    state.topUserSearchResults = Array.isArray(json.rows) ? json.rows : [];
+  } catch {
+    state.topUserSearchResults = [];
+  }
+  renderTopUserSearchResults(q);
+}
+
+function userProfileHtml(profile) {
+  const user = profile?.user;
+  const resources = Array.isArray(profile?.resources) ? profile.resources : [];
+  if (!user) return `<div class="simple-item"><span>User not found.</span></div>`;
+  return `
+    <div class="user-profile-summary">
+      <div class="user-profile-hero">
+        ${userAvatarHtml(user, "large", "profile-view-avatar")}
+        <div>
+          <h3>${escapeHtml(user.name || "Member")}</h3>
+          <p class="detail-meta">${escapeHtml(roleLabel(user.role || "member"))}${user.country ? ` · ${escapeHtml(user.country)}` : ""}</p>
+          ${user.biodata ? `<p class="detail-text">${escapeHtml(user.biodata)}</p>` : ""}
+          <p class="small-note">Joined ${escapeHtml(formatDate(user.created_at))}</p>
+        </div>
+      </div>
+      <div class="tag-row">
+        <span class="tag role-tag role-${escapeHtml(user.role || "member")}">${escapeHtml(roleLabel(user.role || "member"))}</span>
+        ${user.email_verified ? `<span class="tag">Verified</span>` : `<span class="tag">Not verified</span>`}
+      </div>
+      <div class="user-profile-actions">
+        ${state.user && state.user.id !== user.id && hasPermission("message_users") ? `<button type="button" class="primary-btn" data-message-user="${escapeHtml(user.id)}">Message</button>` : ""}
+      </div>
+    </div>
+    <section class="discussion-section">
+      <div class="section-head">
+        <h3>Uploaded resources</h3>
+      </div>
+      <div class="simple-list compact-list">
+        ${
+          resources.length
+            ? resources.map((resource) => `<button type="button" class="simple-item related-resource-item" data-open-detail="${escapeHtml(resource.id)}"><strong>${escapeHtml(resource.title)}</strong><span>${escapeHtml([resource.category, resource.country, resource.type].filter(Boolean).join(" · "))}</span></button>`).join("")
+            : `<div class="simple-item"><span>No uploaded resources yet</span></div>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+async function openUserProfile(userId) {
+  const id = String(userId || "").trim();
+  if (!id || !canViewUserProfiles()) return;
+  if (els.topUserResults) {
+    els.topUserResults.hidden = true;
+    els.topUserResults.innerHTML = "";
+  }
+  if (els.topUserSearch) els.topUserSearch.value = "";
+  if (els.userProfileModal) els.userProfileModal.hidden = false;
+  if (els.userProfileTitle) els.userProfileTitle.textContent = "Profile";
+  if (els.userProfileBody) els.userProfileBody.innerHTML = `<div class="simple-item"><span>Loading profile…</span></div>`;
+  try {
+    const res = await apiFetch(`/users/${encodeURIComponent(id)}`, { timeoutMs: 6000 });
+    if (!res.ok) throw new Error(await errorText(res, "Could not load profile"));
+    const json = await res.json();
+    state.activeUserProfile = json;
+    if (els.userProfileTitle) els.userProfileTitle.textContent = json.user?.name || "Profile";
+    if (els.userProfileBody) els.userProfileBody.innerHTML = userProfileHtml(json);
+  } catch (error) {
+    if (els.userProfileBody) els.userProfileBody.innerHTML = `<div class="simple-item"><span>${escapeHtml(error.message || "Could not load profile")}</span></div>`;
+  }
+}
+
+function closeUserProfileModal() {
+  if (els.userProfileModal) els.userProfileModal.hidden = true;
+  state.activeUserProfile = null;
+}
+
+function renderCommunityResourceOptions() {
+  if (!els.communityPostResource) return;
+  const current = els.communityPostResource.value;
+  const options = ['<option value="">No linked resource</option>'].concat(
+    (state.resources || []).slice(0, 100).map((resource) => `<option value="${escapeHtml(resource.id)}">${escapeHtml(resource.title)}</option>`),
+  );
+  els.communityPostResource.innerHTML = options.join("");
+  if (current) els.communityPostResource.value = current;
+}
+
+function renderForumThreadDetail() {
+  if (!els.forumThreadDetail) return;
+  const thread = (state.forumThreads || []).find((item) => item.id === state.activeForumThreadId);
+  if (!thread) {
+    els.forumThreadDetail.hidden = true;
+    els.forumThreadDetail.innerHTML = "";
+    return;
+  }
+  els.forumThreadDetail.hidden = false;
+  els.forumThreadDetail.innerHTML = `
+    <div class="section-head">
+      <h4>${escapeHtml(thread.title)}</h4>
+      ${canDeleteForumThread(thread) ? `<button type="button" class="secondary-btn" data-delete-thread="${escapeHtml(thread.id)}">Delete</button>` : ""}
+    </div>
+    <div class="simple-item forum-thread-open">
+      <div class="comment-row">
+        ${userAvatarHtml(thread.user, "small")}
+        <div class="comment-copy">
+          <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(thread.user?.id || "")}">${escapeHtml(thread.user?.name || "Member")}</button></strong>
+          <span>${escapeHtml(thread.body || "")}</span>
+        </div>
+      </div>
+      <span class="small-note">${escapeHtml(formatTimeAgo(thread.created_at))}</span>
+    </div>
+    <div class="simple-list compact-list">
+      ${
+        thread.replies?.length
+          ? thread.replies.map((reply) => `
+              <div class="simple-item">
+                <div class="comment-row">
+                  ${userAvatarHtml(reply.user, "small")}
+                  <div class="comment-copy">
+                    <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(reply.user?.id || "")}">${escapeHtml(reply.user?.name || "Member")}</button></strong>
+                    <span>${escapeHtml(reply.body || "")}</span>
+                  </div>
+                </div>
+                <span class="small-note">${escapeHtml(formatTimeAgo(reply.created_at))}</span>
+              </div>
+            `).join("")
+          : `<div class="simple-item"><span>No replies yet</span></div>`
+      }
+    </div>
+    ${
+      canReplyForumThread()
+        ? `<form class="comment-form" data-forum-reply-form="${escapeHtml(thread.id)}">
+            <label class="field">
+              <span>Reply</span>
+              <textarea name="message" rows="3" placeholder="Write a reply"></textarea>
+            </label>
+            <button type="submit" class="primary-btn" data-comment-submit>Post reply</button>
+          </form>`
+        : `<p class="small-note">Sign in with a member account or above to reply.</p>`
+    }
+  `;
+}
+
+function renderCommunity() {
+  if (els.communityPostForm) els.communityPostForm.hidden = !canCreateCommunityPost();
+  if (els.forumThreadForm) els.forumThreadForm.hidden = !canCreateForumThread();
+  renderCommunityResourceOptions();
+  if (els.communityPostsList) {
+    els.communityPostsList.innerHTML = (state.communityPosts || []).length
+      ? state.communityPosts.map((post) => `
+          <article class="simple-item community-post-card">
+            <div class="comment-row">
+              ${userAvatarHtml(post.user, "small")}
+              <div class="comment-copy">
+                <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(post.user?.id || "")}">${escapeHtml(post.user?.name || "Member")}</button></strong>
+                <span class="small-note">${escapeHtml(roleLabel(post.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(post.created_at))}</span>
+                <p>${escapeHtml(post.body || "")}</p>
+                ${post.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip" data-open-detail="${escapeHtml(post.resource.id)}"><strong>${escapeHtml(post.resource.title)}</strong><span>${escapeHtml([post.resource.category, post.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
+              </div>
+              ${
+                post.user?.id === state.user?.id || canDeleteAnyCommunityPost()
+                  ? `<button type="button" class="secondary-btn" data-delete-community-post="${escapeHtml(post.id)}">Delete</button>`
+                  : ""
+              }
+            </div>
+          </article>
+        `).join("")
+      : `<div class="simple-item"><span>No community updates yet</span></div>`;
+  }
+  if (els.forumThreadsList) {
+    els.forumThreadsList.innerHTML = (state.forumThreads || []).length
+      ? state.forumThreads.map((thread) => `
+          <button type="button" class="simple-item forum-thread-card ${state.activeForumThreadId === thread.id ? "is-active" : ""}" data-open-thread="${escapeHtml(thread.id)}">
+            <strong>${escapeHtml(thread.title)}</strong>
+            <span>${escapeHtml(thread.user?.name || "Member")} · ${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</span>
+            <span class="small-note">${escapeHtml(String(thread.reply_count || thread.replies?.length || 0))} replies</span>
+          </button>
+        `).join("")
+      : `<div class="simple-item"><span>No discussions yet</span></div>`;
+  }
+  renderForumThreadDetail();
+}
+
+async function loadCommunity(force = false) {
+  if (state.communityPromise && !force) return await state.communityPromise;
+  const cached = !force ? readTimedCache(COMMUNITY_CACHE_KEY, COMMUNITY_CACHE_TTL_MS) : null;
+  if (!force && cached?.posts && cached?.threads) {
+    state.communityPosts = cached.posts;
+    state.forumThreads = cached.threads;
+    renderCommunity();
+  }
+  state.communityLoading = true;
+  if (els.communityStatus) showStatus(els.communityStatus, "Loading community…", true);
+  state.communityPromise = (async () => {
+    try {
+      const [postsRes, threadsRes] = await Promise.all([
+        apiFetch("/community/posts", { timeoutMs: 7000 }),
+        apiFetch("/community/forum/threads", { timeoutMs: 7000 }),
+      ]);
+      if (!postsRes.ok) throw new Error(await errorText(postsRes, "Could not load community posts"));
+      if (!threadsRes.ok) throw new Error(await errorText(threadsRes, "Could not load forum discussions"));
+      const postsJson = await postsRes.json();
+      const threadsJson = await threadsRes.json();
+      state.communityPosts = Array.isArray(postsJson.rows) ? postsJson.rows : [];
+      state.forumThreads = Array.isArray(threadsJson.rows) ? threadsJson.rows : [];
+      writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
+      if (!state.activeForumThreadId && state.forumThreads.length) state.activeForumThreadId = state.forumThreads[0].id;
+      if (els.communityStatus) showStatus(els.communityStatus, `${state.communityPosts.length} updates · ${state.forumThreads.length} discussions`, true);
+    } catch (error) {
+      if (els.communityStatus) showStatus(els.communityStatus, error.message || "Could not load community", false);
+    } finally {
+      state.communityLoading = false;
+      renderCommunity();
+    }
+  })();
+  try {
+    await state.communityPromise;
+  } finally {
+    state.communityPromise = null;
+  }
+}
+
 function applyRoute(route) {
-  let next = ["home", "messages", "notifications", "profile"].includes(route) ? route : "home";
+  let next = ["home", "resources", "community", "messages", "notifications", "profile"].includes(route) ? route : "home";
   if ((next === "messages" || next === "notifications") && !state.user) {
     next = "profile";
     showToast("Sign in to access this section", false);
   }
+  const panelRoute = next === "resources" ? "home" : next;
   state.route = next;
   els.routePanels.forEach((panel) => {
-    const on = panel.dataset.routePanel === next;
+    const on = panel.dataset.routePanel === panelRoute;
     panel.hidden = !on;
     panel.classList.toggle("is-active", on);
   });
   els.bottomNavButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.route === next));
+  if (next === "resources") {
+    document.getElementById("resources-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   if (next === "messages" && state.user) {
     void loadMessages();
     startNotificationsPolling();
   } else if (next === "notifications" && state.user) {
     void loadNotifications(true);
     startNotificationsPolling();
+  } else if (next === "community") {
+    void loadCommunity(true);
+    if (state.user) startNotificationsPolling();
   } else {
     state.messageMobileThreadOpen = false;
     updateMessagesLayoutMode();
@@ -2020,6 +2390,14 @@ function updateTopButtons() {
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
   if (els.btnHomeUpload) els.btnHomeUpload.hidden = !canUpload;
+  if (els.topUserSearch) els.topUserSearch.disabled = !canViewUserProfiles();
+  if (els.btnTopNotifications) els.btnTopNotifications.hidden = !state.user;
+  if (els.btnTopProfile) {
+    els.btnTopProfile.hidden = !state.user;
+    if (state.user) {
+      els.btnTopProfile.innerHTML = `${userAvatarHtml(state.user, "small")}<span id="top-profile-label">${escapeHtml(state.user.name || "Profile")}</span>`;
+    }
+  }
   if (els.backendBadge) {
     els.backendBadge.textContent = state.backendReachable ? "Library connected" : "Offline sample library";
     els.backendBadge.classList.toggle("ok", state.backendReachable);
@@ -2176,6 +2554,7 @@ async function loadResources(force = false) {
     updateTopButtons();
     renderResources();
     renderNotifications();
+    renderCommunity();
     renderAdmin();
   })();
 
@@ -2308,7 +2687,9 @@ function detailHtml(resource) {
   const canRecommend = state.user ? hasPermission("recommend_content") : false;
   const canComment = state.user ? hasPermission("comment_resources") : false;
   const canEditResource = Boolean(state.user && (resource.uploaded_by?.id === state.user.id || hasPermission("edit_resources")));
+  const canDeleteResourceEntry = canDeleteResource(resource);
   const canShare = Boolean(state.user && hasPermission("message_users"));
+  const related = relatedResources(resource, 4);
 
   const allTags = [resource.category, resource.country, resource.type].filter(Boolean);
   if (resource.productDetail) allTags.push(resource.productDetail);
@@ -2318,7 +2699,7 @@ function detailHtml(resource) {
   const keywordTags = (resource.keywords || []).filter((k) => !allTags.includes(k));
 
   const uploaderLine = resource.uploaded_by?.name
-    ? `<p class="detail-meta">Uploaded by ${escapeHtml(resource.uploaded_by.name)} · ${formatDate(resource.created_at)}</p>`
+    ? `<p class="detail-meta">Uploaded by <button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(resource.uploaded_by.id)}">${escapeHtml(resource.uploaded_by.name)}</button> · ${formatDate(resource.created_at)}</p>`
     : `<p class="detail-meta">${formatDate(resource.created_at)}</p>`;
 
   const ofn = fileNameFromMeta(resource.file);
@@ -2350,14 +2731,30 @@ function detailHtml(resource) {
           ${allTags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
         </div>
         ${keywordTags.length ? `<div class="tag-row" style="margin-top:4px">${keywordTags.map((k) => `<span class="tag tag-keyword">${escapeHtml(k)}</span>`).join("")}</div>` : ""}
+        <div class="wiki-meta-card">
+          <div class="wiki-meta-row"><strong>Created</strong><span>${escapeHtml(formatDate(resource.created_at))}</span></div>
+          <div class="wiki-meta-row"><strong>Uploader</strong><span>${resource.uploaded_by?.name ? `<button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(resource.uploaded_by.id)}">${escapeHtml(resource.uploaded_by.name)}</button>` : "Unknown"}</span></div>
+          <div class="wiki-meta-row"><strong>History</strong><span>Version history coming soon</span></div>
+        </div>
         <div class="detail-actions">
           <button type="button" class="primary-btn" data-download-resource="${escapeHtml(resource.id)}" ${canDownload ? "" : "disabled"}>Download${resource.file?.sizeBytes ? ` (${(Number(resource.file.sizeBytes) / 1024).toFixed(0)} KB)` : ""}</button>
           <button type="button" class="secondary-btn" data-recommend-resource="${escapeHtml(resource.id)}" ${canRecommend ? "" : "disabled"}>Recommend (${recommendationCount(resource.id)})</button>
           ${canShare ? `<button type="button" class="secondary-btn" data-share-resource="${escapeHtml(resource.id)}">Send to someone</button>` : ""}
+          <button type="button" class="secondary-btn" data-discuss-resource="${escapeHtml(resource.id)}">Community</button>
           ${canUpload ? `<button type="button" class="secondary-btn" data-open-upload-inline="1">Upload similar</button>` : ""}
           ${canEditResource ? `<button type="button" class="secondary-btn" data-edit-resource="${escapeHtml(resource.id)}">Edit</button>` : ""}
-          ${canEditResource ? `<button type="button" class="secondary-btn" data-delete-resource="${escapeHtml(resource.id)}">Delete</button>` : ""}
+          ${canDeleteResourceEntry ? `<button type="button" class="secondary-btn" data-delete-resource="${escapeHtml(resource.id)}">Delete</button>` : ""}
         </div>
+        ${
+          related.length
+            ? `<div class="related-resource-list">
+                <h4>Related resources</h4>
+                <div class="simple-list compact-list">
+                  ${related.map((item) => `<button type="button" class="simple-item related-resource-item" data-open-detail="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml([item.category, item.country].filter(Boolean).join(" · "))}</span></button>`).join("")}
+                </div>
+              </div>`
+            : ""
+        }
       </div>
     </div>
 
@@ -2372,8 +2769,13 @@ function detailHtml(resource) {
                 .map(
                   (c) => `
                     <div class="simple-item">
-                      <strong>${escapeHtml(c.user?.name || c.name || "Member")}</strong>
-                      <span>${escapeHtml(c.body || c.message || "")}</span>
+                      <div class="comment-row">
+                        ${userAvatarHtml(c.user || { name: c.name || "Member" }, "small")}
+                        <div class="comment-copy">
+                          <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(c.user?.id || "")}">${escapeHtml(c.user?.name || c.name || "Member")}</button></strong>
+                          <span>${escapeHtml(c.body || c.message || "")}</span>
+                        </div>
+                      </div>
                       ${c.created_at ? `<span class="small-note">${formatDate(c.created_at)}</span>` : ""}
                     </div>
                   `,
@@ -2651,8 +3053,12 @@ async function handleSignOut() {
   state.activeConversationId = null;
   state.activeConversation = null;
   state.activeConversationMessages = [];
+  state.communityPosts = [];
+  state.forumThreads = [];
+  state.activeForumThreadId = null;
   clearNotificationState();
   removeTimedCache(USERS_CACHE_KEY);
+  removeTimedCache(COMMUNITY_CACHE_KEY);
   updateTopButtons();
   renderProfilePage();
   renderResources();
@@ -2660,6 +3066,81 @@ async function handleSignOut() {
   renderNotifications();
   renderAdmin();
   showToast("Signed out", true);
+}
+
+async function handleCommunityPost(event) {
+  event.preventDefault();
+  if (!canCreateCommunityPost()) {
+    showStatus(els.communityPostStatus, "Sign in to post an update", false);
+    return;
+  }
+  const body = String(els.communityPostBody?.value || "").trim();
+  if (!body) {
+    showStatus(els.communityPostStatus, "Write an update first", false);
+    return;
+  }
+  setButtonBusy(els.btnCommunityPost, true, "Posting...");
+  showStatus(els.communityPostStatus, "Posting…", true);
+  try {
+    const res = await apiFetch("/community/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        body,
+        resourceId: String(els.communityPostResource?.value || "").trim() || undefined,
+      }),
+      timeoutMs: 7000,
+    });
+    if (!res.ok) throw new Error(await errorText(res, "Could not create post"));
+    const json = await res.json();
+    state.communityPosts = Array.isArray(json.rows) ? json.rows : [];
+    writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
+    if (els.communityPostBody) els.communityPostBody.value = "";
+    if (els.communityPostResource) els.communityPostResource.value = "";
+    renderCommunity();
+    showStatus(els.communityPostStatus, "Posted", true);
+    showToast("Community update posted", true);
+  } catch (error) {
+    showStatus(els.communityPostStatus, error.message || "Could not create post", false);
+  }
+  setButtonBusy(els.btnCommunityPost, false);
+}
+
+async function handleForumThreadCreate(event) {
+  event.preventDefault();
+  if (!canCreateForumThread()) {
+    showStatus(els.forumThreadStatus, "Your role cannot create forum discussions", false);
+    return;
+  }
+  const title = String(els.forumThreadTitle?.value || "").trim();
+  const body = String(els.forumThreadBody?.value || "").trim();
+  if (!title || !body) {
+    showStatus(els.forumThreadStatus, "Add a title and opening post", false);
+    return;
+  }
+  setButtonBusy(els.btnForumThread, true, "Creating...");
+  showStatus(els.forumThreadStatus, "Creating discussion…", true);
+  try {
+    const res = await apiFetch("/community/forum/threads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, body }),
+      timeoutMs: 7000,
+    });
+    if (!res.ok) throw new Error(await errorText(res, "Could not create discussion"));
+    const json = await res.json();
+    state.forumThreads = Array.isArray(json.rows) ? json.rows : [];
+    if (state.forumThreads.length) state.activeForumThreadId = state.forumThreads[0].id;
+    writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
+    if (els.forumThreadTitle) els.forumThreadTitle.value = "";
+    if (els.forumThreadBody) els.forumThreadBody.value = "";
+    renderCommunity();
+    showStatus(els.forumThreadStatus, "Discussion created", true);
+    showToast("Forum discussion created", true);
+  } catch (error) {
+    showStatus(els.forumThreadStatus, error.message || "Could not create discussion", false);
+  }
+  setButtonBusy(els.btnForumThread, false);
 }
 
 function handleProfileSave(event) {
@@ -2859,6 +3340,8 @@ function bindEvents() {
   els.btnShowForgot?.addEventListener("click", () => showSigninForgotMode(true));
   els.btnCancelForgot?.addEventListener("click", () => showSigninForgotMode(false));
   els.btnSendReset?.addEventListener("click", handleSendPasswordReset);
+  els.communityPostForm?.addEventListener("submit", handleCommunityPost);
+  els.forumThreadForm?.addEventListener("submit", handleForumThreadCreate);
   els.btnAuthRetrySession?.addEventListener("click", async () => {
     showStatus(els.authStateNote, "Retrying session check…", true);
     if (els.authStateActions) els.authStateActions.hidden = true;
@@ -2960,6 +3443,20 @@ function bindEvents() {
     button.addEventListener("click", () => setRoute(button.dataset.route || "home"));
   });
 
+  els.btnTopNotifications?.addEventListener("click", () => setRoute("notifications"));
+  els.btnTopProfile?.addEventListener("click", () => setRoute("profile"));
+  els.topUserSearch?.addEventListener("input", () => {
+    const q = String(els.topUserSearch.value || "");
+    window.clearTimeout(state.topUserSearchTimer);
+    state.topUserSearchTimer = window.setTimeout(() => {
+      void searchTopUsers(q);
+    }, 250);
+  });
+  els.topUserSearch?.addEventListener("focus", () => {
+    const q = String(els.topUserSearch.value || "");
+    if (q.trim().length >= 2) void searchTopUsers(q);
+  });
+
   els.btnNotificationsReadAll?.addEventListener("click", () => {
     void markAllNotificationsRead();
   });
@@ -2998,6 +3495,9 @@ function bindEvents() {
   els.uploadFile?.addEventListener("change", renderUploadPreview);
 
   document.addEventListener("click", (event) => {
+    if (!event.target.closest(".top-user-search-shell")) {
+      renderTopUserSearchResults("");
+    }
       const categoryButton = event.target.closest("[data-category-value]");
     if (categoryButton) {
       document.querySelectorAll(".category-tile.is-selected").forEach((t) => t.classList.remove("is-selected"));
@@ -3030,6 +3530,13 @@ function bindEvents() {
       return;
     }
 
+    const openUserButton = event.target.closest("[data-open-user-profile]");
+    if (openUserButton) {
+      const id = openUserButton.getAttribute("data-open-user-profile");
+      if (id) void openUserProfile(id);
+      return;
+    }
+
     const notificationButton = event.target.closest("[data-open-notification]");
     if (notificationButton) {
       void openNotification(notificationButton.getAttribute("data-open-notification"));
@@ -3043,6 +3550,11 @@ function bindEvents() {
 
     if (event.target.closest("[data-close-upload]")) {
       closeUploadModal();
+      return;
+    }
+
+    if (event.target.closest("[data-close-user-profile]")) {
+      closeUserProfileModal();
       return;
     }
 
@@ -3145,6 +3657,7 @@ function bindEvents() {
     const deleteButton = event.target.closest("[data-delete-resource]");
     if (deleteButton) {
       const id = deleteButton.getAttribute("data-delete-resource");
+      if (!window.confirm("Are you sure you want to delete this resource?")) return;
       apiFetch(`/resources/${encodeURIComponent(id)}`, { method: "DELETE" })
         .then(async (res) => {
           if (!res.ok) throw new Error(await errorText(res, "Could not delete resource"));
@@ -3157,6 +3670,64 @@ function bindEvents() {
           showToast("Resource deleted", true);
         })
         .catch((error) => showToast(error.message || "Could not delete resource", false));
+      return;
+    }
+
+    const messageUserButton = event.target.closest("[data-message-user]");
+    if (messageUserButton) {
+      closeUserProfileModal();
+      setRoute("messages");
+      void ensureConversationForUser(messageUserButton.getAttribute("data-message-user"));
+      return;
+    }
+
+    const forumOpenButton = event.target.closest("[data-open-thread]");
+    if (forumOpenButton) {
+      state.activeForumThreadId = forumOpenButton.getAttribute("data-open-thread");
+      renderCommunity();
+      return;
+    }
+
+    const deleteCommunityPostButton = event.target.closest("[data-delete-community-post]");
+    if (deleteCommunityPostButton) {
+      const id = deleteCommunityPostButton.getAttribute("data-delete-community-post");
+      if (!window.confirm("Delete this community post?")) return;
+      apiFetch(`/community/posts/${encodeURIComponent(id)}`, { method: "DELETE", timeoutMs: 6000 })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(await errorText(res, "Could not delete post"));
+          state.communityPosts = state.communityPosts.filter((item) => item.id !== id);
+          writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
+          renderCommunity();
+          showToast("Post deleted", true);
+        })
+        .catch((error) => showToast(error.message || "Could not delete post", false));
+      return;
+    }
+
+    const deleteThreadButton = event.target.closest("[data-delete-thread]");
+    if (deleteThreadButton) {
+      const id = deleteThreadButton.getAttribute("data-delete-thread");
+      if (!window.confirm("Delete this discussion thread?")) return;
+      apiFetch(`/community/forum/threads/${encodeURIComponent(id)}`, { method: "DELETE", timeoutMs: 6000 })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(await errorText(res, "Could not delete discussion"));
+          state.forumThreads = state.forumThreads.filter((item) => item.id !== id);
+          if (state.activeForumThreadId === id) state.activeForumThreadId = state.forumThreads[0]?.id || null;
+          writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
+          renderCommunity();
+          showToast("Discussion deleted", true);
+        })
+        .catch((error) => showToast(error.message || "Could not delete discussion", false));
+      return;
+    }
+
+    const discussButton = event.target.closest("[data-discuss-resource]");
+    if (discussButton) {
+      const id = discussButton.getAttribute("data-discuss-resource");
+      setRoute("community");
+      closeDetailModal();
+      if (els.communityPostResource) els.communityPostResource.value = id || "";
+      document.getElementById("community-post-body")?.focus();
       return;
     }
 
@@ -3205,6 +3776,47 @@ function bindEvents() {
       });
   });
 
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-forum-reply-form]");
+    if (!form) return;
+    event.preventDefault();
+    const threadId = form.getAttribute("data-forum-reply-form");
+    const messageEl = form.querySelector("textarea[name='message']");
+    const submitBtn = form.querySelector("[data-comment-submit]");
+    const body = String(messageEl?.value || "").trim();
+    if (!threadId || !body) return;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Posting...";
+    }
+    apiFetch(`/community/forum/threads/${encodeURIComponent(threadId)}/replies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+      timeoutMs: 7000,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await errorText(res, "Could not post reply"));
+        const json = await res.json();
+        const thread = json.thread || null;
+        if (thread) {
+          state.forumThreads = state.forumThreads.map((item) => (item.id === thread.id ? thread : item));
+          state.activeForumThreadId = thread.id;
+          writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
+          renderCommunity();
+        }
+        if (messageEl) messageEl.value = "";
+        showToast("Reply added", true);
+      })
+      .catch((error) => {
+        showToast(error.message || "Could not post reply", false);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Post reply";
+        }
+      });
+  });
+
   window.addEventListener("hashchange", () => applyRoute(routeFromHash()));
   window.addEventListener("beforeunload", clearUploadPreview);
 }
@@ -3215,10 +3827,12 @@ async function bootstrap() {
     syncAuthState(snapshot);
     updateTopButtons();
     renderProfilePage();
+    renderCommunity();
     if (state.user?.id) {
       startNotificationsPolling();
       if (state.user.id !== prevUserId) {
         void refreshNotifications({ includeList: state.route === "notifications", force: true });
+        void loadCommunity(true);
       }
     } else {
       stopNotificationsPolling();
@@ -3239,10 +3853,12 @@ async function bootstrap() {
   updateTopButtons();
   renderProfilePage();
   await Promise.allSettled([loadResources(), loadUsers()]);
+  await loadCommunity();
   renderMessages();
   await refreshNotifications({ includeList: true, force: true });
   startNotificationsPolling();
   renderNotifications();
+  renderCommunity();
   renderAdmin();
   applyRoute(routeFromHash());
 }

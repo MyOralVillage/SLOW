@@ -21,6 +21,18 @@
         </a>
         <div class="top-status">
           <span id="backend-badge" class="status-pill">Checking connection</span>
+          <div class="top-user-search-shell">
+            <input id="top-user-search" type="search" placeholder="Search users..." autocomplete="off" />
+            <div id="top-user-results" class="messages-search-results top-user-results" hidden></div>
+          </div>
+          <button type="button" class="top-action top-bell-btn" id="btn-top-notifications" aria-label="Notifications">
+            <span aria-hidden="true">🔔</span>
+            <span id="top-notifications-badge" class="nav-badge" hidden>0</span>
+          </button>
+          <button type="button" class="top-action top-avatar-btn" id="btn-top-profile" hidden>
+            <span id="top-avatar-slot" class="messages-avatar small">?</span>
+            <span id="top-profile-label">Profile</span>
+          </button>
           <button type="button" class="top-action" id="btn-open-upload">Upload</button>
           <button type="button" class="top-action" id="btn-top-signin">Sign in</button>
         </div>
@@ -79,7 +91,7 @@
           </form>
         </section>
 
-        <section class="section-block">
+        <section class="section-block" id="resources-section">
           <div class="section-head section-head-stack">
             <div>
               <h2>Resources</h2>
@@ -91,6 +103,62 @@
             </div>
           </div>
           <div id="resource-grid" class="resource-grid" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <section class="route-panel" data-route-panel="community" hidden>
+        <section class="section-block">
+          <p class="section-top-nav"><a href="#home" class="back-home-link">← Home</a></p>
+          <div class="section-head section-head-stack">
+            <div>
+              <h2>Community</h2>
+              <p id="community-status" class="small-note">Loading updates</p>
+            </div>
+          </div>
+
+          <div class="community-layout">
+            <div class="card-panel community-panel">
+              <div class="section-head">
+                <h3 class="panel-title">Updates</h3>
+              </div>
+              <form id="community-post-form" class="community-compose" novalidate>
+                <label class="field">
+                  <span>Share an update</span>
+                  <textarea id="community-post-body" rows="3" placeholder="What are you working on?"></textarea>
+                </label>
+                <label class="field">
+                  <span>Attach resource (optional)</span>
+                  <select id="community-post-resource"></select>
+                </label>
+                <p id="community-post-status" class="small-note"></p>
+                <button type="submit" class="primary-btn" id="btn-community-post">Post update</button>
+              </form>
+              <div id="community-posts-list" class="simple-list"></div>
+            </div>
+
+            <div class="card-panel community-panel">
+              <div class="section-head section-head-stack">
+                <div>
+                  <h3 class="panel-title">Forum Discussions</h3>
+                  <p class="panel-subtitle">Specialist, VIP, admin, and owner roles can open new discussions.</p>
+                </div>
+              </div>
+              <form id="forum-thread-form" class="community-compose" novalidate>
+                <label class="field">
+                  <span>Thread title</span>
+                  <input id="forum-thread-title" type="text" maxlength="160" placeholder="Start a discussion" />
+                </label>
+                <label class="field">
+                  <span>Opening post</span>
+                  <textarea id="forum-thread-body" rows="4" placeholder="Share the topic, question, or proposal"></textarea>
+                </label>
+                <p id="forum-thread-status" class="small-note"></p>
+                <button type="submit" class="primary-btn" id="btn-forum-thread">Create discussion</button>
+              </form>
+              <div id="forum-threads-list" class="simple-list"></div>
+              <div id="forum-thread-detail" class="community-thread-detail" hidden></div>
+            </div>
+          </div>
         </section>
       </section>
 
@@ -405,12 +473,9 @@
 
       <nav class="bottom-nav" aria-label="Main navigation">
         <button type="button" class="bottom-nav-btn is-active" data-route="home">Home</button>
+        <button type="button" class="bottom-nav-btn" data-route="resources">Resources</button>
+        <button type="button" class="bottom-nav-btn" data-route="community">Community</button>
         <button type="button" class="bottom-nav-btn" data-route="messages">Messages</button>
-        <button type="button" class="bottom-nav-btn nav-bell-btn" data-route="notifications" aria-label="Notifications">
-          <span class="nav-bell-icon" aria-hidden="true">🔔</span>
-          <span class="nav-bell-label">Notifications</span>
-          <span id="notifications-badge" class="nav-badge" hidden>0</span>
-        </button>
         <button type="button" class="bottom-nav-btn" data-route="profile">Profile</button>
       </nav>
     </main>
@@ -535,6 +600,17 @@
           <textarea id="share-resource-message" rows="3" placeholder="Add a short note"></textarea>
         </label>
         <p id="share-resource-status" class="small-note"></p>
+      </div>
+    </div>
+
+    <div id="user-profile-modal" class="modal-shell" hidden>
+      <div class="modal-backdrop" data-close-user-profile></div>
+      <div class="detail-panel user-profile-panel">
+        <div class="detail-top">
+          <h2 id="user-profile-title">Profile</h2>
+          <button type="button" class="close-btn" data-close-user-profile aria-label="Close">x</button>
+        </div>
+        <div id="user-profile-body" class="detail-body"></div>
       </div>
     </div>
 
