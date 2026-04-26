@@ -5,6 +5,18 @@
         android:icon="@android:drawable/ic_menu_view"
         android:title="@string/nav_home" />
     <item
+        android:id="@+id/nav_resources"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="@string/nav_resources" />
+    <item
+        android:id="@+id/nav_community"
+        android:icon="@android:drawable/ic_menu_share"
+        android:title="@string/nav_community" />
+    <item
+        android:id="@+id/nav_forums"
+        android:icon="@android:drawable/ic_menu_edit"
+        android:title="@string/nav_forums" />
+    <item
         android:id="@+id/nav_messages"
         android:icon="@android:drawable/ic_dialog_email"
         android:title="@string/nav_messages" />

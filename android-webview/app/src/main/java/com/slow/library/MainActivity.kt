@@ -14,6 +14,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.LinearLayout
@@ -47,6 +48,18 @@ class MainActivity : AppCompatActivity() {
             fileChooserCallback = null
         }
 
+    private fun navigateTo(hash: String, mode: String? = null) {
+        val safeHash = hash.replace("'", "")
+        val safeMode = mode?.replace("'", "")
+        val js =
+            if (safeMode != null) {
+                "window.location.hash='$safeHash';window.setTimeout(function(){try{document.querySelector('[data-route=\"$safeMode\"]')?.click();}catch(e){}},120);"
+            } else {
+                "window.location.hash='$safeHash';"
+            }
+        webView.evaluateJavascript(js, null)
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,7 +81,12 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
-            webView.loadUrl("$frontendUrl/")
+            val deep = intent?.data?.toString()
+            if (!deep.isNullOrBlank() && deep.startsWith(frontendUrl)) {
+                webView.loadUrl(deep)
+            } else {
+                webView.loadUrl("$frontendUrl/")
+            }
         }
     }
 
@@ -85,10 +103,11 @@ class MainActivity : AppCompatActivity() {
             setSupportZoom(false)
             builtInZoomControls = false
             mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            cacheMode = WebSettings.LOAD_DEFAULT
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(false)
+            userAgentString = "${userAgentString} SLOWAndroidWebView/1.0"
         }
 
         CookieManager.getInstance().apply {
@@ -131,7 +150,7 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
-                if (url.startsWith(frontendUrl) || url.startsWith("http://127.0.0.1") || url.startsWith("http://localhost")) {
+                if (url.startsWith(frontendUrl)) {
                     return false
                 }
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -200,14 +219,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupBottomNav() {
         bottomNav.setOnItemSelectedListener { item ->
-            val hash = when (item.itemId) {
-                R.id.nav_home -> "home"
-                R.id.nav_messages -> "messages"
-                R.id.nav_notifications -> "notifications"
-                R.id.nav_profile -> "profile"
+            when (item.itemId) {
+                R.id.nav_home -> navigateTo("home")
+                R.id.nav_resources -> navigateTo("resources")
+                R.id.nav_community -> navigateTo("community")
+                R.id.nav_forums -> {
+                    navigateTo("community")
+                    webView.evaluateJavascript(
+                        "window.setTimeout(function(){try{document.getElementById('forum-thread-form')?.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}},250);",
+                        null
+                    )
+                }
+                R.id.nav_messages -> navigateTo("messages")
+                R.id.nav_notifications -> navigateTo("notifications")
+                R.id.nav_profile -> navigateTo("profile")
                 else -> return@setOnItemSelectedListener false
             }
-            webView.evaluateJavascript("window.location.hash='$hash';", null)
             true
         }
     }
@@ -218,6 +245,8 @@ class MainActivity : AppCompatActivity() {
             hash.startsWith("messages") -> R.id.nav_messages
             hash.startsWith("notifications") -> R.id.nav_notifications
             hash.startsWith("profile") -> R.id.nav_profile
+            hash.startsWith("community") -> R.id.nav_community
+            hash.startsWith("resources") -> R.id.nav_resources
             else -> R.id.nav_home
         }
         bottomNav.menu.findItem(itemId)?.isChecked = true
