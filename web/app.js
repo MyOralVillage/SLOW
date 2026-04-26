@@ -104,6 +104,8 @@ const state = {
   activeDetailId: null,
   editingResourceId: null,
   uploadPreviewUrl: null,
+  pendingAvatarFile: null,
+  pendingAvatarPreviewUrl: "",
   searchTimer: null,
   profileStoreCache: readJsonStore(PROFILE_STORE_KEY),
   commentStoreCache: readJsonStore(COMMENT_STORE_KEY),
@@ -368,7 +370,8 @@ function userAvatarHtml(user, size = "small", extraClass = "") {
   const classes = ["messages-avatar", size === "small" ? "small" : "", extraClass].filter(Boolean).join(" ");
   const url = avatarUrlForUser(user);
   if (url) {
-    return `<span class="${classes} is-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(user?.name || "User")}" loading="lazy" decoding="async" /></span>`;
+    const loading = size === "large" ? 'loading="eager"' : 'loading="lazy"';
+    return `<span class="${classes} is-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(user?.name || "User")}" ${loading} decoding="async" /></span>`;
   }
   return `<span class="${classes}">${escapeHtml(avatarLetter(user?.name || "?"))}</span>`;
 }
@@ -539,6 +542,56 @@ async function loadProfileAvatar() {
   } catch {
     if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
   }
+}
+
+function clearPendingAvatarPreview() {
+  if (state.pendingAvatarPreviewUrl) {
+    URL.revokeObjectURL(state.pendingAvatarPreviewUrl);
+    state.pendingAvatarPreviewUrl = "";
+  }
+  state.pendingAvatarFile = null;
+}
+
+function setPendingAvatarFile(file) {
+  clearPendingAvatarPreview();
+  state.pendingAvatarFile = file || null;
+  if (!file || !els.profileAvatarPreview) return;
+  state.pendingAvatarPreviewUrl = URL.createObjectURL(file);
+  els.profileAvatarPreview.src = state.pendingAvatarPreviewUrl;
+  if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = false;
+}
+
+async function uploadPendingAvatarIfAny() {
+  const file = state.pendingAvatarFile;
+  if (!file || !state.token) return;
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  const res = await apiFetch("/auth/avatar", { method: "POST", body: fd });
+  if (!res.ok) throw new Error(await errorText(res, "Photo upload failed"));
+  const json = await res.json();
+  auth.setCurrentUser(json.user);
+  syncAuthState();
+  clearPendingAvatarPreview();
+  updateTopButtons();
+  renderProfilePage();
+  renderMessages();
+  renderNotifications();
+  renderCommunity();
+}
+
+async function removeAvatar() {
+  if (!state.token) return;
+  const res = await apiFetch("/auth/avatar", { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorText(res, "Could not remove photo"));
+  const json = await res.json();
+  auth.setCurrentUser(json.user);
+  syncAuthState();
+  clearPendingAvatarPreview();
+  updateTopButtons();
+  renderProfilePage();
+  renderMessages();
+  renderNotifications();
+  renderCommunity();
 }
 
 function processPasswordResetFromQuery() {
@@ -3284,6 +3337,11 @@ function handleProfileSave(event) {
       showStatus(els.profileStatus, "Profile saved", true);
       updateTopButtons();
       renderProfilePage();
+      try {
+        await uploadPendingAvatarIfAny();
+      } catch (e) {
+        showToast(e.message || "Photo upload failed", false);
+      }
       void loadProfileAvatar();
       showToast("Profile saved", true);
     })
@@ -3524,20 +3582,29 @@ function bindEvents() {
   els.profileAvatar?.addEventListener("change", async () => {
     const file = els.profileAvatar?.files?.[0];
     if (!file || !state.token) return;
-    const fd = new FormData();
-    fd.append("file", file, file.name);
-    try {
-      const res = await apiFetch("/auth/avatar", { method: "POST", body: fd });
-      if (!res.ok) throw new Error(await errorText(res, "Upload failed"));
-      const json = await res.json();
-      auth.setCurrentUser(json.user);
-      syncAuthState();
-      showToast("Photo saved", true);
-      renderProfilePage();
-    } catch (e) {
-      showToast(e.message || "Photo upload failed", false);
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
+    if (!allowed.has(String(file.type || "").toLowerCase())) {
+      showToast("Profile photo must be a JPG, PNG, or WebP image.", false);
+      els.profileAvatar.value = "";
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Profile photos must be 5MB or smaller.", false);
+      els.profileAvatar.value = "";
+      return;
+    }
+    setPendingAvatarFile(file);
+    showToast("Photo ready. Tap Save profile to apply.", true);
     els.profileAvatar.value = "";
+  });
+
+  document.getElementById("btn-remove-avatar")?.addEventListener("click", () => {
+    clearPendingAvatarPreview();
+    void removeAvatar().then(() => showToast("Profile photo removed", true)).catch((e) => showToast(e.message || "Could not remove photo", false));
+  });
+
+  document.getElementById("btn-change-avatar")?.addEventListener("click", () => {
+    els.profileAvatar?.click();
   });
 
   els.bottomNavButtons.forEach((button) => {

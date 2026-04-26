@@ -757,8 +757,8 @@ a.text-link-btn {
 }
 
 .messages-avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
   background: var(--accent-soft);
   border: 1px solid var(--border-light);
@@ -772,14 +772,14 @@ a.text-link-btn {
 }
 
 .messages-avatar.small {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
 }
 
 .messages-avatar.large,
 .profile-view-avatar {
-  width: 72px;
-  height: 72px;
+  width: 96px;
+  height: 96px;
 }
 
 .messages-avatar.is-image img {
@@ -3021,9 +3021,32 @@ a.text-link-btn {
 }
 
 .profile-avatar-img {
-  width: 84px;
-  height: 84px;
-  border-radius: 18px;
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.profile-avatar-hit {
+  border: none;
+  padding: 0;
+  background: transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.profile-avatar-hit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.profile-avatar-actions {
+  display: grid;
+  gap: 6px;
+  align-content: start;
 }
 
 .verify-actions .secondary-btn {

@@ -50,6 +50,8 @@ export class UsersController {
     const mime = inferMimeFromFilename(filename) || "image/jpeg";
     res.setHeader("Content-Type", mime);
     res.setHeader("Cache-Control", "public, max-age=600");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", "inline");
     stream.pipe(res);
   }
 

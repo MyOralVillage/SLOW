@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, Res, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Post, Query, Req, Res, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
 
@@ -39,7 +39,12 @@ function bearerToken(req: Request) {
 
 const avatarUpload = {
   storage: memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, acceptFile: boolean) => void) => {
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
+    const ok = allowed.has(String(file?.mimetype || "").toLowerCase());
+    cb(ok ? null : new Error("Unsupported file type"), ok);
+  },
 };
 
 @Controller("auth")
@@ -162,6 +167,8 @@ export class AuthController {
     const mime = inferMimeFromFilename(filename) || "image/jpeg";
     res.setHeader("Content-Type", mime);
     res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", "inline");
     stream.pipe(res);
   }
 
@@ -174,5 +181,12 @@ export class AuthController {
   ) {
     if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
     return await this.auth.saveAvatar(req.authUser.id, file);
+  }
+
+  @Delete("avatar")
+  @UseGuards(SessionAuthGuard)
+  async deleteAvatar(@Req() req: Request & { authUser?: { id: string } }) {
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    return await this.auth.removeAvatar(req.authUser.id);
   }
 }

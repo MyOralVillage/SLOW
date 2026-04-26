@@ -416,7 +416,9 @@
                 </div>
                 <p id="profile-email-status" class="auth-notice" hidden></p>
                 <p id="profile-avatar-wrap" class="profile-avatar-wrap" hidden>
-                  <img id="profile-avatar-preview" class="profile-avatar-img" width="64" height="64" alt="" />
+                  <button type="button" class="profile-avatar-hit" id="btn-change-avatar" aria-label="Change profile photo">
+                    <img id="profile-avatar-preview" class="profile-avatar-img" width="96" height="96" alt="" />
+                  </button>
                 </p>
                 <div class="verify-actions" id="btn-request-verification-p" hidden>
                   <button type="button" class="secondary-btn" id="btn-request-verification">Send verification email</button>
@@ -440,8 +442,12 @@
                 </label>
                 <label class="field">
                   <span>Photo / avatar</span>
-                  <input id="profile-avatar" name="avatar" type="file" accept="image/*" />
+                  <input id="profile-avatar" name="avatar" type="file" accept="image/jpeg,image/png,image/webp" />
                 </label>
+                <div class="profile-avatar-actions">
+                  <button type="button" class="secondary-btn" id="btn-remove-avatar">Remove photo</button>
+                  <p class="small-note">JPG, PNG, or WebP · up to 5MB</p>
+                </div>
                 <label class="field">
                   <span>WhatsApp phone</span>
                   <input id="profile-whatsapp" name="whatsapp" type="text" maxlength="40" placeholder="+232..." />

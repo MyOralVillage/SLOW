@@ -62,6 +62,16 @@ function ownerEmailsFromEnv() {
   );
 }
 
+function isAllowedAvatarFilename(name: string) {
+  const lower = String(name || "").toLowerCase();
+  return /\.(jpe?g|png|webp)$/.test(lower);
+}
+
+function isAllowedAvatarMime(mime: string) {
+  const m = String(mime || "").toLowerCase();
+  return m === "image/jpeg" || m === "image/png" || m === "image/webp";
+}
+
 @Injectable()
 export class AuthService {
   private readonly log = new Logger(AuthService.name);
@@ -477,6 +487,13 @@ export class AuthService {
     if (!file?.buffer?.length) {
       throw new BadRequestException("Choose an image file.");
     }
+    const maxBytes = 5 * 1024 * 1024;
+    if (typeof file.size === "number" && file.size > maxBytes) {
+      throw new BadRequestException("Profile photos must be 5MB or smaller.");
+    }
+    if (!isAllowedAvatarMime(file.mimetype) || !isAllowedAvatarFilename(file.originalname || "")) {
+      throw new BadRequestException("Profile photo must be a JPG, PNG, or WebP image.");
+    }
     const existing = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { avatar_storage_key: true },
@@ -489,6 +506,22 @@ export class AuthService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { avatar_storage_key: stored.storageKey, avatar_name: file.originalname || null },
+    });
+    return { user: this.serializeUser(user) };
+  }
+
+  async removeAvatar(userId: string) {
+    const existing = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatar_storage_key: true },
+    });
+    if (existing?.avatar_storage_key) {
+      const old = this.disk.resolveLocalPath({ storageKey: existing.avatar_storage_key, filePath: null });
+      if (old) await fs.promises.unlink(old.abs).catch(() => undefined);
+    }
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar_storage_key: null, avatar_name: null },
     });
     return { user: this.serializeUser(user) };
   }
