@@ -80,14 +80,16 @@ export class MailService {
       throw new ServiceUnavailableException("Email service is not configured. Set RESEND_API_KEY.");
     }
 
-    const from = this.senderAddress("SLOW <onboarding@resend.dev>");
+    // Resend's default onboarding sender is the safest fallback for new projects.
+    // A display name can be rejected depending on account/domain state, so default to the raw email.
+    const from = this.senderAddress("onboarding@resend.dev");
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from, to: [to], subject, text }),
+      body: JSON.stringify({ from, to, subject, text }),
     });
 
     if (!res.ok) {

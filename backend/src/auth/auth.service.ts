@@ -94,7 +94,10 @@ export class AuthService {
 
   private emailErrorMessage(kind: "verification" | "password reset", error: unknown) {
     if (error instanceof ServiceUnavailableException) {
-      return "Email service is not configured.";
+      return error.message || "Email service is not configured.";
+    }
+    if (error instanceof BadGatewayException) {
+      return error.message || (kind === "verification" ? "Could not send verification email." : "Could not send password reset email.");
     }
     return kind === "verification"
       ? "Could not send verification email."
@@ -358,12 +361,14 @@ export class AuthService {
     if (!email || !email.includes("@")) {
       return generic;
     }
-    this.mail.assertTransportAvailable();
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user || user.status === UserStatus.disabled) {
       return generic;
     }
+
+    // Only require email transport when we actually need to deliver an email.
+    this.mail.assertTransportAvailable();
 
     const resetToken = crypto.randomBytes(32).toString("hex");
     const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
