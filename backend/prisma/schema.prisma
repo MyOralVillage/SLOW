@@ -113,6 +113,10 @@ model ConversationMessage {
   conversation_id String
   sender_id       String
   resource_id     String?
+  image_mime_type String?
+  image_original_filename String?
+  image_size_bytes BigInt?
+  image_bytes     Bytes?
 
   conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   sender       User         @relation("ConversationMessagesSent", fields: [sender_id], references: [id], onDelete: Cascade)

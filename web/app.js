@@ -118,6 +118,9 @@ const state = {
   activeConversationId: null,
   activeConversation: null,
   activeConversationMessages: [],
+  messageImageBlobUrls: {},
+  pendingMessageImageFile: null,
+  pendingMessageImagePreviewUrl: "",
   messagesPollTimer: null,
   messageUserSearchTimer: null,
   shareResourceSearchTimer: null,
@@ -271,8 +274,11 @@ const els = {
   messageUserResults: document.getElementById("message-user-results"),
   messageBody: document.getElementById("message-body"),
   messageReplyBody: document.getElementById("message-reply-body"),
+  messageImageInput: document.getElementById("message-image-input"),
+  messageImagePreview: document.getElementById("message-image-preview"),
   btnSendMessage: document.getElementById("btn-send-message"),
   btnSendReply: document.getElementById("btn-send-reply"),
+  btnAttachMessageImage: document.getElementById("btn-attach-message-image"),
   messagesSendStatus: document.getElementById("messages-send-status"),
   messagesComposeNote: document.getElementById("messages-compose-note"),
   messagesComposeWrap: document.getElementById("messages-compose-wrap"),
@@ -806,6 +812,74 @@ function sharedResourceCardHtml(resourceLike, options = {}) {
   `;
 }
 
+function clearMessageImageBlobUrls() {
+  Object.values(state.messageImageBlobUrls || {}).forEach((url) => {
+    try { URL.revokeObjectURL(url); } catch {}
+  });
+  state.messageImageBlobUrls = {};
+}
+
+async function preloadMessageImages(rows) {
+  clearMessageImageBlobUrls();
+  const withImages = (rows || []).filter((row) => row?.image?.url && row?.id);
+  await Promise.all(
+    withImages.map(async (row) => {
+      try {
+        const res = await apiFetch(row.image.url, { timeoutMs: 7000 });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        state.messageImageBlobUrls[row.id] = URL.createObjectURL(blob);
+      } catch {
+        /* ignore image fetch failure */
+      }
+    }),
+  );
+}
+
+function messageImageHtml(message) {
+  if (!message?.image?.url || !message?.id) return "";
+  const src = state.messageImageBlobUrls[message.id];
+  if (!src) return `<div class="message-bubble-image"><div class="small-note">Loading image…</div></div>`;
+  return `<div class="message-bubble-image"><img src="${escapeHtml(src)}" alt="${escapeHtml(message.image.original_filename || "Shared image")}" loading="lazy" decoding="async" /></div>`;
+}
+
+function clearPendingMessageImage() {
+  if (state.pendingMessageImagePreviewUrl) {
+    try { URL.revokeObjectURL(state.pendingMessageImagePreviewUrl); } catch {}
+  }
+  state.pendingMessageImagePreviewUrl = "";
+  state.pendingMessageImageFile = null;
+  if (els.messageImageInput) els.messageImageInput.value = "";
+  if (els.messageImagePreview) {
+    els.messageImagePreview.hidden = true;
+    els.messageImagePreview.innerHTML = "";
+  }
+}
+
+function renderPendingMessageImagePreview() {
+  if (!els.messageImagePreview) return;
+  const file = state.pendingMessageImageFile;
+  if (!file || !state.pendingMessageImagePreviewUrl) {
+    els.messageImagePreview.hidden = true;
+    els.messageImagePreview.innerHTML = "";
+    return;
+  }
+  els.messageImagePreview.hidden = false;
+  els.messageImagePreview.innerHTML = `
+    <img src="${escapeHtml(state.pendingMessageImagePreviewUrl)}" alt="${escapeHtml(file.name || "Selected image")}" />
+    <div class="message-image-preview-actions">
+      <span class="small-note">${escapeHtml(file.name || "image")} · ${(Number(file.size || 0) / 1024).toFixed(0)} KB</span>
+      <button type="button" class="secondary-btn" id="btn-remove-message-image">Remove image</button>
+    </div>
+  `;
+}
+
+function autoResizeTextarea(textarea) {
+  if (!textarea) return;
+  textarea.style.height = "auto";
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
+}
+
 function groupConversationMessages(rows) {
   const groups = [];
   for (const row of rows || []) {
@@ -1053,10 +1127,12 @@ function renderConversationThread() {
             .map((message) => {
               const text = String(message.body || "").trim();
               const body = text ? `<div class="message-bubble-text">${escapeHtml(text)}</div>` : "";
+              const image = messageImageHtml(message);
               const resource = message.resource ? sharedResourceCardHtml(message.resource, { mine: group.mine }) : "";
               return `
                 <div class="message-bubble">
                   ${body}
+                  ${image}
                   ${resource}
                   <span class="message-bubble-time">${escapeHtml(formatMessageTimestamp(message.created_at))}</span>
                 </div>
@@ -1104,6 +1180,7 @@ async function openConversation(conversationId) {
   state.activeConversationId = id;
   state.activeConversation = json.conversation || null;
   state.activeConversationMessages = Array.isArray(json.messages) ? json.messages : [];
+  await preloadMessageImages(state.activeConversationMessages);
   state.messageMobileThreadOpen = true;
   updateMessagesLayoutMode();
   renderConversationList();
@@ -1176,23 +1253,29 @@ async function sendConversationReply() {
   if (!state.activeConversationId) return;
   const text = String(els.messageReplyBody?.value || "").trim();
   const resourceId = state.pendingSharedResource?.id || undefined;
-  if (!text && !resourceId) {
+  const imageFile = state.pendingMessageImageFile || null;
+  if (!text && !resourceId && !imageFile) {
     showStatus(els.messagesSendStatus, "Write a message", false);
     return;
   }
   showStatus(els.messagesSendStatus, "Sending…", true);
+  const payload = new FormData();
+  payload.append("body", text);
+  if (resourceId) payload.append("resourceId", resourceId);
+  if (imageFile) payload.append("image", imageFile, imageFile.name);
   const res = await apiFetch(`/messages/conversations/${encodeURIComponent(state.activeConversationId)}/messages`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ body: text || "Shared a resource", resourceId }),
-    timeoutMs: 6000,
+    body: payload,
+    timeoutMs: 12000,
   });
   if (!res.ok) {
     showStatus(els.messagesSendStatus, await errorText(res, "Could not send message"), false);
     return;
   }
   if (els.messageReplyBody) els.messageReplyBody.value = "";
+  autoResizeTextarea(els.messageReplyBody);
   state.pendingSharedResource = null;
+  clearPendingMessageImage();
   renderMessageShareBanner();
   showStatus(els.messagesSendStatus, "Sent", true);
   await refreshConversations();
@@ -3610,6 +3693,34 @@ function bindEvents() {
       void sendConversationReply();
     }
   });
+  els.messageReplyBody?.addEventListener("input", () => autoResizeTextarea(els.messageReplyBody));
+
+  els.btnAttachMessageImage?.addEventListener("click", () => {
+    els.messageImageInput?.click();
+  });
+
+  els.messageImageInput?.addEventListener("change", () => {
+    const file = els.messageImageInput?.files?.[0];
+    if (!file) {
+      clearPendingMessageImage();
+      return;
+    }
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+    if (!allowed.has(String(file.type || "").toLowerCase())) {
+      showToast("Only JPG, PNG, WebP, or GIF images can be sent.", false);
+      clearPendingMessageImage();
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Images must be 5MB or smaller.", false);
+      clearPendingMessageImage();
+      return;
+    }
+    clearPendingMessageImage();
+    state.pendingMessageImageFile = file;
+    state.pendingMessageImagePreviewUrl = URL.createObjectURL(file);
+    renderPendingMessageImagePreview();
+  });
 
   els.profileAvatar?.addEventListener("change", async () => {
     const file = els.profileAvatar?.files?.[0];
@@ -3756,6 +3867,11 @@ function bindEvents() {
 
     if (event.target.closest("[data-close-user-profile]")) {
       closeUserProfileModal();
+      return;
+    }
+
+    if (event.target.closest("#btn-remove-message-image")) {
+      clearPendingMessageImage();
       return;
     }
 

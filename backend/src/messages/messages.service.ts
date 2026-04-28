@@ -12,6 +12,23 @@ export class MessagesService {
     private readonly notifications: NotificationsService,
   ) {}
 
+  private messageImagePayload(message: {
+    id: string;
+    conversation_id?: string;
+    image_mime_type?: string | null;
+    image_original_filename?: string | null;
+    image_size_bytes?: bigint | number | null;
+    image_bytes?: Uint8Array | null;
+  }) {
+    if (!message?.image_bytes || !message.image_mime_type) return null;
+    return {
+      mime_type: message.image_mime_type,
+      original_filename: message.image_original_filename || "image",
+      size_bytes: typeof message.image_size_bytes === "bigint" ? Number(message.image_size_bytes) : Number(message.image_size_bytes || 0),
+      url: `/api/messages/conversations/${message.conversation_id}/messages/${message.id}/image`,
+    };
+  }
+
   private async requireConversationMembership(conversationId: string, userId: string) {
     const participant = await this.prisma.conversationParticipant.findUnique({
       where: {
@@ -140,6 +157,7 @@ export class MessagesService {
                 created_at: last.created_at,
                 sender: last.sender,
                 resource: last.resource || null,
+                image: this.messageImagePayload({ ...last, conversation_id: c.id, image_bytes: (last as any).image_bytes, image_mime_type: (last as any).image_mime_type, image_original_filename: (last as any).image_original_filename, image_size_bytes: (last as any).image_size_bytes }),
               }
             : null,
           unread_count: unreadByConversation.get(c.id) || 0,
@@ -217,11 +235,12 @@ export class MessagesService {
         read_at: m.read_at,
         sender: serializePublicUser(m.sender),
         resource: m.resource || null,
+        image: this.messageImagePayload(m as any),
       })),
     };
   }
 
-  async createConversation(currentUserId: string, participantUserId: string, body?: string, resourceId?: string) {
+  async createConversation(currentUserId: string, participantUserId: string, body?: string, resourceId?: string, image?: Express.Multer.File) {
     const toUserId = String(participantUserId || "").trim();
     if (!toUserId) throw new BadRequestException("Choose a user to message.");
     if (currentUserId === toUserId) throw new BadRequestException("Cannot message yourself.");
@@ -247,8 +266,8 @@ export class MessagesService {
       select: { id: true },
     });
     if (existing) {
-      if (String(body || "").trim()) {
-        await this.sendMessage(existing.id, currentUserId, String(body), resourceId);
+      if (String(body || "").trim() || resourceId || image?.buffer?.length) {
+        await this.sendMessage(existing.id, currentUserId, String(body), resourceId, image);
       }
       return await this.getConversation(existing.id, currentUserId);
     }
@@ -261,21 +280,28 @@ export class MessagesService {
       },
       select: { id: true },
     });
-    if (String(body || "").trim()) {
-      await this.sendMessage(created.id, currentUserId, String(body), resourceId);
+    if (String(body || "").trim() || resourceId || image?.buffer?.length) {
+      await this.sendMessage(created.id, currentUserId, String(body), resourceId, image);
     }
     return await this.getConversation(created.id, currentUserId);
   }
 
-  async sendMessage(conversationId: string, senderId: string, body: string, resourceId?: string) {
+  async sendMessage(conversationId: string, senderId: string, body: string, resourceId?: string, image?: Express.Multer.File) {
     const text = String(body || "").trim();
-    if (!text) throw new BadRequestException("Message cannot be empty.");
+    const hasImage = Boolean(image?.buffer?.length);
+    if (!text && !resourceId && !hasImage) throw new BadRequestException("Message cannot be empty.");
     await this.requireConversationMembership(conversationId, senderId);
 
     const resource = resourceId
       ? await this.prisma.resource.findUnique({ where: { id: resourceId }, select: { id: true } })
       : null;
     if (resourceId && !resource) throw new NotFoundException("Resource not found.");
+    if (hasImage) {
+      const mime = String(image?.mimetype || "").toLowerCase();
+      const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+      if (!allowed.has(mime)) throw new BadRequestException("Only JPG, PNG, WebP, or GIF images can be sent.");
+      if (Number(image?.size || 0) > 5 * 1024 * 1024) throw new BadRequestException("Images must be 5MB or smaller.");
+    }
 
     const participants = await this.prisma.conversationParticipant.findMany({
       where: { conversation_id: conversationId },
@@ -292,6 +318,10 @@ export class MessagesService {
         sender_id: senderId,
         body: text,
         resource_id: resourceId || null,
+        image_mime_type: hasImage ? String(image!.mimetype || "").toLowerCase() : null,
+        image_original_filename: hasImage ? image!.originalname || "image" : null,
+        image_size_bytes: hasImage ? BigInt(Number(image!.size || image!.buffer.length || 0)) : null,
+        image_bytes: hasImage ? new Uint8Array(image!.buffer) : null,
       },
       include: {
         sender: { select: { id: true, name: true, email: true } },
@@ -323,6 +353,30 @@ export class MessagesService {
       created_at: row.created_at,
       sender: row.sender,
       resource: row.resource || null,
+      image: this.messageImagePayload(row as any),
+    };
+  }
+
+  async openMessageImage(conversationId: string, messageId: string, userId: string) {
+    await this.requireConversationMembership(conversationId, userId);
+    const row = await this.prisma.conversationMessage.findFirst({
+      where: {
+        id: messageId,
+        conversation_id: conversationId,
+      },
+      select: {
+        image_mime_type: true,
+        image_original_filename: true,
+        image_bytes: true,
+      },
+    });
+    if (!row?.image_bytes || !row.image_mime_type) {
+      throw new NotFoundException("Image not found.");
+    }
+    return {
+      mimeType: row.image_mime_type,
+      filename: row.image_original_filename || "image",
+      buffer: Buffer.from(row.image_bytes),
     };
   }
 }

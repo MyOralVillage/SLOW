@@ -1,10 +1,18 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
+import type { Response } from "express";
 
 import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
 import { MessagesService } from "./messages.service";
 
 type Authed = { authUser?: { id: string; permissions?: string[] } };
+
+const imageUpload = {
+  storage: memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+};
 
 @Controller("messages")
 export class MessagesController {
@@ -31,6 +39,23 @@ export class MessagesController {
     return await this.messages.getConversation(id, req.authUser!.id);
   }
 
+  @Get("conversations/:conversationId/messages/:messageId/image")
+  @UseGuards(SessionAuthGuard, PermissionGuard)
+  @RequirePermission("message_users")
+  async getMessageImage(
+    @Req() req: Authed,
+    @Param("conversationId") conversationId: string,
+    @Param("messageId") messageId: string,
+    @Res() res: Response,
+  ) {
+    const image = await this.messages.openMessageImage(conversationId, messageId, req.authUser!.id);
+    res.setHeader("Content-Type", image.mimeType);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(image.filename)}"`);
+    res.send(image.buffer);
+  }
+
   @Get(":conversationId")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("message_users")
@@ -41,27 +66,31 @@ export class MessagesController {
   @Post("conversations")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("message_users")
+  @UseInterceptors(FileInterceptor("image", imageUpload))
   async createConversation(
     @Req() req: Authed,
     @Body() body: { participantUserId?: string; body?: string; message?: string; resourceId?: string },
+    @UploadedFile() image?: Express.Multer.File,
   ) {
     const participantUserId = String(body?.participantUserId || "");
     const text = String(body?.body || body?.message || "");
     const resourceId = String(body?.resourceId || "").trim() || undefined;
-    return await this.messages.createConversation(req.authUser!.id, participantUserId, text, resourceId);
+    return await this.messages.createConversation(req.authUser!.id, participantUserId, text, resourceId, image);
   }
 
   @Post("conversations/:id/messages")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("message_users")
+  @UseInterceptors(FileInterceptor("image", imageUpload))
   async sendMessage(
     @Req() req: Authed,
     @Param("id") id: string,
     @Body() body: { body?: string; message?: string; resourceId?: string },
+    @UploadedFile() image?: Express.Multer.File,
   ) {
     const text = String(body?.body || body?.message || "");
     const resourceId = String(body?.resourceId || "").trim() || undefined;
-    return await this.messages.sendMessage(id, req.authUser!.id, text, resourceId);
+    return await this.messages.sendMessage(id, req.authUser!.id, text, resourceId, image);
   }
 
   @Post("send")

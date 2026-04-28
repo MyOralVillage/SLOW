@@ -865,6 +865,20 @@ a.text-link-btn {
   word-break: break-word;
 }
 
+.message-bubble-image {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.message-bubble-image img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
 .message-bubble-time {
   font-size: 12px;
   color: var(--muted);
@@ -956,7 +970,8 @@ a.text-link-btn {
 
 .messages-composer-shell textarea {
   min-height: 92px;
-  resize: vertical;
+  resize: none;
+  overflow-y: hidden;
 }
 
 .messages-composer-actions {
@@ -964,6 +979,31 @@ a.text-link-btn {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.message-image-preview {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  background: var(--panel-alt);
+}
+
+.message-image-preview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 14px;
+  display: block;
+}
+
+.message-image-preview-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .share-resource-panel {

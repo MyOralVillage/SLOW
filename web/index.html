@@ -266,11 +266,14 @@
                 <div id="messages-share-banner" class="auth-notice" hidden></div>
                 <div id="messages-thread-list" class="messages-thread-list"></div>
                 <div class="messages-composer-shell">
+                  <input id="message-image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden />
+                  <div id="message-image-preview" class="message-image-preview" hidden></div>
                   <label class="field field-wide">
                     <span>Reply</span>
                     <textarea id="message-reply-body" rows="3" placeholder="Write a message"></textarea>
                   </label>
                   <div class="messages-composer-actions">
+                    <button type="button" class="secondary-btn" id="btn-attach-message-image"><svg class="icon btn-icon" aria-hidden="true"><use href="#icon-upload"></use></svg><span>Add image</span></button>
                     <button type="button" class="primary-btn" id="btn-send-reply"><svg class="icon btn-icon" aria-hidden="true"><use href="#icon-send"></use></svg><span>Send</span></button>
                   </div>
                 </div>
