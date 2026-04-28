@@ -361,7 +361,7 @@ export class AuthService {
     this.mail.assertTransportAvailable();
 
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || user.status === UserStatus.disabled || !user.password_hash) {
+    if (!user || user.status === UserStatus.disabled) {
       return generic;
     }
 
