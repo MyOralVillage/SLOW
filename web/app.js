@@ -1709,6 +1709,7 @@ function hasPermission(permission, user = state.user) {
 }
 
 async function loadConfig() {
+  if (!["127.0.0.1", "localhost"].includes(location.hostname)) return;
   try {
     const res = await fetchWithTimeout("config.local.json", { cache: "no-store", timeoutMs: 3000 });
     if (res.ok) Object.assign(config, await res.json());
@@ -2664,6 +2665,12 @@ function applyRoute(route) {
     stopMessagesPolling();
     if (state.user) startNotificationsPolling();
   }
+  if ((next === "home" || next === "resources") && !state.resources.length && !state.resourcesLoading) {
+    void loadResources();
+  }
+  if (next === "profile" && hasPermission("manage_users") && !state.users.length && !state.usersLoading) {
+    void loadUsers();
+  }
 }
 
 function updateTopButtons() {
@@ -3179,7 +3186,7 @@ async function doAuth(email, statusEl) {
     renderResources();
     renderMessages();
     renderNotifications();
-    await loadUsers(true);
+    if (hasPermission("manage_users")) void loadUsers(true);
     return result.data;
   } catch (error) {
     showStatus(statusEl, error.message || "Could not reach the server", false);
@@ -3201,7 +3208,7 @@ async function doAuthRequest(path, payload, statusEl) {
     renderResources();
     renderMessages();
     renderNotifications();
-    await loadUsers(true);
+    if (hasPermission("manage_users")) void loadUsers(true);
     return result.data;
   } catch (error) {
     showStatus(statusEl, error.message || "Could not reach the server", false);
@@ -4247,15 +4254,17 @@ async function bootstrap() {
   renderCategoryTiles();
   updateTopButtons();
   renderProfilePage();
-  await Promise.allSettled([loadResources(), loadUsers()]);
-  await loadCommunity();
+  renderResources();
   renderMessages();
-  await refreshNotifications({ includeList: true, force: true });
-  startNotificationsPolling();
   renderNotifications();
   renderCommunity();
   renderAdmin();
   applyRoute(routeFromHash());
+  await loadResources();
+  if (state.user) {
+    void refreshNotifications({ includeList: state.route === "notifications", force: true });
+    startNotificationsPolling();
+  }
 }
 
 bootstrap().catch((error) => {

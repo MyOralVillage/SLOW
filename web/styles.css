@@ -3536,12 +3536,22 @@ a.text-link-btn {
 
   .bottom-nav-btn {
     min-height: 54px;
-    font-size: 11px;
+    gap: 4px;
+    font-size: 10px;
+    padding: 6px 2px;
+  }
+
+  .bottom-nav-btn span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
   }
 
   .nav-icon {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
   }
 
   .messages-thread-list {
