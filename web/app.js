@@ -160,6 +160,7 @@ const els = {
   searchForm: document.getElementById("search-form"),
   searchQuery: document.getElementById("search-query"),
   filterCountry: document.getElementById("filter-country"),
+  filterCategory: document.getElementById("filter-category"),
   filterProductDetail: document.getElementById("filter-product-detail"),
   filterCrossCutting: document.getElementById("filter-cross-cutting"),
   filterInstitution: document.getElementById("filter-institution"),
@@ -1072,7 +1073,7 @@ function renderConversationThread() {
           `;
         })
         .join("")
-    : `<div class="messages-empty-state"><div class="messages-empty-icon" aria-hidden="true">✉️</div><h3 class="panel-title">No messages yet</h3><p class="panel-subtitle">Say hello or share a resource to get the conversation started.</p></div>`;
+    : `<div class="messages-empty-state"><div class="messages-empty-icon" aria-hidden="true">${iconSvg("message-square")}</div><h3 class="panel-title">No messages yet</h3><p class="panel-subtitle">Say hello or share a resource to get the conversation started.</p></div>`;
   els.messagesThreadList.scrollTop = els.messagesThreadList.scrollHeight;
 }
 
@@ -1632,8 +1633,28 @@ function fillSelect(selectEl, values, placeholder) {
   });
 }
 
+function inferredResourceCategory(resource) {
+  const explicit = String(resource?.category || "").trim();
+  if (explicit) return explicit;
+  const blob = [
+    resource?.title,
+    resource?.description,
+    ...(Array.isArray(resource?.keywords) ? resource.keywords : []),
+    resource?.type,
+    resource?.crossCutting,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (/\bcurrency\b|\bbirr\b|\bcoin\b|\bcoins\b|\bnote\b|\bnotes\b|\bmoney\b|\bcash\b/.test(blob)) {
+    return "Currency";
+  }
+  return "";
+}
+
 function initFields() {
   fillSelect(els.filterCountry, metadata.countries, "All countries");
+  fillSelect(els.filterCategory, metadata.mainCategories, "All categories");
   fillSelect(els.filterProductDetail, metadata.productDetails, "All product details");
   fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All cross-cutting");
   fillSelect(els.filterInstitution, metadata.institutions, "All institutions");
@@ -1831,14 +1852,19 @@ function normalizeFile(f) {
 }
 
 function normalizeResource(resource) {
+  const normalizedKeywords = Array.isArray(resource.keywords) ? resource.keywords : [];
+  const derivedCategory = String(resource.category || "").trim() || inferredResourceCategory({
+    ...resource,
+    keywords: normalizedKeywords,
+  });
   return {
     id: resource.id,
     title: resource.title || "Untitled",
     description: resource.description || "",
     country: resource.country || "",
-    category: resource.category || "",
+    category: derivedCategory,
     type: resource.type || "",
-    keywords: Array.isArray(resource.keywords) ? resource.keywords : [],
+    keywords: normalizedKeywords,
     productDetail: resource.productDetail || resource.product_detail || "",
     crossCutting: resource.crossCutting || resource.cross_cutting || "",
     institution: resource.institution || "",
@@ -1883,6 +1909,7 @@ function resourceCardHtml(resource) {
 function filterResources(resources) {
   const query = (els.searchQuery?.value || "").trim().toLowerCase();
   const country = els.filterCountry?.value || "";
+  const category = els.filterCategory?.value || "";
   const productDetail = els.filterProductDetail?.value || "";
   const crossCutting = els.filterCrossCutting?.value || "";
   const institution = els.filterInstitution?.value || "";
@@ -1905,6 +1932,7 @@ function filterResources(resources) {
 
     if (query && !textBlob.includes(query)) return false;
     if (country && resource.country !== country) return false;
+    if (category && resource.category !== category) return false;
     if (productDetail && resource.productDetail !== productDetail) return false;
     if (crossCutting && resource.crossCutting !== crossCutting) return false;
     if (institution && resource.institution !== institution) return false;
@@ -2997,6 +3025,7 @@ function scheduleApplySearch() {
 function clearSearch() {
   els.searchForm.reset();
   fillSelect(els.filterCountry, metadata.countries, "All countries");
+  fillSelect(els.filterCategory, metadata.mainCategories, "All categories");
   fillSelect(els.filterProductDetail, metadata.productDetails, "All product details");
   fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All cross-cutting");
   fillSelect(els.filterInstitution, metadata.institutions, "All institutions");
@@ -3653,7 +3682,7 @@ function bindEvents() {
     event.preventDefault();
     applySearch();
   });
-  [els.searchQuery, els.filterCountry, els.filterProductDetail, els.filterCrossCutting, els.filterInstitution, els.filterKeywords]
+  [els.searchQuery, els.filterCountry, els.filterCategory, els.filterProductDetail, els.filterCrossCutting, els.filterInstitution, els.filterKeywords]
     .filter(Boolean)
     .forEach((field) => {
       field.addEventListener("input", scheduleApplySearch);
@@ -3674,6 +3703,7 @@ function bindEvents() {
       const value = categoryButton.getAttribute("data-category-value") || "";
       if (kind === "main") {
         els.searchQuery.value = "";
+        if (els.filterCategory) els.filterCategory.value = value;
         state.filteredResources = filterResources(
           state.resources.filter((resource) => resource.category === value),
         );

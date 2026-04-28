@@ -84,10 +84,10 @@ export class AuthService {
   ) {}
 
   private webAppBaseUrl() {
-    const base = String(process.env.WEB_APP_URL || DEFAULT_WEB_APP_URL).replace(/\/$/, "");
+    const base = String(process.env.FRONTEND_URL || process.env.WEB_APP_URL || DEFAULT_WEB_APP_URL).replace(/\/$/, "");
     if (!this.warnedAboutDefaultWebAppUrl && /127\.0\.0\.1|localhost/.test(base)) {
       this.warnedAboutDefaultWebAppUrl = true;
-      this.log.warn(`WEB_APP_URL is using the local fallback (${base}). Password reset and verification links will not work for real users until this is set to your public frontend URL.`);
+      this.log.warn(`FRONTEND_URL/WEB_APP_URL is using the local fallback (${base}). Password reset and verification links will not work for real users until this is set to your public frontend URL.`);
     }
     return base;
   }

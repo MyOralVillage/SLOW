@@ -2630,11 +2630,19 @@ a.text-link-btn {
    ═══════════════════════════════════════════ */
 
 :root {
-  --bg: #f6f4ef;
+  --bg: #f8f9fa;
   --panel: #ffffff;
-  --panel-alt: #fbfaf7;
-  --border: #cfc8bb;
-  --border-light: #ddd5c8;
+  --panel-alt: #f6f8fb;
+  --border: #c8ccd1;
+  --border-light: #dde1e6;
+  --text: #202122;
+  --muted: #54595d;
+  --accent: #3366cc;
+  --accent-soft: #eaf2ff;
+  --accent-hover: #254ea8;
+  --ok: #2f6f44;
+  --ok-soft: #e8f3ec;
+  --warn: #8a6d1f;
   --shadow: none;
   --shadow-lg: none;
   --radius: 10px;
@@ -2800,8 +2808,8 @@ a.text-link-btn {
   padding: 16px 18px;
   gap: 16px;
   align-items: center;
-  border-color: rgba(207, 200, 188, 0.92);
-  background: rgba(255, 253, 248, 0.92);
+  border-color: rgba(200, 204, 209, 0.92);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -2920,8 +2928,9 @@ a.text-link-btn {
   gap: 12px;
   align-items: center;
   border-width: 1px;
-  background: linear-gradient(180deg, #fff 0%, #fcfaf5 100%);
-  box-shadow: 0 2px 10px rgba(25, 22, 17, 0.04);
+  background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+  box-shadow: 0 1px 3px rgba(32, 33, 34, 0.08);
+  border-left: 4px solid #a2c2ff;
 }
 
 .category-tile::before {
@@ -2999,7 +3008,7 @@ a.text-link-btn {
   padding: 18px;
   border: 1px solid var(--border-light);
   border-radius: 18px;
-  background: linear-gradient(180deg, #fff 0%, #faf7f1 100%);
+  background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
 }
 
 .profile-top > div:first-child {
@@ -3060,8 +3069,8 @@ a.text-link-btn {
 
 .resource-card {
   border-radius: 18px;
-  border-color: rgba(207, 200, 188, 0.78);
-  box-shadow: 0 4px 14px rgba(25, 22, 17, 0.05);
+  border-color: rgba(200, 204, 209, 0.9);
+  box-shadow: 0 1px 4px rgba(32, 33, 34, 0.08);
 }
 
 .resource-card-hit {
@@ -3073,7 +3082,7 @@ a.text-link-btn {
   aspect-ratio: 4 / 3;
   min-height: 168px;
   border-bottom: 1px solid var(--border-light);
-  background: linear-gradient(180deg, #fbf8f1 0%, #f2ece1 100%);
+  background: linear-gradient(180deg, #fbfcfe 0%, #eff3f8 100%);
 }
 
 .resource-card-body {
@@ -3181,6 +3190,23 @@ a.text-link-btn {
   gap: 16px;
 }
 
+.wiki-meta-card,
+.message-inbox-item,
+.message-user-result,
+.share-target-row,
+.simple-item,
+.forum-thread-card {
+  border-color: var(--border-light);
+  background: #fff;
+}
+
+.forum-thread-card.is-active,
+.message-inbox-item.is-active,
+.notification-item.is-unread {
+  background: #edf3ff;
+  border-color: #b8c7e6;
+}
+
 .notification-icon {
   width: 22px;
   height: 22px;
@@ -3196,10 +3222,10 @@ a.text-link-btn {
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   padding: 8px;
-  border: 1px solid rgba(207, 200, 188, 0.92);
+  border: 1px solid rgba(200, 204, 209, 0.92);
   border-radius: 18px 18px 0 0;
-  background: rgba(255, 253, 248, 0.94);
-  box-shadow: 0 -8px 24px rgba(25, 22, 17, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -4px 16px rgba(32, 33, 34, 0.08);
 }
 
 .bottom-nav-btn {
