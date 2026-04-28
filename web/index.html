@@ -141,66 +141,93 @@
 
           <div class="community-layout">
             <div class="card-panel community-panel">
-              <div class="section-head">
-                <h3 class="panel-title">Updates</h3>
+              <div class="section-head section-head-stack">
+                <div>
+                  <h3 class="panel-title">Member Feed</h3>
+                  <p class="panel-subtitle">Short updates, field notes, and resource shares from members.</p>
+                </div>
               </div>
-              <form id="community-post-form" class="community-compose" novalidate>
-                <label class="field">
-                  <span>Share an update</span>
-                  <textarea id="community-post-body" rows="3" placeholder="What are you working on?"></textarea>
-                </label>
-                <label class="field">
-                  <span>Attach resource (optional)</span>
-                  <select id="community-post-resource"></select>
-                </label>
-                <p id="community-post-status" class="small-note"></p>
-                <button type="submit" class="primary-btn" id="btn-community-post">Post update</button>
-              </form>
-              <div id="community-posts-list" class="simple-list"></div>
+              <div class="community-feed-shell">
+                <form id="community-post-form" class="community-compose community-compose-card" novalidate>
+                  <div class="community-compose-top">
+                    <div class="community-compose-avatar" id="community-compose-avatar" aria-hidden="true">+</div>
+                    <div class="community-compose-copy">
+                      <strong>Share an update</strong>
+                      <span class="small-note">Post like a community note or short status update.</span>
+                    </div>
+                  </div>
+                  <label class="field">
+                    <span>Update</span>
+                    <textarea id="community-post-body" rows="3" placeholder="What are you working on, testing, or sharing today?"></textarea>
+                  </label>
+                  <label class="field">
+                    <span>Attach resource (optional)</span>
+                    <select id="community-post-resource"></select>
+                  </label>
+                  <div class="community-compose-actions">
+                    <p id="community-post-status" class="small-note"></p>
+                    <button type="submit" class="primary-btn" id="btn-community-post">Post update</button>
+                  </div>
+                </form>
+                <div id="community-posts-list" class="simple-list community-feed-list"></div>
+              </div>
             </div>
 
             <div class="card-panel community-panel">
               <div class="section-head section-head-stack">
                 <div>
                   <h3 class="panel-title">Forum Discussions</h3>
-                  <p class="panel-subtitle">Start a discussion around a resource, a named topic, or a general community idea.</p>
+                  <p class="panel-subtitle">Browse active topics, open a thread, and reply in a more structured forum view.</p>
                 </div>
               </div>
               <div class="tag-row community-topic-row">
-                <span class="tag">Resource</span>
-                <span class="tag">Topic</span>
-                <span class="tag">General</span>
+                <span class="tag">Resource threads</span>
+                <span class="tag">Topic threads</span>
+                <span class="tag">General threads</span>
               </div>
-              <form id="forum-thread-form" class="community-compose" novalidate>
-                <label class="field">
-                  <span>Discussion focus</span>
-                  <select id="forum-thread-kind">
-                    <option value="general">General discussion</option>
-                    <option value="topic">Topic discussion</option>
-                    <option value="resource">Resource discussion</option>
-                  </select>
-                </label>
-                <label class="field" id="forum-topic-wrap" hidden>
-                  <span>Topic</span>
-                  <input id="forum-thread-topic" type="text" maxlength="120" placeholder="Examples: icons, branding, outreach" />
-                </label>
-                <label class="field" id="forum-resource-wrap" hidden>
-                  <span>Resource</span>
-                  <select id="forum-thread-resource"></select>
-                </label>
-                <label class="field">
-                  <span>Thread title</span>
-                  <input id="forum-thread-title" type="text" maxlength="160" placeholder="Start a discussion" />
-                </label>
-                <label class="field">
-                  <span>Opening post</span>
-                  <textarea id="forum-thread-body" rows="4" placeholder="Share the topic, question, or proposal"></textarea>
-                </label>
-                <p id="forum-thread-status" class="small-note"></p>
-                <button type="submit" class="primary-btn" id="btn-forum-thread">Create discussion</button>
-              </form>
-              <div id="forum-threads-list" class="simple-list"></div>
-              <div id="forum-thread-detail" class="community-thread-detail" hidden></div>
+              <div class="forum-layout">
+                <div class="forum-sidebar">
+                  <form id="forum-thread-form" class="community-compose community-compose-card forum-compose-card" novalidate>
+                    <div class="community-compose-top">
+                      <div class="community-compose-avatar forum-compose-icon" aria-hidden="true">#</div>
+                      <div class="community-compose-copy">
+                        <strong>Start a discussion</strong>
+                        <span class="small-note">Open a thread around a resource, topic, or general idea.</span>
+                      </div>
+                    </div>
+                    <label class="field">
+                      <span>Discussion focus</span>
+                      <select id="forum-thread-kind">
+                        <option value="general">General discussion</option>
+                        <option value="topic">Topic discussion</option>
+                        <option value="resource">Resource discussion</option>
+                      </select>
+                    </label>
+                    <label class="field" id="forum-topic-wrap" hidden>
+                      <span>Topic</span>
+                      <input id="forum-thread-topic" type="text" maxlength="120" placeholder="Examples: icons, branding, outreach" />
+                    </label>
+                    <label class="field" id="forum-resource-wrap" hidden>
+                      <span>Resource</span>
+                      <select id="forum-thread-resource"></select>
+                    </label>
+                    <label class="field">
+                      <span>Thread title</span>
+                      <input id="forum-thread-title" type="text" maxlength="160" placeholder="Start a discussion" />
+                    </label>
+                    <label class="field">
+                      <span>Opening post</span>
+                      <textarea id="forum-thread-body" rows="4" placeholder="Share the topic, question, or proposal"></textarea>
+                    </label>
+                    <div class="community-compose-actions">
+                      <p id="forum-thread-status" class="small-note"></p>
+                      <button type="submit" class="primary-btn" id="btn-forum-thread">Create discussion</button>
+                    </div>
+                  </form>
+                  <div id="forum-threads-list" class="simple-list forum-thread-list"></div>
+                </div>
+                <div id="forum-thread-detail" class="community-thread-detail forum-thread-detail-panel" hidden></div>
+              </div>
             </div>
           </div>
         </section>

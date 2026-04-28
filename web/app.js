@@ -2496,54 +2496,72 @@ function renderForumThreadDetail() {
     return;
   }
   els.forumThreadDetail.hidden = false;
+  const replyCount = Number(thread.reply_count || thread.replies?.length || 0);
   const focusMeta = thread.thread_kind === "resource"
     ? `${forumKindLabel(thread.thread_kind)} · ${thread.resource?.title || "Linked resource"}`
     : thread.thread_kind === "topic"
       ? `${forumKindLabel(thread.thread_kind)} · ${thread.topic_label || "Topic"}`
       : forumKindLabel(thread.thread_kind);
   els.forumThreadDetail.innerHTML = `
-    <div class="section-head">
-      <h4>${escapeHtml(thread.title)}</h4>
-      ${canDeleteForumThread(thread) ? `<button type="button" class="secondary-btn" data-delete-thread="${escapeHtml(thread.id)}">Delete</button>` : ""}
-    </div>
-    <div class="simple-item forum-thread-open">
-      <div class="tag-row"><span class="tag">${escapeHtml(focusMeta)}</span></div>
-      ${thread.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip" data-open-detail="${escapeHtml(thread.resource.id)}"><strong>${escapeHtml(thread.resource.title)}</strong><span>${escapeHtml([thread.resource.category, thread.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
-      <div class="comment-row">
-        ${userAvatarHtml(thread.user, "small")}
-        <div class="comment-copy">
-          <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(thread.user?.id || "")}">${escapeHtml(thread.user?.name || "Member")}</button></strong>
-          <span>${escapeHtml(thread.body || "")}</span>
+    <article class="forum-thread-detail-card">
+      <div class="forum-thread-detail-top">
+        <div class="forum-thread-detail-copy">
+          <div class="tag-row">
+            <span class="tag">${escapeHtml(focusMeta)}</span>
+            <span class="tag">${escapeHtml(String(replyCount))} replies</span>
+            <span class="tag">${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</span>
+          </div>
+          <h4>${escapeHtml(thread.title)}</h4>
+        </div>
+        ${canDeleteForumThread(thread) ? `<button type="button" class="secondary-btn" data-delete-thread="${escapeHtml(thread.id)}">Delete</button>` : ""}
+      </div>
+      ${thread.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip forum-linked-resource" data-open-detail="${escapeHtml(thread.resource.id)}"><strong>${escapeHtml(thread.resource.title)}</strong><span>${escapeHtml([thread.resource.category, thread.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
+      <div class="forum-thread-open">
+        <div class="comment-row">
+          ${userAvatarHtml(thread.user, "small")}
+          <div class="comment-copy">
+            <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(thread.user?.id || "")}">${escapeHtml(thread.user?.name || "Member")}</button></strong>
+            <span class="small-note">${escapeHtml(roleLabel(thread.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(thread.created_at))}</span>
+            <p class="forum-thread-body-copy">${escapeHtml(thread.body || "")}</p>
+          </div>
         </div>
       </div>
-      <span class="small-note">${escapeHtml(formatTimeAgo(thread.created_at))}</span>
-    </div>
-    <div class="simple-list compact-list">
+    </article>
+    <div class="forum-replies-block">
+      <div class="section-head">
+        <h4>Replies</h4>
+        <span class="small-note">${escapeHtml(String(replyCount))} total</span>
+      </div>
+      <div class="simple-list compact-list forum-reply-list">
       ${
         thread.replies?.length
           ? thread.replies.map((reply) => `
-              <div class="simple-item">
+              <article class="simple-item forum-reply-card">
                 <div class="comment-row">
                   ${userAvatarHtml(reply.user, "small")}
                   <div class="comment-copy">
                     <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(reply.user?.id || "")}">${escapeHtml(reply.user?.name || "Member")}</button></strong>
-                    <span>${escapeHtml(reply.body || "")}</span>
+                    <span class="small-note">${escapeHtml(roleLabel(reply.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(reply.created_at))}</span>
+                    <p class="forum-thread-body-copy">${escapeHtml(reply.body || "")}</p>
                   </div>
                 </div>
-                <span class="small-note">${escapeHtml(formatTimeAgo(reply.created_at))}</span>
-              </div>
+              </article>
             `).join("")
           : `<div class="simple-item"><span>No replies yet</span></div>`
       }
+      </div>
     </div>
     ${
       canReplyForumThread()
-        ? `<form class="comment-form" data-forum-reply-form="${escapeHtml(thread.id)}">
+        ? `<form class="comment-form forum-reply-form" data-forum-reply-form="${escapeHtml(thread.id)}">
             <label class="field">
               <span>Reply</span>
               <textarea name="message" rows="3" placeholder="Write a reply"></textarea>
             </label>
-            <button type="submit" class="primary-btn" data-comment-submit>Post reply</button>
+            <div class="community-compose-actions">
+              <span class="small-note">Reply to keep the discussion moving.</span>
+              <button type="submit" class="primary-btn" data-comment-submit>Post reply</button>
+            </div>
           </form>`
         : `<p class="small-note">Sign in with a member account or above to reply.</p>`
     }
@@ -2560,19 +2578,26 @@ function renderCommunity() {
     els.communityPostsList.innerHTML = (state.communityPosts || []).length
       ? state.communityPosts.map((post) => `
           <article class="simple-item community-post-card">
-            <div class="comment-row">
-              ${userAvatarHtml(post.user, "small")}
-              <div class="comment-copy">
-                <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(post.user?.id || "")}">${escapeHtml(post.user?.name || "Member")}</button></strong>
-                <span class="small-note">${escapeHtml(roleLabel(post.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(post.created_at))}</span>
-                <p>${escapeHtml(post.body || "")}</p>
-                ${post.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip" data-open-detail="${escapeHtml(post.resource.id)}"><strong>${escapeHtml(post.resource.title)}</strong><span>${escapeHtml([post.resource.category, post.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
+            <div class="community-post-head">
+              <div class="comment-row">
+                ${userAvatarHtml(post.user, "small")}
+                <div class="comment-copy">
+                  <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(post.user?.id || "")}">${escapeHtml(post.user?.name || "Member")}</button></strong>
+                  <span class="small-note">${escapeHtml(roleLabel(post.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(post.created_at))}</span>
+                </div>
               </div>
               ${
                 post.user?.id === state.user?.id || canDeleteAnyCommunityPost()
                   ? `<button type="button" class="secondary-btn" data-delete-community-post="${escapeHtml(post.id)}">Delete</button>`
                   : ""
               }
+            </div>
+            <div class="community-post-body">
+              <p>${escapeHtml(post.body || "")}</p>
+              ${post.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip forum-linked-resource" data-open-detail="${escapeHtml(post.resource.id)}"><strong>${escapeHtml(post.resource.title)}</strong><span>${escapeHtml([post.resource.category, post.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
+            </div>
+            <div class="community-post-footer">
+              <span class="small-note">${escapeHtml(post.resource ? "Shared with a linked resource" : "Member update")}</span>
             </div>
           </article>
         `).join("")
@@ -2582,11 +2607,17 @@ function renderCommunity() {
     els.forumThreadsList.innerHTML = (state.forumThreads || []).length
       ? state.forumThreads.map((thread) => `
           <button type="button" class="simple-item forum-thread-card ${state.activeForumThreadId === thread.id ? "is-active" : ""}" data-open-thread="${escapeHtml(thread.id)}">
+            <div class="forum-thread-card-top">
+              <div class="tag-row">
+                <span class="tag">${escapeHtml(forumKindLabel(thread.thread_kind))}</span>
+                <span class="tag">${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</span>
+              </div>
+              <span class="forum-thread-count">${escapeHtml(String(thread.reply_count || thread.replies?.length || 0))}</span>
+            </div>
             <strong>${escapeHtml(thread.title)}</strong>
             <span class="small-note">${escapeHtml(thread.thread_kind === "resource" ? `Resource · ${thread.resource?.title || "Linked resource"}` : thread.thread_kind === "topic" ? `Topic · ${thread.topic_label || ""}` : "General discussion")}</span>
             <span class="thread-preview">${escapeHtml(String(thread.body || "").trim().slice(0, 140))}${String(thread.body || "").trim().length > 140 ? "..." : ""}</span>
-            <span>${escapeHtml(thread.user?.name || "Member")} · ${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</span>
-            <span class="small-note">${escapeHtml(String(thread.reply_count || thread.replies?.length || 0))} replies</span>
+            <span class="forum-thread-meta-line">${escapeHtml(thread.user?.name || "Member")} · ${escapeHtml(roleLabel(thread.user?.role || "member"))}</span>
           </button>
         `).join("")
       : `<div class="simple-item"><span>No discussions yet</span></div>`;
