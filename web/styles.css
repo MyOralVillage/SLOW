@@ -985,6 +985,37 @@ a.text-link-btn {
   justify-content: flex-end;
 }
 
+.messages-composer-iconbtn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.messages-composer-iconbtn .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.messages-composer-iconbtn span[aria-hidden="true"] {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.messages-composer-iconbtn:hover,
+.messages-composer-iconbtn:focus-visible {
+  background: rgba(51, 102, 204, 0.08);
+  border-color: rgba(51, 102, 204, 0.2);
+  outline: none;
+}
+
 .message-emoji-picker {
   display: flex;
   flex-wrap: wrap;
