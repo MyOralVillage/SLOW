@@ -46,6 +46,25 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
+    def end_headers(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path or "/"
+        no_cache_paths = {
+            "/",
+            "/index.html",
+            "/app.js",
+            "/auth.js",
+            "/metadata.js",
+            "/countries.js",
+            "/styles.css",
+            "/reset-password/index.html",
+        }
+        if path in no_cache_paths or path.endswith(".html"):
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        super().end_headers()
+
     def _upstream_target(self) -> str | None:
         parsed = urlparse(self.path)
         if not parsed.path.startswith(PROXY_PREFIX):

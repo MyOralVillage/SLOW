@@ -1,0 +1,23 @@
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/reset-password/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/app.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/auth.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/metadata.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/countries.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/styles.css
+  Cache-Control: no-cache, no-store, must-revalidate
