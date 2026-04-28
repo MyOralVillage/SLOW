@@ -261,7 +261,7 @@
                   <p class="panel-subtitle">Use search to start a conversation or open an existing thread from the sidebar.</p>
                 </div>
               </div>
-              <div id="messages-thread-wrap" hidden>
+              <div id="messages-thread-wrap" class="messages-thread-wrap" hidden>
                 <h3 class="panel-title" id="messages-thread-title" hidden>Conversation</h3>
                 <div id="messages-share-banner" class="auth-notice" hidden></div>
                 <div id="messages-thread-list" class="messages-thread-list"></div>
@@ -272,7 +272,9 @@
                     <span>Reply</span>
                     <textarea id="message-reply-body" rows="3" placeholder="Write a message"></textarea>
                   </label>
+                  <div id="message-emoji-picker" class="message-emoji-picker" hidden></div>
                   <div class="messages-composer-actions">
+                    <button type="button" class="secondary-btn" id="btn-message-emoji"><span aria-hidden="true">🙂</span><span>Emoji</span></button>
                     <button type="button" class="secondary-btn" id="btn-attach-message-image"><svg class="icon btn-icon" aria-hidden="true"><use href="#icon-upload"></use></svg><span>Add image</span></button>
                     <button type="button" class="primary-btn" id="btn-send-reply"><svg class="icon btn-icon" aria-hidden="true"><use href="#icon-send"></use></svg><span>Send</span></button>
                   </div>
@@ -422,8 +424,9 @@
                   <p id="profile-permission-summary" class="small-note"></p>
                 </div>
                 <p id="profile-email-status" class="auth-notice" hidden></p>
-                <p id="profile-avatar-wrap" class="profile-avatar-wrap" hidden>
+                <p id="profile-avatar-wrap" class="profile-avatar-wrap">
                   <button type="button" class="profile-avatar-hit" id="btn-change-avatar" aria-label="Change profile photo">
+                    <span id="profile-avatar-fallback" class="profile-avatar-fallback">?</span>
                     <img id="profile-avatar-preview" class="profile-avatar-img" width="96" height="96" alt="" />
                   </button>
                 </p>

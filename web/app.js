@@ -31,6 +31,7 @@ const auth = window.SlowAuth;
 
 const ROLE_OPTIONS = ["owner", "admin", "vip", "specialist", "member", "none"];
 const STATUS_OPTIONS = ["active", "invited", "disabled"];
+const MESSAGE_EMOJIS = ["🙂", "😀", "😂", "😍", "🙏", "👍", "👏", "❤️", "🎉", "✅", "🤝", "📎"];
 const ALL_PERMISSIONS = [
   "view_content",
   "search_resources",
@@ -264,6 +265,7 @@ const els = {
   profileEmailStatus: document.getElementById("profile-email-status"),
   profileAvatarPreview: document.getElementById("profile-avatar-preview"),
   profileAvatarWrap: document.getElementById("profile-avatar-wrap"),
+  profileAvatarFallback: document.getElementById("profile-avatar-fallback"),
   btnRequestVerification: document.getElementById("btn-request-verification"),
   btnRefreshVerification: document.getElementById("btn-refresh-verification"),
   btnRequestVerificationP: document.getElementById("btn-request-verification-p"),
@@ -276,8 +278,10 @@ const els = {
   messageReplyBody: document.getElementById("message-reply-body"),
   messageImageInput: document.getElementById("message-image-input"),
   messageImagePreview: document.getElementById("message-image-preview"),
+  messageEmojiPicker: document.getElementById("message-emoji-picker"),
   btnSendMessage: document.getElementById("btn-send-message"),
   btnSendReply: document.getElementById("btn-send-reply"),
+  btnMessageEmoji: document.getElementById("btn-message-emoji"),
   btnAttachMessageImage: document.getElementById("btn-attach-message-image"),
   messagesSendStatus: document.getElementById("messages-send-status"),
   messagesComposeNote: document.getElementById("messages-compose-note"),
@@ -527,14 +531,13 @@ function goHome() {
 }
 
 async function loadProfileAvatar() {
-  if (!els.profileAvatarPreview || !state.token) {
-    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
-    return;
+  if (!els.profileAvatarPreview) return;
+  if (els.profileAvatarFallback) {
+    els.profileAvatarFallback.textContent = avatarLetter(state.user?.name || "User");
+    els.profileAvatarFallback.hidden = false;
   }
-  if (!state.user?.has_avatar) {
-    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
-    return;
-  }
+  els.profileAvatarPreview.hidden = true;
+  if (!state.token || !state.user?.has_avatar) return;
   try {
     const res = await apiFetch("/auth/avatar", { cache: "no-store" });
     if (!res.ok) throw new Error("no avatar");
@@ -545,9 +548,11 @@ async function loadProfileAvatar() {
     }
     els.profileAvatarPreview.dataset.blobUrl = url;
     els.profileAvatarPreview.src = url;
-    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = false;
+    els.profileAvatarPreview.hidden = false;
+    if (els.profileAvatarFallback) els.profileAvatarFallback.hidden = true;
   } catch {
-    if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
+    els.profileAvatarPreview.hidden = true;
+    if (els.profileAvatarFallback) els.profileAvatarFallback.hidden = false;
   }
 }
 
@@ -565,7 +570,8 @@ function setPendingAvatarFile(file) {
   if (!file || !els.profileAvatarPreview) return;
   state.pendingAvatarPreviewUrl = URL.createObjectURL(file);
   els.profileAvatarPreview.src = state.pendingAvatarPreviewUrl;
-  if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = false;
+  els.profileAvatarPreview.hidden = false;
+  if (els.profileAvatarFallback) els.profileAvatarFallback.hidden = true;
 }
 
 async function uploadPendingAvatarIfAny() {
@@ -880,6 +886,42 @@ function autoResizeTextarea(textarea) {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
 }
 
+function renderMessageEmojiPicker() {
+  if (!els.messageEmojiPicker) return;
+  els.messageEmojiPicker.innerHTML = MESSAGE_EMOJIS
+    .map(
+      (emoji) => `<button type="button" class="message-emoji-btn" data-message-emoji="${escapeHtml(emoji)}" aria-label="Insert ${escapeHtml(emoji)}">${escapeHtml(emoji)}</button>`,
+    )
+    .join("");
+}
+
+function closeMessageEmojiPicker() {
+  if (els.messageEmojiPicker) els.messageEmojiPicker.hidden = true;
+  if (els.btnMessageEmoji) els.btnMessageEmoji.setAttribute("aria-expanded", "false");
+}
+
+function toggleMessageEmojiPicker() {
+  if (!els.messageEmojiPicker) return;
+  const shouldOpen = els.messageEmojiPicker.hidden;
+  els.messageEmojiPicker.hidden = !shouldOpen;
+  if (els.btnMessageEmoji) els.btnMessageEmoji.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+}
+
+function insertEmojiIntoMessage(emoji) {
+  const textarea = els.messageReplyBody;
+  if (!textarea || !emoji) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const value = textarea.value || "";
+  const prefix = start > 0 && !/\s$/.test(value.slice(0, start)) ? " " : "";
+  const suffix = end < value.length && !/^\s/.test(value.slice(end)) ? " " : "";
+  textarea.value = `${value.slice(0, start)}${prefix}${emoji}${suffix}${value.slice(end)}`;
+  const caret = start + prefix.length + emoji.length + suffix.length;
+  textarea.focus();
+  textarea.setSelectionRange(caret, caret);
+  autoResizeTextarea(textarea);
+}
+
 function groupConversationMessages(rows) {
   const groups = [];
   for (const row of rows || []) {
@@ -1185,6 +1227,7 @@ async function openConversation(conversationId) {
   updateMessagesLayoutMode();
   renderConversationList();
   renderConversationThread();
+  autoResizeTextarea(els.messageReplyBody);
   await refreshNotifications({ includeList: state.route === "notifications", force: true });
 }
 
@@ -2681,7 +2724,11 @@ function renderSignedOutView() {
     els.profileEmailStatus.classList.remove("ok", "warn");
   }
   if (els.btnRequestVerificationP) els.btnRequestVerificationP.hidden = true;
-  if (els.profileAvatarWrap) els.profileAvatarWrap.hidden = true;
+  if (els.profileAvatarFallback) {
+    els.profileAvatarFallback.textContent = avatarLetter("User");
+    els.profileAvatarFallback.hidden = false;
+  }
+  if (els.profileAvatarPreview) els.profileAvatarPreview.hidden = true;
 }
 
 function renderSignedInView(currentUser, profile) {
@@ -3554,6 +3601,7 @@ function bindEvents() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
+    closeMessageEmojiPicker();
     if (!els.shareResourceModal?.hidden) {
       closeShareResourceModal();
       return;
@@ -3567,6 +3615,7 @@ function bindEvents() {
     }
   });
 
+  renderMessageEmojiPicker();
   els.appHomeLink?.addEventListener("click", (e) => {
     e.preventDefault();
     goHome();
@@ -3694,6 +3743,10 @@ function bindEvents() {
     }
   });
   els.messageReplyBody?.addEventListener("input", () => autoResizeTextarea(els.messageReplyBody));
+  els.btnMessageEmoji?.addEventListener("click", (e) => {
+    e.preventDefault();
+    toggleMessageEmojiPicker();
+  });
 
   els.btnAttachMessageImage?.addEventListener("click", () => {
     els.messageImageInput?.click();
@@ -3806,6 +3859,15 @@ function bindEvents() {
   els.uploadFile?.addEventListener("change", renderUploadPreview);
 
   document.addEventListener("click", (event) => {
+    const emojiButton = event.target.closest("#btn-message-emoji");
+    const emojiChip = event.target.closest("[data-message-emoji]");
+    const emojiPanel = event.target.closest("#message-emoji-picker");
+    if (emojiChip) {
+      insertEmojiIntoMessage(emojiChip.getAttribute("data-message-emoji") || "");
+      closeMessageEmojiPicker();
+    } else if (!emojiButton && !emojiPanel) {
+      closeMessageEmojiPicker();
+    }
     if (!event.target.closest(".top-user-search-shell")) {
       renderTopUserSearchResults("");
     }
