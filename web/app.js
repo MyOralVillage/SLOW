@@ -94,6 +94,7 @@ function roleLabel(role) {
 const state = {
   route: "home",
   backendReachable: false,
+  backendLastOkAt: 0,
   token: auth?.getToken?.() || "",
   user: auth?.getCurrentUser?.() || null,
   authLoading: auth?.isLoading?.() || false,
@@ -2733,8 +2734,11 @@ function updateTopButtons() {
     }
   }
   if (els.backendBadge) {
-    els.backendBadge.textContent = state.backendReachable ? "Library connected" : "Offline sample library";
-    els.backendBadge.classList.toggle("ok", state.backendReachable);
+    const lastOkMs = Number(state.backendLastOkAt || 0);
+    const stickyOk = lastOkMs > 0 && Date.now() - lastOkMs < 10 * 60 * 1000;
+    const connected = Boolean(state.backendReachable || stickyOk);
+    els.backendBadge.textContent = connected ? "Library connected" : "Offline sample library";
+    els.backendBadge.classList.toggle("ok", connected);
   }
 }
 
@@ -2879,6 +2883,7 @@ async function loadResources(force = false) {
       state.resources = rows;
       writeTimedCache(RESOURCE_CACHE_KEY, rows);
       state.backendReachable = true;
+      state.backendLastOkAt = Date.now();
     } catch {
       if (!state.backendReachable && !state.resources.length) {
         state.resources = metadata.sampleResources.map(normalizeResource);
