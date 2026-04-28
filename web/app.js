@@ -598,6 +598,9 @@ async function removeAvatar() {
 function processPasswordResetFromQuery() {
   const tok = auth?.consumeResetLinkFromUrl?.();
   if (!tok) return;
+  if (window.location.pathname.endsWith("/reset-password")) {
+    document.title = "Reset Password | Salone OIM Knowledge Wiki";
+  }
   syncAuthState();
   if (els.resetTokenStore) els.resetTokenStore.value = tok;
   if (els.resetNewPassword) els.resetNewPassword.value = "";

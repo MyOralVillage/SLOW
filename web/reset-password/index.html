@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Reset Password | Salone OIM Knowledge Wiki</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f8f9fa;
+        --panel: #ffffff;
+        --border: #c8ccd1;
+        --text: #202122;
+        --muted: #54595d;
+        --accent: #3366cc;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+      }
+      .shell {
+        width: min(100%, 560px);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 28px 24px;
+        box-shadow: 0 2px 10px rgba(32, 33, 34, 0.08);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-family: "Newsreader", Georgia, serif;
+        font-size: clamp(1.8rem, 4vw, 2.4rem);
+      }
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      a {
+        color: var(--accent);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <h1>Reset your password</h1>
+      <p id="status">Opening the secure password reset form…</p>
+      <p>If nothing happens, <a id="continue-link" href="/#profile">continue to the reset form</a>.</p>
+    </main>
+    <script>
+      (function () {
+        const url = new URL(window.location.href);
+        const token = (url.searchParams.get("token") || "").trim();
+        const destination = new URL("../", window.location.href);
+        if (token) destination.searchParams.set("reset_password", token);
+        destination.hash = "#profile";
+        const link = document.getElementById("continue-link");
+        if (link) link.href = destination.toString();
+        window.location.replace(destination.toString());
+      })();
+    </script>
+  </body>
+</html>
