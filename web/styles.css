@@ -1425,6 +1425,13 @@ a.text-link-btn {
   text-align: left;
 }
 
+.inline-link-btn-plain {
+  color: inherit;
+  font-weight: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .wiki-meta-card {
   display: grid;
   gap: 8px;

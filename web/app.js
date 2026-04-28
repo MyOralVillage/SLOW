@@ -387,6 +387,13 @@ function userAvatarHtml(user, size = "small", extraClass = "") {
   return `<span class="${classes}">${escapeHtml(avatarLetter(user?.name || "?"))}</span>`;
 }
 
+function userProfileLinkHtml(user, fallback = "Member", extraClass = "inline-link-btn") {
+  const id = String(user?.id || "").trim();
+  const name = user?.name || fallback;
+  if (!id) return escapeHtml(name);
+  return `<button type="button" class="${escapeHtml(extraClass)}" data-open-user-profile="${escapeHtml(id)}">${escapeHtml(name)}</button>`;
+}
+
 function canDeleteAnyResource(user = state.user) {
   return Boolean(user && ["owner", "admin"].includes(String(user.role || "")));
 }
@@ -974,7 +981,7 @@ function renderShareResourceModal() {
                 <div class="message-conversation-row">
                   ${userAvatarHtml(counterpart || { name: "Conversation" }, "small")}
                   <div class="message-conversation-main">
-                    <span class="message-conversation-name">${escapeHtml(counterpart?.name || "Conversation")}</span>
+                    <span class="message-conversation-name">${userProfileLinkHtml(counterpart, "Conversation", "inline-link-btn inline-link-btn-plain")}</span>
                     <span class="message-conversation-preview">${escapeHtml(conversation.last_message?.body || "Share this resource in chat")}</span>
                   </div>
                   <span class="message-user-status">${statusDotHtml(active)}${escapeHtml(label)}</span>
@@ -1156,7 +1163,11 @@ function renderConversationThread() {
       : escapeHtml(avatarLetter(counterpart?.name || "Conversation"));
     els.messagesThreadAvatar.classList.toggle("is-image", Boolean(avatarUrlForUser(counterpart)));
   }
-  if (els.messagesThreadName) els.messagesThreadName.textContent = counterpart?.name || "Conversation";
+  if (els.messagesThreadName) {
+    els.messagesThreadName.innerHTML = counterpart?.id
+      ? userProfileLinkHtml(counterpart, "Conversation", "inline-link-btn inline-link-btn-plain")
+      : escapeHtml(counterpart?.name || "Conversation");
+  }
   if (els.messagesThreadStatus) els.messagesThreadStatus.innerHTML = `${statusDotHtml(active)}${escapeHtml(label)}`;
   els.messagesThreadWrap.hidden = false;
   const rows = state.activeConversationMessages || [];
@@ -1186,7 +1197,7 @@ function renderConversationThread() {
               ${avatar}
               <div class="message-stack">
                 <div class="message-group-meta">
-                  <span class="small-note">${escapeHtml(senderName)}</span>
+                  <span class="small-note">${group.mine ? escapeHtml(senderName) : userProfileLinkHtml(group.sender, senderName, "inline-link-btn inline-link-btn-plain")}</span>
                 </div>
                 ${bubbles}
               </div>
@@ -2617,7 +2628,7 @@ function renderCommunity() {
             <strong>${escapeHtml(thread.title)}</strong>
             <span class="small-note">${escapeHtml(thread.thread_kind === "resource" ? `Resource · ${thread.resource?.title || "Linked resource"}` : thread.thread_kind === "topic" ? `Topic · ${thread.topic_label || ""}` : "General discussion")}</span>
             <span class="thread-preview">${escapeHtml(String(thread.body || "").trim().slice(0, 140))}${String(thread.body || "").trim().length > 140 ? "..." : ""}</span>
-            <span class="forum-thread-meta-line">${escapeHtml(thread.user?.name || "Member")} · ${escapeHtml(roleLabel(thread.user?.role || "member"))}</span>
+            <span class="forum-thread-meta-line">${userProfileLinkHtml(thread.user, "Member", "inline-link-btn inline-link-btn-plain")} · ${escapeHtml(roleLabel(thread.user?.role || "member"))}</span>
           </button>
         `).join("")
       : `<div class="simple-item"><span>No discussions yet</span></div>`;
