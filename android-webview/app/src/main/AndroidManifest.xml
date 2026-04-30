@@ -32,7 +32,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
-                    android:host="slowoim.netlify.app" />
+                    android:host="www.myoralvillage.org"
+                    android:pathPrefix="/slow" />
             </intent-filter>
         </activity>
 

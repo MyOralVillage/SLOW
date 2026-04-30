@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">SLOW Library</string>
-    <string name="frontend_url">https://slowoim.netlify.app</string>
+    <string name="frontend_url">https://www.myoralvillage.org/slow</string>
     <string name="backend_base_url">https://slow-57j2.onrender.com/api</string>
     <string name="backend_api_key"></string>
     <string name="nav_home">Home</string>
@@ -8,7 +8,7 @@
     <string name="nav_community">Community</string>
     <string name="nav_forums">Forums</string>
     <string name="nav_messages">Messages</string>
-    <string name="nav_notifications">Alerts</string>
+    <string name="nav_notifications">Notifications</string>
     <string name="nav_profile">Profile</string>
     <string name="nav_saved">Saved</string>
     <string name="retry">Try again</string>
