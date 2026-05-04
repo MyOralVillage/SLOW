@@ -6,9 +6,19 @@ import { MessagesModule } from "./messages/messages.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { ResourcesModule } from "./resources/resources.module";
+import { SiteModule } from "./site/site.module";
 import { UsersModule } from "./users/users.module";
 
 @Module({
-  imports: [PrismaModule, AuthModule, ResourcesModule, UsersModule, MessagesModule, NotificationsModule, CommunityModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    ResourcesModule,
+    UsersModule,
+    MessagesModule,
+    NotificationsModule,
+    CommunityModule,
+    SiteModule,
+  ],
 })
 export class AppModule {}

@@ -260,3 +260,10 @@ model Message {
   @@index([to_user_id, created_at])
   @@index([from_user_id, created_at])
 }
+
+/// Single-row site configuration (e.g. library taxonomy for filters and uploads).
+model SiteConfig {
+  id            String   @id
+  taxonomy_json Json
+  updated_at    DateTime @updatedAt
+}
