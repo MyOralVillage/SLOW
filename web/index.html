@@ -178,7 +178,7 @@
               <div class="community-feed-shell">
                 <form id="community-post-form" class="community-compose community-compose-card" novalidate>
                   <div class="community-compose-top">
-                    <div class="community-compose-avatar" id="community-compose-avatar" aria-hidden="true">+</div>
+                    <div class="community-compose-avatar" id="community-compose-avatar" aria-hidden="true"></div>
                     <div class="community-compose-copy">
                       <strong>Share an update</strong>
                       <span class="small-note">Post like a community note or short status update.</span>
@@ -214,7 +214,9 @@
                 <div class="forum-sidebar">
                   <form id="forum-thread-form" class="community-compose community-compose-card forum-compose-card" novalidate>
                     <div class="community-compose-top">
-                      <div class="community-compose-avatar forum-compose-icon" aria-hidden="true">#</div>
+                      <div class="community-compose-avatar forum-compose-icon" aria-hidden="true">
+                        <svg class="icon" aria-hidden="true"><use href="#icon-comment"></use></svg>
+                      </div>
                       <div class="community-compose-copy">
                         <strong>Start a discussion</strong>
                         <span class="small-note">Open a thread around a resource, topic, or general idea.</span>
@@ -326,7 +328,7 @@
                   </label>
                   <div id="message-emoji-picker" class="message-emoji-picker" hidden></div>
                   <div class="messages-composer-actions">
-                    <button type="button" class="messages-composer-iconbtn" id="btn-message-emoji" aria-label="Add emoji" title="Add emoji"><svg class="icon" aria-hidden="true"><use href="#icon-smile"></use></svg></button>
+                    <button type="button" class="messages-composer-iconbtn" id="btn-message-emoji" aria-label="Quick replies" title="Quick replies"><svg class="icon" aria-hidden="true"><use href="#icon-smile"></use></svg></button>
                     <button type="button" class="messages-composer-iconbtn" id="btn-attach-message-image" aria-label="Add image" title="Add image"><svg class="icon" aria-hidden="true"><use href="#icon-image"></use></svg></button>
                     <button type="button" class="primary-btn" id="btn-send-reply"><svg class="icon btn-icon" aria-hidden="true"><use href="#icon-send"></use></svg><span>Send</span></button>
                   </div>

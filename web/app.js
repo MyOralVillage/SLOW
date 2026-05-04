@@ -31,7 +31,21 @@ const auth = window.SlowAuth;
 
 const ROLE_OPTIONS = ["owner", "admin", "vip", "specialist", "member", "none"];
 const STATUS_OPTIONS = ["active", "invited", "disabled"];
-const MESSAGE_EMOJIS = ["🙂", "😀", "😂", "😍", "🙏", "👍", "👏", "❤️", "🎉", "✅", "🤝", "📎"];
+/** Quick replies insert unicode into the message; buttons show text labels (no emoji graphics in UI). */
+const MESSAGE_QUICK_REACTIONS = [
+  { emoji: "🙂", label: "Smile" },
+  { emoji: "😀", label: "Joy" },
+  { emoji: "😂", label: "Laugh" },
+  { emoji: "😍", label: "Love" },
+  { emoji: "🙏", label: "Thanks" },
+  { emoji: "👍", label: "Thumbs up" },
+  { emoji: "👏", label: "Clap" },
+  { emoji: "❤️", label: "Heart" },
+  { emoji: "🎉", label: "Celebrate" },
+  { emoji: "✅", label: "Done" },
+  { emoji: "🤝", label: "Agree" },
+  { emoji: "📎", label: "Attach note" },
+];
 const ALL_PERMISSIONS = [
   "view_content",
   "search_resources",
@@ -395,13 +409,14 @@ function avatarUrlForUser(user) {
 }
 
 function userAvatarHtml(user, size = "small", extraClass = "") {
-  const classes = ["messages-avatar", size === "small" ? "small" : "", extraClass].filter(Boolean).join(" ");
+  const sizeClass = size === "large" ? "large" : size === "xs" ? "xs" : "small";
+  const classes = ["messages-avatar", sizeClass, extraClass].filter(Boolean).join(" ");
   const url = avatarUrlForUser(user);
   if (url) {
     const loading = size === "large" ? 'loading="eager"' : 'loading="lazy"';
     return `<span class="${classes} is-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(user?.name || "User")}" ${loading} decoding="async" /></span>`;
   }
-  return `<span class="${classes}">${escapeHtml(avatarLetter(user?.name || "?"))}</span>`;
+  return `<span class="${classes}" aria-hidden="true">${escapeHtml(avatarLetter(user?.name || "?"))}</span>`;
 }
 
 function userProfileLinkHtml(user, fallback = "Member", extraClass = "inline-link-btn") {
@@ -977,11 +992,10 @@ function autoResizeTextarea(textarea) {
 
 function renderMessageEmojiPicker() {
   if (!els.messageEmojiPicker) return;
-  els.messageEmojiPicker.innerHTML = MESSAGE_EMOJIS
-    .map(
-      (emoji) => `<button type="button" class="message-emoji-btn" data-message-emoji="${escapeHtml(emoji)}" aria-label="Insert ${escapeHtml(emoji)}">${escapeHtml(emoji)}</button>`,
-    )
-    .join("");
+  els.messageEmojiPicker.innerHTML = MESSAGE_QUICK_REACTIONS.map(
+    ({ emoji, label }) =>
+      `<button type="button" class="message-emoji-btn" data-message-emoji="${escapeHtml(emoji)}" aria-label="Insert ${escapeHtml(label)}"><span class="message-emoji-label">${escapeHtml(label)}</span></button>`,
+  ).join("");
 }
 
 function closeMessageEmojiPicker() {
@@ -1240,10 +1254,14 @@ function renderConversationThread() {
   els.messagesThreadTitle.textContent = counterpart ? `Conversation with ${counterpart.name}` : "Conversation";
   if (els.messagesThreadTopbar) els.messagesThreadTopbar.hidden = false;
   if (els.messagesThreadAvatar) {
-    els.messagesThreadAvatar.innerHTML = avatarUrlForUser(counterpart)
-      ? `<img src="${escapeHtml(avatarUrlForUser(counterpart))}" alt="${escapeHtml(counterpart?.name || "Conversation")}" loading="lazy" decoding="async" />`
-      : escapeHtml(avatarLetter(counterpart?.name || "Conversation"));
-    els.messagesThreadAvatar.classList.toggle("is-image", Boolean(avatarUrlForUser(counterpart)));
+    const url = avatarUrlForUser(counterpart);
+    if (url) {
+      els.messagesThreadAvatar.innerHTML = `<img src="${escapeHtml(url)}" alt="${escapeHtml(counterpart?.name || "Conversation")}" loading="lazy" decoding="async" />`;
+      els.messagesThreadAvatar.className = "messages-avatar small is-image";
+    } else {
+      els.messagesThreadAvatar.textContent = avatarLetter(counterpart?.name || "Conversation");
+      els.messagesThreadAvatar.className = "messages-avatar small";
+    }
   }
   if (els.messagesThreadName) {
     els.messagesThreadName.innerHTML = counterpart?.id
@@ -2677,6 +2695,20 @@ function renderForumResourceOptions() {
   if (current) els.forumThreadResource.value = current;
 }
 
+function renderCommunityComposeAvatar() {
+  const el = document.getElementById("community-compose-avatar");
+  if (!el) return;
+  if (state.user) {
+    el.innerHTML = userAvatarHtml(state.user, "small");
+    el.classList.add("is-filled");
+    el.removeAttribute("aria-hidden");
+  } else {
+    el.innerHTML = `<span class="community-compose-placeholder" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#icon-user"></use></svg></span>`;
+    el.classList.remove("is-filled");
+    el.setAttribute("aria-hidden", "true");
+  }
+}
+
 function renderForumThreadDetail() {
   if (!els.forumThreadDetail) return;
   const thread = (state.forumThreads || []).find((item) => item.id === state.activeForumThreadId);
@@ -2696,11 +2728,7 @@ function renderForumThreadDetail() {
           <div class="tag-row forum-detail-tags">
             <span class="tag">${escapeHtml(forumKindLabel(thread.thread_kind))}</span>
             <span class="tag">${escapeHtml(String(replyCount))} ${replyCount === 1 ? "reply" : "replies"}</span>
-            <span class="tag"
-              ><time datetime="${escapeHtml(thread.updated_at || thread.created_at || "")}">${escapeHtml(
-                formatTimeAgo(thread.updated_at || thread.created_at),
-              )}</time></span
-            >
+            <span class="tag"><time datetime="${escapeHtml(thread.updated_at || thread.created_at || "")}">${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</time></span>
           </div>
           <p class="forum-detail-category-line small-note">${escapeHtml(focusMeta)}</p>
           <h3 class="forum-detail-heading">${escapeHtml(thread.title || "Discussion")}</h3>
@@ -2711,9 +2739,7 @@ function renderForumThreadDetail() {
                 <button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(thread.user?.id || "")}">${escapeHtml(thread.user?.name || "Member")}</button>
                 <span class="tag role-tag role-${escapeHtml(opRole)}">${escapeHtml(roleLabel(opRole))}</span>
               </div>
-              <time class="small-note forum-detail-op-time" datetime="${escapeHtml(thread.created_at || "")}"
-                >${escapeHtml(formatTimeAgo(thread.created_at))}</time
-              >
+              <time class="small-note forum-detail-op-time" datetime="${escapeHtml(thread.created_at || "")}">${escapeHtml(formatTimeAgo(thread.created_at))}</time>
             </div>
           </div>
         </div>
@@ -2768,6 +2794,7 @@ function renderForumThreadDetail() {
 
 function renderCommunity() {
   updateCommunityTabUi();
+  renderCommunityComposeAvatar();
   if (els.communityPostForm) els.communityPostForm.hidden = !canCreateCommunityPost();
   if (els.forumThreadForm) els.forumThreadForm.hidden = !canCreateForumThread();
   renderCommunityResourceOptions();
@@ -2788,9 +2815,7 @@ function renderCommunity() {
                       <button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(post.user?.id || "")}">${escapeHtml(post.user?.name || "Member")}</button>
                       <span class="tag role-tag role-${escapeHtml(pr)}">${escapeHtml(roleLabel(pr))}</span>
                     </div>
-                    <time class="small-note community-post-time" datetime="${escapeHtml(post.created_at || "")}"
-                      >${escapeHtml(formatTimeAgo(post.created_at))}</time
-                    >
+                    <time class="small-note community-post-time" datetime="${escapeHtml(post.created_at || "")}">${escapeHtml(formatTimeAgo(post.created_at))}</time>
                   </div>
                 </div>
               </div>
@@ -2804,9 +2829,11 @@ function renderCommunity() {
               <div class="community-post-text">${escapeHtml(post.body || "")}</div>
               ${post.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip forum-linked-resource" data-open-detail="${escapeHtml(post.resource.id)}"><strong>${escapeHtml(post.resource.title)}</strong><span>${escapeHtml([post.resource.category, post.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
             </div>
-            <div class="community-post-footer">
-              <span class="small-note">${escapeHtml(post.resource ? "Linked resource" : "Member update")}</span>
-            </div>
+            ${
+              post.resource
+                ? `<div class="community-post-footer"><span class="small-note">Linked library resource</span></div>`
+                : ""
+            }
           </article>
         `;
         }).join("")
@@ -2913,7 +2940,7 @@ function updateTopButtons() {
   if (els.btnTopProfile) {
     els.btnTopProfile.hidden = !state.user;
     if (state.user) {
-      els.btnTopProfile.innerHTML = `${userAvatarHtml(state.user, "small")}<span id="top-profile-label">${escapeHtml(state.user.name || "Profile")}</span>`;
+      els.btnTopProfile.innerHTML = `${userAvatarHtml(state.user, "xs")}<span id="top-profile-label">${escapeHtml(state.user.name || "Profile")}</span>`;
     }
   }
   if (els.backendBadge) {
