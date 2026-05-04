@@ -146,6 +146,8 @@ const state = {
   communityLoading: false,
   communityPromise: null,
   activeForumThreadId: null,
+  /** @type {"posts" | "forum"} */
+  communityTab: "posts",
 };
 
 const els = {
@@ -182,6 +184,10 @@ const els = {
   btnNotificationsReadAll: document.getElementById("btn-notifications-read-all"),
   notificationsBadge: document.getElementById("notifications-badge"),
   communityStatus: document.getElementById("community-status"),
+  communityTabPosts: document.getElementById("tab-community-posts"),
+  communityTabForum: document.getElementById("tab-community-forum"),
+  communityPanelPosts: document.getElementById("community-tab-posts"),
+  communityPanelForum: document.getElementById("community-tab-forum"),
   communityPostForm: document.getElementById("community-post-form"),
   communityPostBody: document.getElementById("community-post-body"),
   communityPostResource: document.getElementById("community-post-resource"),
@@ -234,6 +240,16 @@ const els = {
   profileSocials: document.getElementById("profile-socials"),
   profileStatus: document.getElementById("profile-status"),
   btnProfileSave: document.getElementById("btn-profile-save"),
+  taxonomyEditor: document.getElementById("taxonomy-editor"),
+  taxonomyForm: document.getElementById("taxonomy-form"),
+  taxonomyCountries: document.getElementById("taxonomy-countries"),
+  taxonomyMainCategories: document.getElementById("taxonomy-main-categories"),
+  taxonomyCrossCutting: document.getElementById("taxonomy-cross-cutting"),
+  taxonomyProductDetails: document.getElementById("taxonomy-product-details"),
+  taxonomyInstitutions: document.getElementById("taxonomy-institutions"),
+  taxonomyTypes: document.getElementById("taxonomy-types"),
+  taxonomyStatus: document.getElementById("taxonomy-status"),
+  btnTaxonomySave: document.getElementById("btn-taxonomy-save"),
   btnSignout: document.getElementById("btn-signout"),
   adminPanel: document.getElementById("admin-panel"),
   adminStatus: document.getElementById("admin-status"),
@@ -787,6 +803,71 @@ function forumKindLabel(kind) {
   if (kind === "resource") return "Resource";
   if (kind === "topic") return "Topic";
   return "General";
+}
+
+function forumThreadCategorySubtitle(thread) {
+  if (!thread) return "";
+  if (thread.thread_kind === "resource") {
+    return thread.resource?.title ? `Resource · ${thread.resource.title}` : "Resource discussion";
+  }
+  if (thread.thread_kind === "topic") {
+    return thread.topic_label ? `Topic · ${thread.topic_label}` : "Topic discussion";
+  }
+  return "General discussion";
+}
+
+function forumThreadListCardHtml(thread) {
+  const replyCount = Number(thread.reply_count || thread.replies?.length || 0);
+  const kindLabel = forumKindLabel(thread.thread_kind);
+  const categoryLine = forumThreadCategorySubtitle(thread);
+  const body = String(thread.body || "").trim();
+  const isActive = state.activeForumThreadId === thread.id;
+  const role = thread.user?.role || "member";
+  return `
+    <article
+      class="simple-item forum-thread-card ${isActive ? "is-active" : ""}"
+      data-open-thread="${escapeHtml(thread.id)}"
+      tabindex="0"
+      aria-label="${escapeHtml(thread.title || "Discussion")}"
+    >
+      <div class="forum-thread-card-stack">
+        <div class="forum-thread-card-topline">
+          <div class="forum-thread-card-badges tag-row">
+            <span class="tag forum-kind-tag">${escapeHtml(kindLabel)}</span>
+            <span class="tag forum-reply-count-tag">${escapeHtml(String(replyCount))} ${replyCount === 1 ? "reply" : "replies"}</span>
+          </div>
+          <time class="forum-card-time small-note" datetime="${escapeHtml(thread.updated_at || thread.created_at || "")}">${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</time>
+        </div>
+        <div class="forum-card-title">${escapeHtml(thread.title || "Discussion")}</div>
+        <div class="forum-card-author-row comment-row">
+          ${userAvatarHtml(thread.user, "small")}
+          <div class="forum-card-author-meta comment-copy">
+            ${userProfileLinkHtml(thread.user, "Member", "inline-link-btn")}
+            <span class="tag role-tag role-${escapeHtml(role)}">${escapeHtml(roleLabel(role))}</span>
+          </div>
+        </div>
+        <p class="forum-card-category-line small-note">${escapeHtml(categoryLine)}</p>
+        <div class="forum-card-preview-wrap">
+          <p class="forum-card-preview">${escapeHtml(body)}</p>
+          <p class="forum-card-read-hint small-note" aria-hidden="true">Tap or click to read full discussion</p>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function updateCommunityTabUi() {
+  const forum = state.communityTab === "forum";
+  if (els.communityTabPosts) {
+    els.communityTabPosts.classList.toggle("is-active", !forum);
+    els.communityTabPosts.setAttribute("aria-selected", forum ? "false" : "true");
+  }
+  if (els.communityTabForum) {
+    els.communityTabForum.classList.toggle("is-active", forum);
+    els.communityTabForum.setAttribute("aria-selected", forum ? "true" : "false");
+  }
+  if (els.communityPanelPosts) els.communityPanelPosts.hidden = forum;
+  if (els.communityPanelForum) els.communityPanelForum.hidden = !forum;
 }
 
 function renderMessageSearchResults(target, rows, query, mode = "pick") {
@@ -1730,6 +1811,103 @@ async function loadConfig() {
   }
 }
 
+const TAXONOMY_KEYS = ["countries", "mainCategories", "crossCuttingCategories", "productDetails", "institutions", "types"];
+
+function applyTaxonomyPayload(t) {
+  if (!t || typeof t !== "object") return;
+  for (const k of TAXONOMY_KEYS) {
+    if (Array.isArray(t[k]) && t[k].length) {
+      metadata[k] = t[k].map((s) => String(s).trim()).filter(Boolean);
+    }
+  }
+}
+
+function refreshTaxonomyDependentUi() {
+  initFields();
+  renderCategoryTiles();
+  renderAdmin();
+  scheduleApplySearch();
+}
+
+function parseTaxonomyLines(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function taxonomyLinesFromMetadata(arr) {
+  return (arr || []).join("\n");
+}
+
+function syncTaxonomyEditorFromMetadata() {
+  if (!els.taxonomyMainCategories) return;
+  els.taxonomyCountries.value = taxonomyLinesFromMetadata(metadata.countries);
+  els.taxonomyMainCategories.value = taxonomyLinesFromMetadata(metadata.mainCategories);
+  els.taxonomyCrossCutting.value = taxonomyLinesFromMetadata(metadata.crossCuttingCategories);
+  els.taxonomyProductDetails.value = taxonomyLinesFromMetadata(metadata.productDetails);
+  els.taxonomyInstitutions.value = taxonomyLinesFromMetadata(metadata.institutions);
+  els.taxonomyTypes.value = taxonomyLinesFromMetadata(metadata.types);
+}
+
+async function loadTaxonomy() {
+  try {
+    const res = await fetchWithTimeout(`${apiBase()}/site/taxonomy`, { cache: "no-store", timeoutMs: 10000 });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyTaxonomyPayload(data);
+    if (hasPermission("manage_categories")) syncTaxonomyEditorFromMetadata();
+  } catch {
+    /* keep bundled metadata.js defaults */
+  }
+}
+
+async function handleTaxonomySave(event) {
+  event.preventDefault();
+  if (!hasPermission("manage_categories")) return;
+  const payload = {
+    countries: parseTaxonomyLines(els.taxonomyCountries?.value),
+    mainCategories: parseTaxonomyLines(els.taxonomyMainCategories?.value),
+    crossCuttingCategories: parseTaxonomyLines(els.taxonomyCrossCutting?.value),
+    productDetails: parseTaxonomyLines(els.taxonomyProductDetails?.value),
+    institutions: parseTaxonomyLines(els.taxonomyInstitutions?.value),
+    types: parseTaxonomyLines(els.taxonomyTypes?.value),
+  };
+  for (const k of TAXONOMY_KEYS) {
+    if (!payload[k].length) {
+      showStatus(els.taxonomyStatus, `Add at least one line for ${k.replace(/([A-Z])/g, " $1").trim()}.`, false);
+      return;
+    }
+  }
+  showStatus(els.taxonomyStatus, "Saving…", true);
+  setButtonBusy(els.btnTaxonomySave, true, "Saving…");
+  try {
+    const res = await apiFetch("/site/taxonomy", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      clearSessionOnAuthFailure: false,
+      timeoutMs: 15000,
+    });
+    if (!res.ok) {
+      showStatus(els.taxonomyStatus, await errorText(res, "Could not save library lists"), false);
+      showToast(await errorText(res, "Could not save library lists"), false);
+      return;
+    }
+    const data = await res.json();
+    applyTaxonomyPayload(data);
+    refreshTaxonomyDependentUi();
+    syncTaxonomyEditorFromMetadata();
+    showStatus(els.taxonomyStatus, "Saved. Lists updated for all visitors.", true);
+    showToast("Library lists updated", true);
+  } catch (error) {
+    showStatus(els.taxonomyStatus, error.message || "Could not save", false);
+    showToast(error.message || "Could not save", false);
+  } finally {
+    setButtonBusy(els.btnTaxonomySave, false);
+  }
+}
+
 async function apiFetch(path, options = {}) {
   const { timeoutMs = 0, clearSessionOnAuthFailure = true, ...fetchOptions } = options;
   const headers = new Headers(fetchOptions.headers || {});
@@ -2509,39 +2687,44 @@ function renderForumThreadDetail() {
   }
   els.forumThreadDetail.hidden = false;
   const replyCount = Number(thread.reply_count || thread.replies?.length || 0);
-  const focusMeta = thread.thread_kind === "resource"
-    ? `${forumKindLabel(thread.thread_kind)} · ${thread.resource?.title || "Linked resource"}`
-    : thread.thread_kind === "topic"
-      ? `${forumKindLabel(thread.thread_kind)} · ${thread.topic_label || "Topic"}`
-      : forumKindLabel(thread.thread_kind);
+  const focusMeta = forumThreadCategorySubtitle(thread);
+  const opRole = thread.user?.role || "member";
   els.forumThreadDetail.innerHTML = `
     <article class="forum-thread-detail-card">
       <div class="forum-thread-detail-top">
-        <div class="forum-thread-detail-copy">
-          <div class="tag-row">
-            <span class="tag">${escapeHtml(focusMeta)}</span>
-            <span class="tag">${escapeHtml(String(replyCount))} replies</span>
-            <span class="tag">${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</span>
+        <div class="forum-thread-detail-intro">
+          <div class="tag-row forum-detail-tags">
+            <span class="tag">${escapeHtml(forumKindLabel(thread.thread_kind))}</span>
+            <span class="tag">${escapeHtml(String(replyCount))} ${replyCount === 1 ? "reply" : "replies"}</span>
+            <span class="tag"
+              ><time datetime="${escapeHtml(thread.updated_at || thread.created_at || "")}">${escapeHtml(
+                formatTimeAgo(thread.updated_at || thread.created_at),
+              )}</time></span
+            >
           </div>
-          <h4>${escapeHtml(thread.title)}</h4>
+          <p class="forum-detail-category-line small-note">${escapeHtml(focusMeta)}</p>
+          <h3 class="forum-detail-heading">${escapeHtml(thread.title || "Discussion")}</h3>
+          <div class="forum-detail-op-row comment-row">
+            ${userAvatarHtml(thread.user, "small")}
+            <div class="comment-copy forum-detail-op-names">
+              <div class="forum-detail-name-line">
+                <button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(thread.user?.id || "")}">${escapeHtml(thread.user?.name || "Member")}</button>
+                <span class="tag role-tag role-${escapeHtml(opRole)}">${escapeHtml(roleLabel(opRole))}</span>
+              </div>
+              <time class="small-note forum-detail-op-time" datetime="${escapeHtml(thread.created_at || "")}"
+                >${escapeHtml(formatTimeAgo(thread.created_at))}</time
+              >
+            </div>
+          </div>
         </div>
-        ${canDeleteForumThread(thread) ? `<button type="button" class="secondary-btn" data-delete-thread="${escapeHtml(thread.id)}">Delete</button>` : ""}
+        ${canDeleteForumThread(thread) ? `<button type="button" class="secondary-btn forum-detail-delete" data-delete-thread="${escapeHtml(thread.id)}">Delete</button>` : ""}
       </div>
       ${thread.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip forum-linked-resource" data-open-detail="${escapeHtml(thread.resource.id)}"><strong>${escapeHtml(thread.resource.title)}</strong><span>${escapeHtml([thread.resource.category, thread.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
-      <div class="forum-thread-open">
-        <div class="comment-row">
-          ${userAvatarHtml(thread.user, "small")}
-          <div class="comment-copy">
-            <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(thread.user?.id || "")}">${escapeHtml(thread.user?.name || "Member")}</button></strong>
-            <span class="small-note">${escapeHtml(roleLabel(thread.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(thread.created_at))}</span>
-            <p class="forum-thread-body-copy">${escapeHtml(thread.body || "")}</p>
-          </div>
-        </div>
-      </div>
+      <div class="forum-detail-original-body forum-thread-body-copy">${escapeHtml(thread.body || "")}</div>
     </article>
     <div class="forum-replies-block">
-      <div class="section-head">
-        <h4>Replies</h4>
+      <div class="section-head forum-replies-head">
+        <h4 class="forum-replies-title">Replies</h4>
         <span class="small-note">${escapeHtml(String(replyCount))} total</span>
       </div>
       <div class="simple-list compact-list forum-reply-list">
@@ -2552,9 +2735,12 @@ function renderForumThreadDetail() {
                 <div class="comment-row">
                   ${userAvatarHtml(reply.user, "small")}
                   <div class="comment-copy">
-                    <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(reply.user?.id || "")}">${escapeHtml(reply.user?.name || "Member")}</button></strong>
-                    <span class="small-note">${escapeHtml(roleLabel(reply.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(reply.created_at))}</span>
-                    <p class="forum-thread-body-copy">${escapeHtml(reply.body || "")}</p>
+                    <div class="forum-reply-name-line">
+                      <button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(reply.user?.id || "")}">${escapeHtml(reply.user?.name || "Member")}</button>
+                      <span class="tag role-tag role-${escapeHtml(reply.user?.role || "member")}">${escapeHtml(roleLabel(reply.user?.role || "member"))}</span>
+                    </div>
+                    <time class="small-note" datetime="${escapeHtml(reply.created_at || "")}">${escapeHtml(formatTimeAgo(reply.created_at))}</time>
+                    <p class="forum-thread-body-copy forum-reply-body">${escapeHtml(reply.body || "")}</p>
                   </div>
                 </div>
               </article>
@@ -2581,6 +2767,7 @@ function renderForumThreadDetail() {
 }
 
 function renderCommunity() {
+  updateCommunityTabUi();
   if (els.communityPostForm) els.communityPostForm.hidden = !canCreateCommunityPost();
   if (els.forumThreadForm) els.forumThreadForm.hidden = !canCreateForumThread();
   renderCommunityResourceOptions();
@@ -2588,50 +2775,46 @@ function renderCommunity() {
   syncForumThreadFormFocus();
   if (els.communityPostsList) {
     els.communityPostsList.innerHTML = (state.communityPosts || []).length
-      ? state.communityPosts.map((post) => `
+      ? state.communityPosts.map((post) => {
+          const pr = post.user?.role || "member";
+          return `
           <article class="simple-item community-post-card">
             <div class="community-post-head">
-              <div class="comment-row">
-                ${userAvatarHtml(post.user, "small")}
-                <div class="comment-copy">
-                  <strong><button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(post.user?.id || "")}">${escapeHtml(post.user?.name || "Member")}</button></strong>
-                  <span class="small-note">${escapeHtml(roleLabel(post.user?.role || "member"))} · ${escapeHtml(formatTimeAgo(post.created_at))}</span>
+              <div class="community-post-author-block">
+                <div class="comment-row community-post-author-row">
+                  ${userAvatarHtml(post.user, "small")}
+                  <div class="comment-copy community-post-author-copy">
+                    <div class="community-post-name-line">
+                      <button type="button" class="inline-link-btn" data-open-user-profile="${escapeHtml(post.user?.id || "")}">${escapeHtml(post.user?.name || "Member")}</button>
+                      <span class="tag role-tag role-${escapeHtml(pr)}">${escapeHtml(roleLabel(pr))}</span>
+                    </div>
+                    <time class="small-note community-post-time" datetime="${escapeHtml(post.created_at || "")}"
+                      >${escapeHtml(formatTimeAgo(post.created_at))}</time
+                    >
+                  </div>
                 </div>
               </div>
               ${
                 post.user?.id === state.user?.id || canDeleteAnyCommunityPost()
-                  ? `<button type="button" class="secondary-btn" data-delete-community-post="${escapeHtml(post.id)}">Delete</button>`
+                  ? `<button type="button" class="secondary-btn community-post-delete" data-delete-community-post="${escapeHtml(post.id)}">Delete</button>`
                   : ""
               }
             </div>
             <div class="community-post-body">
-              <p>${escapeHtml(post.body || "")}</p>
+              <div class="community-post-text">${escapeHtml(post.body || "")}</div>
               ${post.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip forum-linked-resource" data-open-detail="${escapeHtml(post.resource.id)}"><strong>${escapeHtml(post.resource.title)}</strong><span>${escapeHtml([post.resource.category, post.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
             </div>
             <div class="community-post-footer">
-              <span class="small-note">${escapeHtml(post.resource ? "Shared with a linked resource" : "Member update")}</span>
+              <span class="small-note">${escapeHtml(post.resource ? "Linked resource" : "Member update")}</span>
             </div>
           </article>
-        `).join("")
+        `;
+        }).join("")
       : `<div class="simple-item"><span>No community updates yet</span></div>`;
   }
   if (els.forumThreadsList) {
     els.forumThreadsList.innerHTML = (state.forumThreads || []).length
-      ? state.forumThreads.map((thread) => `
-          <button type="button" class="simple-item forum-thread-card ${state.activeForumThreadId === thread.id ? "is-active" : ""}" data-open-thread="${escapeHtml(thread.id)}">
-            <div class="forum-thread-card-top">
-              <div class="tag-row">
-                <span class="tag">${escapeHtml(forumKindLabel(thread.thread_kind))}</span>
-                <span class="tag">${escapeHtml(formatTimeAgo(thread.updated_at || thread.created_at))}</span>
-              </div>
-              <span class="forum-thread-count">${escapeHtml(String(thread.reply_count || thread.replies?.length || 0))}</span>
-            </div>
-            <strong>${escapeHtml(thread.title)}</strong>
-            <span class="small-note">${escapeHtml(thread.thread_kind === "resource" ? `Resource · ${thread.resource?.title || "Linked resource"}` : thread.thread_kind === "topic" ? `Topic · ${thread.topic_label || ""}` : "General discussion")}</span>
-            <span class="thread-preview">${escapeHtml(String(thread.body || "").trim().slice(0, 140))}${String(thread.body || "").trim().length > 140 ? "..." : ""}</span>
-            <span class="forum-thread-meta-line">${userProfileLinkHtml(thread.user, "Member", "inline-link-btn inline-link-btn-plain")} · ${escapeHtml(roleLabel(thread.user?.role || "member"))}</span>
-          </button>
-        `).join("")
+      ? state.forumThreads.map((thread) => forumThreadListCardHtml(thread)).join("")
       : `<div class="simple-item"><span>No discussions yet</span></div>`;
   }
   renderForumThreadDetail();
@@ -2660,7 +2843,6 @@ async function loadCommunity(force = false) {
       state.communityPosts = Array.isArray(postsJson.rows) ? postsJson.rows : [];
       state.forumThreads = Array.isArray(threadsJson.rows) ? threadsJson.rows : [];
       writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
-      if (!state.activeForumThreadId && state.forumThreads.length) state.activeForumThreadId = state.forumThreads[0].id;
       if (els.communityStatus) showStatus(els.communityStatus, `${state.communityPosts.length} updates · ${state.forumThreads.length} discussions`, true);
     } catch (error) {
       if (els.communityStatus) showStatus(els.communityStatus, error.message || "Could not load community", false);
@@ -2700,6 +2882,7 @@ function applyRoute(route) {
     void loadNotifications(true);
     startNotificationsPolling();
   } else if (next === "community") {
+    if (state.activeForumThreadId) state.communityTab = "forum";
     void loadCommunity(true);
     if (state.user) startNotificationsPolling();
   } else {
@@ -2748,6 +2931,7 @@ function renderLoadingState() {
   setVisible(els.authStateActions, false);
   setVisible(els.authPanels, false);
   setVisible(els.profileEditor, false);
+  if (els.taxonomyEditor) els.taxonomyEditor.hidden = true;
 }
 
 function renderSignedOutView() {
@@ -2777,6 +2961,7 @@ function renderSignedOutView() {
     els.profileEmailStatus.classList.remove("ok", "warn");
   }
   if (els.btnRequestVerificationP) els.btnRequestVerificationP.hidden = true;
+  if (els.taxonomyEditor) els.taxonomyEditor.hidden = true;
   if (els.profileAvatarFallback) {
     els.profileAvatarFallback.textContent = avatarLetter("User");
     els.profileAvatarFallback.hidden = false;
@@ -2819,6 +3004,12 @@ function renderSignedInView(currentUser, profile) {
   els.profileCountry.value = currentUser.country || profile?.country || "";
   els.profileInterest.value = currentUser.why_interested || profile?.interest || "";
   els.profileSocials.value = currentUser.social_handles || profile?.socials || "";
+
+  if (els.taxonomyEditor) {
+    const showTax = hasPermission("manage_categories");
+    els.taxonomyEditor.hidden = !showTax;
+    if (showTax) syncTaxonomyEditorFromMetadata();
+  }
 }
 
 function renderProfilePage() {
@@ -3233,6 +3424,7 @@ async function doAuth(email, statusEl) {
     renderResources();
     renderMessages();
     renderNotifications();
+    void loadTaxonomy().then(() => refreshTaxonomyDependentUi());
     if (hasPermission("manage_users")) void loadUsers(true);
     return result.data;
   } catch (error) {
@@ -3255,6 +3447,7 @@ async function doAuthRequest(path, payload, statusEl) {
     renderResources();
     renderMessages();
     renderNotifications();
+    void loadTaxonomy().then(() => refreshTaxonomyDependentUi());
     if (hasPermission("manage_users")) void loadUsers(true);
     return result.data;
   } catch (error) {
@@ -3583,12 +3776,12 @@ async function handleUpload(event) {
     category: els.uploadCategory.value,
     type: els.uploadType.value,
     productDetail: els.uploadProductDetail?.value || "",
-    crossCuttingCategory: els.uploadCrossCutting?.value || "",
-    institution: els.uploadInstitution?.value || "",
+    crossCuttingCategory: "",
+    institution: "",
     keywords: els.uploadKeywords.value.trim(),
   };
 
-  if (!payload.title || !payload.description || !payload.country || !payload.category || !payload.type || (!file && !state.editingResourceId)) {
+  if (!payload.title || !payload.country || !payload.category || !payload.type || (!file && !state.editingResourceId)) {
     showStatus(els.uploadStatus, state.editingResourceId ? "Complete all required fields" : "Complete all fields and choose a file", false);
     return;
   }
@@ -3898,6 +4091,15 @@ function bindEvents() {
   els.signInForm?.addEventListener("submit", handleSignIn);
   els.signupForm?.addEventListener("submit", handleSignUp);
   els.profileForm?.addEventListener("submit", handleProfileSave);
+  els.taxonomyForm?.addEventListener("submit", handleTaxonomySave);
+  els.communityTabPosts?.addEventListener("click", () => {
+    state.communityTab = "posts";
+    renderCommunity();
+  });
+  els.communityTabForum?.addEventListener("click", () => {
+    state.communityTab = "forum";
+    renderCommunity();
+  });
   els.btnSignout?.addEventListener("click", handleSignOut);
   els.searchForm?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -4040,6 +4242,7 @@ function bindEvents() {
       const id = openCommunityThread.getAttribute("data-open-community-thread");
       setRoute("community");
       closeDetailModal();
+      state.communityTab = "forum";
       state.activeForumThreadId = id;
       renderCommunity();
       return;
@@ -4126,8 +4329,12 @@ function bindEvents() {
 
     const forumOpenButton = event.target.closest("[data-open-thread]");
     if (forumOpenButton) {
+      state.communityTab = "forum";
       state.activeForumThreadId = forumOpenButton.getAttribute("data-open-thread");
       renderCommunity();
+      requestAnimationFrame(() => {
+        els.forumThreadDetail?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
       return;
     }
 
@@ -4297,6 +4504,7 @@ async function bootstrap() {
   await restoreSession();
   await processEmailVerifyFromQuery();
   await loadConfig();
+  await loadTaxonomy();
   initFields();
   renderCategoryTiles();
   updateTopButtons();
