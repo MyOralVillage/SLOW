@@ -154,9 +154,33 @@
             </div>
           </div>
 
-          <div class="community-split" id="community-split">
-            <div class="community-column community-column-feed">
-              <div class="card-panel community-panel community-feed-panel">
+          <div class="community-tabs" role="tablist" aria-label="Community sections">
+            <button
+              type="button"
+              class="community-tab-btn is-active"
+              role="tab"
+              id="tab-community-posts"
+              aria-selected="true"
+              aria-controls="community-tab-posts"
+              data-community-tab="posts"
+            >
+              Posts
+            </button>
+            <button
+              type="button"
+              class="community-tab-btn"
+              role="tab"
+              id="tab-community-forum"
+              aria-selected="false"
+              aria-controls="community-tab-forum"
+              data-community-tab="forum"
+            >
+              Forum
+            </button>
+          </div>
+
+          <div id="community-tab-posts" class="community-tab-panel" role="tabpanel" aria-labelledby="tab-community-posts">
+            <div class="card-panel community-panel community-feed-panel">
                 <div class="section-head section-head-stack">
                   <div>
                     <h3 class="panel-title">Member feed</h3>
@@ -190,8 +214,8 @@
               </div>
             </div>
 
-            <div class="community-column community-column-forum" id="community-column-forum">
-              <div class="community-forum-stack">
+          <div id="community-tab-forum" class="community-tab-panel community-tab-forum" role="tabpanel" aria-labelledby="tab-community-forum" hidden>
+            <div class="community-forum-stack" id="community-column-forum">
                 <div class="card-panel community-panel forum-compose-panel">
                   <div class="section-head section-head-stack">
                     <div>
@@ -238,7 +262,6 @@
                 </div>
               </div>
             </div>
-          </div>
         </section>
       </section>
 

@@ -1545,6 +1545,28 @@ a.text-link-btn {
   min-width: 0;
 }
 
+/* Forum tab: single full-width column — form, list, then detail (no side-by-side overlap) */
+.community-tab-forum .community-forum-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.community-tab-forum .forum-threads-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.community-tab-forum .forum-thread-detail-panel:not([hidden]) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 /* Community: desktop 2-column (feed | forum), mobile stacked */
 .community-split {
   display: grid;

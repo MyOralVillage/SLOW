@@ -160,6 +160,8 @@ const state = {
   communityLoading: false,
   communityPromise: null,
   activeForumThreadId: null,
+  /** @type {"posts" | "forum"} */
+  communityTab: "posts",
 };
 
 const els = {
@@ -203,6 +205,10 @@ const els = {
   btnNotificationsReadAll: document.getElementById("btn-notifications-read-all"),
   notificationsBadge: document.getElementById("notifications-badge"),
   communityStatus: document.getElementById("community-status"),
+  communityTabPosts: document.getElementById("tab-community-posts"),
+  communityTabForum: document.getElementById("tab-community-forum"),
+  communityPanelPosts: document.getElementById("community-tab-posts"),
+  communityPanelForum: document.getElementById("community-tab-forum"),
   communityAdminTools: document.getElementById("community-admin-tools"),
   btnCommunityEditTaxonomy: document.getElementById("btn-community-edit-taxonomy"),
   communityPostForm: document.getElementById("community-post-form"),
@@ -1819,7 +1825,10 @@ function hasPermission(permission, user = state.user) {
 
 /** Admin/owner library category management (matches backend `manage_categories`). */
 function canManageCategories(user = state.user) {
-  return Boolean(user && hasPermission("manage_categories", user));
+  if (!user) return false;
+  if (hasPermission("manage_categories", user)) return true;
+  const r = String(user.role || "").toLowerCase();
+  return r === "owner" || r === "admin";
 }
 
 async function loadConfig() {
@@ -2877,7 +2886,22 @@ function renderForumThreadDetail() {
   `;
 }
 
+function updateCommunityTabUi() {
+  const forum = state.communityTab === "forum";
+  if (els.communityTabPosts) {
+    els.communityTabPosts.classList.toggle("is-active", !forum);
+    els.communityTabPosts.setAttribute("aria-selected", forum ? "false" : "true");
+  }
+  if (els.communityTabForum) {
+    els.communityTabForum.classList.toggle("is-active", forum);
+    els.communityTabForum.setAttribute("aria-selected", forum ? "true" : "false");
+  }
+  if (els.communityPanelPosts) els.communityPanelPosts.hidden = forum;
+  if (els.communityPanelForum) els.communityPanelForum.hidden = !forum;
+}
+
 function renderCommunity() {
+  updateCommunityTabUi();
   renderCommunityComposeAvatar();
   if (els.communityAdminTools) els.communityAdminTools.hidden = !canManageCategories();
   if (els.communityPostForm) els.communityPostForm.hidden = !canCreateCommunityPost();
@@ -2994,6 +3018,7 @@ function applyRoute(route) {
     void loadNotifications(true);
     startNotificationsPolling();
   } else if (next === "community") {
+    if (state.activeForumThreadId) state.communityTab = "forum";
     void loadCommunity(true);
     if (state.user) startNotificationsPolling();
   } else {
@@ -3722,6 +3747,7 @@ async function handleSignOut() {
   state.communityPosts = [];
   state.forumThreads = [];
   state.activeForumThreadId = null;
+  state.communityTab = "posts";
   clearNotificationState();
   removeTimedCache(USERS_CACHE_KEY);
   removeTimedCache(COMMUNITY_CACHE_KEY);
@@ -3808,6 +3834,7 @@ async function handleForumThreadCreate(event) {
     const json = await res.json();
     state.forumThreads = Array.isArray(json.rows) ? json.rows : [];
     if (state.forumThreads.length) state.activeForumThreadId = state.forumThreads[0].id;
+    state.communityTab = "forum";
     writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
     if (els.forumThreadTitle) els.forumThreadTitle.value = "";
     if (els.forumThreadBody) els.forumThreadBody.value = "";
@@ -4212,6 +4239,14 @@ function bindEvents() {
   els.taxonomyForm?.addEventListener("submit", handleTaxonomySave);
   els.btnEditCategories?.addEventListener("click", () => openCategoryManageModal());
   els.categoryAddForm?.addEventListener("submit", handleCategoryAddSubmit);
+  els.communityTabPosts?.addEventListener("click", () => {
+    state.communityTab = "posts";
+    renderCommunity();
+  });
+  els.communityTabForum?.addEventListener("click", () => {
+    state.communityTab = "forum";
+    renderCommunity();
+  });
   els.btnCommunityEditTaxonomy?.addEventListener("click", () => {
     if (!canManageCategories()) return;
     window.location.hash = "library-lists";
@@ -4410,6 +4445,7 @@ function bindEvents() {
       const id = openCommunityThread.getAttribute("data-open-community-thread");
       setRoute("community");
       closeDetailModal();
+      state.communityTab = "forum";
       state.activeForumThreadId = id;
       renderCommunity();
       requestAnimationFrame(() => {
@@ -4500,6 +4536,7 @@ function bindEvents() {
 
     const forumOpenButton = event.target.closest("[data-open-thread]");
     if (forumOpenButton) {
+      state.communityTab = "forum";
       state.activeForumThreadId = forumOpenButton.getAttribute("data-open-thread");
       renderCommunity();
       requestAnimationFrame(() => {
@@ -4545,6 +4582,7 @@ function bindEvents() {
     if (discussButton) {
       const id = discussButton.getAttribute("data-discuss-resource");
       setRoute("community");
+      state.communityTab = "forum";
       closeDetailModal();
       if (els.forumThreadKind) els.forumThreadKind.value = "resource";
       if (els.forumThreadResource) els.forumThreadResource.value = id || "";
@@ -4629,6 +4667,7 @@ function bindEvents() {
         if (thread) {
           state.forumThreads = state.forumThreads.map((item) => (item.id === thread.id ? thread : item));
           state.activeForumThreadId = thread.id;
+          state.communityTab = "forum";
           writeTimedCache(COMMUNITY_CACHE_KEY, { posts: state.communityPosts, threads: state.forumThreads });
           renderCommunity();
         }
