@@ -6,6 +6,7 @@ import { MessagesModule } from "./messages/messages.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { ResourcesModule } from "./resources/resources.module";
+import { CategoriesModule } from "./categories/categories.module";
 import { SiteModule } from "./site/site.module";
 import { UsersModule } from "./users/users.module";
 
@@ -18,6 +19,7 @@ import { UsersModule } from "./users/users.module";
     MessagesModule,
     NotificationsModule,
     CommunityModule,
+    CategoriesModule,
     SiteModule,
   ],
 })

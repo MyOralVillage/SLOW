@@ -60,6 +60,7 @@ model User {
   communityPosts  CommunityPost[]
   forumThreads    ForumThread[]
   forumReplies    ForumReply[]
+  categoriesCreated Category[] @relation("CategoryCreator")
 
   @@index([role])
   @@index([status])
@@ -266,4 +267,25 @@ model SiteConfig {
   id            String   @id
   taxonomy_json Json
   updated_at    DateTime @updatedAt
+}
+
+enum CategoryGroup {
+  main
+  cross_cutting
+}
+
+/// Editable library categories (main + cross-cutting); drives home tiles and resource fields.
+model Category {
+  id         String         @id @default(uuid())
+  name       String
+  slug       String         @unique
+  group_type CategoryGroup
+  created_by String?
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+
+  creator User? @relation("CategoryCreator", fields: [created_by], references: [id], onDelete: SetNull)
+
+  @@unique([group_type, name])
+  @@index([group_type])
 }

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 
+import { CategoriesService } from "../categories/categories.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { DEFAULT_SITE_TAXONOMY, type SiteTaxonomy } from "./default-taxonomy";
 import type { UpdateTaxonomyDto } from "./dto/update-taxonomy.dto";
@@ -27,18 +28,22 @@ function dedupeTrimmed(values: string[]): string[] {
 
 @Injectable()
 export class SiteService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categories: CategoriesService,
+  ) {}
 
   async getTaxonomy(): Promise<SiteTaxonomy> {
     const row = await this.prisma.siteConfig.findUnique({ where: { id: "default" } });
     const stored = row?.taxonomy_json;
-    if (!stored || typeof stored !== "object") {
-      return this.mergeWithDefaults({});
-    }
-    return this.mergeWithDefaults(stored as Record<string, unknown>);
+    const merged =
+      !stored || typeof stored !== "object"
+        ? this.mergeWithDefaults({})
+        : this.mergeWithDefaults(stored as Record<string, unknown>);
+    return await this.applyCategoriesFromDatabase(merged);
   }
 
-  async updateTaxonomy(dto: UpdateTaxonomyDto): Promise<SiteTaxonomy> {
+  async updateTaxonomy(dto: UpdateTaxonomyDto, createdByUserId: string | null): Promise<SiteTaxonomy> {
     const normalized: SiteTaxonomy = {
       countries: dedupeTrimmed(dto.countries),
       mainCategories: dedupeTrimmed(dto.mainCategories),
@@ -59,6 +64,12 @@ export class SiteService {
       create: { id: "default", taxonomy_json: normalized },
       update: { taxonomy_json: normalized },
     });
+
+    await this.categories.replaceAllFromArrays(
+      normalized.mainCategories,
+      normalized.crossCuttingCategories,
+      createdByUserId,
+    );
 
     return normalized;
   }
@@ -82,5 +93,17 @@ export class SiteService {
     }
 
     return out;
+  }
+
+  /** When categories exist in the DB, main/cross-cutting lists come from there (single source of truth). */
+  private async applyCategoriesFromDatabase(base: SiteTaxonomy): Promise<SiteTaxonomy> {
+    const n = await this.prisma.category.count();
+    if (n === 0) return base;
+    const { mainCategories, crossCuttingCategories } = await this.categories.getNamesForTaxonomy();
+    return {
+      ...base,
+      mainCategories: mainCategories.length ? mainCategories : base.mainCategories,
+      crossCuttingCategories: crossCuttingCategories.length ? crossCuttingCategories : base.crossCuttingCategories,
+    };
   }
 }

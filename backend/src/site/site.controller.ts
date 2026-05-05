@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Put, Req, UseGuards } from "@nestjs/common";
+import type { Request } from "express";
 
 import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
@@ -18,7 +19,11 @@ export class SiteController {
   @Put("taxonomy")
   @UseGuards(SessionAuthGuard, PermissionGuard)
   @RequirePermission("manage_categories")
-  async updateTaxonomy(@Body() body: UpdateTaxonomyDto) {
-    return await this.site.updateTaxonomy(body);
+  async updateTaxonomy(
+    @Req() req: Request & { authUser?: { id: string } },
+    @Body() body: UpdateTaxonomyDto,
+  ) {
+    const userId = req.authUser?.id || null;
+    return await this.site.updateTaxonomy(body, userId);
   }
 }

@@ -160,8 +160,6 @@ const state = {
   communityLoading: false,
   communityPromise: null,
   activeForumThreadId: null,
-  /** @type {"posts" | "forum"} */
-  communityTab: "posts",
 };
 
 const els = {
@@ -190,6 +188,13 @@ const els = {
   btnRefreshLibrary: document.getElementById("btn-refresh-library"),
   browseStatus: document.getElementById("browse-status"),
   resourceGrid: document.getElementById("resource-grid"),
+  btnEditCategories: document.getElementById("btn-edit-categories"),
+  categoryManageModal: document.getElementById("category-manage-modal"),
+  categoryManageList: document.getElementById("category-manage-list"),
+  categoryAddForm: document.getElementById("category-add-form"),
+  categoryAddName: document.getElementById("category-add-name"),
+  categoryAddGroup: document.getElementById("category-add-group"),
+  categoryManageStatus: document.getElementById("category-manage-status"),
   routePanels: Array.from(document.querySelectorAll("[data-route-panel]")),
   bottomNavButtons: Array.from(document.querySelectorAll(".bottom-nav-btn")),
   messagesList: document.getElementById("messages-list"),
@@ -198,10 +203,8 @@ const els = {
   btnNotificationsReadAll: document.getElementById("btn-notifications-read-all"),
   notificationsBadge: document.getElementById("notifications-badge"),
   communityStatus: document.getElementById("community-status"),
-  communityTabPosts: document.getElementById("tab-community-posts"),
-  communityTabForum: document.getElementById("tab-community-forum"),
-  communityPanelPosts: document.getElementById("community-tab-posts"),
-  communityPanelForum: document.getElementById("community-tab-forum"),
+  communityAdminTools: document.getElementById("community-admin-tools"),
+  btnCommunityEditTaxonomy: document.getElementById("btn-community-edit-taxonomy"),
   communityPostForm: document.getElementById("community-post-form"),
   communityPostBody: document.getElementById("community-post-body"),
   communityPostResource: document.getElementById("community-post-resource"),
@@ -869,20 +872,6 @@ function forumThreadListCardHtml(thread) {
       </div>
     </article>
   `;
-}
-
-function updateCommunityTabUi() {
-  const forum = state.communityTab === "forum";
-  if (els.communityTabPosts) {
-    els.communityTabPosts.classList.toggle("is-active", !forum);
-    els.communityTabPosts.setAttribute("aria-selected", forum ? "false" : "true");
-  }
-  if (els.communityTabForum) {
-    els.communityTabForum.classList.toggle("is-active", forum);
-    els.communityTabForum.setAttribute("aria-selected", forum ? "true" : "false");
-  }
-  if (els.communityPanelPosts) els.communityPanelPosts.hidden = forum;
-  if (els.communityPanelForum) els.communityPanelForum.hidden = !forum;
 }
 
 function renderMessageSearchResults(target, rows, query, mode = "pick") {
@@ -1812,11 +1801,25 @@ function notificationIcon(type) {
 }
 
 function userPermissions(user = state.user) {
-  return Array.isArray(user?.permissions) ? user.permissions : [];
+  if (!user) return [];
+  const raw = user.permissions;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw;
+  }
+  const role = user.role;
+  if (role && ROLE_PERMISSIONS[role]) {
+    return [...ROLE_PERMISSIONS[role]];
+  }
+  return Array.isArray(raw) ? raw : [];
 }
 
 function hasPermission(permission, user = state.user) {
   return userPermissions(user).includes(permission);
+}
+
+/** Admin/owner library category management (matches backend `manage_categories`). */
+function canManageCategories(user = state.user) {
+  return Boolean(user && hasPermission("manage_categories", user));
 }
 
 async function loadConfig() {
@@ -1874,7 +1877,7 @@ async function loadTaxonomy() {
     if (!res.ok) return;
     const data = await res.json();
     applyTaxonomyPayload(data);
-    if (hasPermission("manage_categories")) syncTaxonomyEditorFromMetadata();
+    if (canManageCategories()) syncTaxonomyEditorFromMetadata();
   } catch {
     /* keep bundled metadata.js defaults */
   }
@@ -1882,7 +1885,7 @@ async function loadTaxonomy() {
 
 async function handleTaxonomySave(event) {
   event.preventDefault();
-  if (!hasPermission("manage_categories")) return;
+  if (!canManageCategories()) return;
   const payload = {
     countries: parseTaxonomyLines(els.taxonomyCountries?.value),
     mainCategories: parseTaxonomyLines(els.taxonomyMainCategories?.value),
@@ -1923,6 +1926,84 @@ async function handleTaxonomySave(event) {
     showToast(error.message || "Could not save", false);
   } finally {
     setButtonBusy(els.btnTaxonomySave, false);
+  }
+}
+
+async function refreshTaxonomyUiAfterCategoryChange() {
+  await loadTaxonomy();
+  refreshTaxonomyDependentUi();
+  if (canManageCategories()) syncTaxonomyEditorFromMetadata();
+}
+
+function openCategoryManageModal() {
+  if (!canManageCategories()) return;
+  if (els.categoryManageModal) els.categoryManageModal.hidden = false;
+  void renderCategoryManageList();
+}
+
+function closeCategoryManageModal() {
+  if (els.categoryManageModal) els.categoryManageModal.hidden = true;
+  if (els.categoryManageStatus) els.categoryManageStatus.textContent = "";
+}
+
+async function renderCategoryManageList() {
+  if (!els.categoryManageList) return;
+  if (els.categoryManageStatus) showStatus(els.categoryManageStatus, "Loading categories…", true);
+  try {
+    const res = await apiFetch("/categories", { timeoutMs: 12000, clearSessionOnAuthFailure: false });
+    if (!res.ok) throw new Error(await errorText(res, "Could not load categories"));
+    const json = await res.json();
+    const rows = Array.isArray(json.rows) ? json.rows : [];
+    els.categoryManageList.innerHTML = rows.length
+      ? rows
+          .map((row) => {
+            const g = row.group_type === "cross_cutting" ? "Cross-cutting" : "Main";
+            return `
+          <div class="category-manage-row">
+            <div class="category-manage-row-main">
+              <span class="category-manage-name-text">${escapeHtml(row.name)}</span>
+              <span class="tag">${escapeHtml(g)}</span>
+            </div>
+            <div class="category-manage-actions">
+              <button type="button" class="secondary-btn" data-category-edit="${escapeHtml(row.id)}" data-category-name="${escapeHtml(row.name)}">Edit</button>
+              <button type="button" class="secondary-btn" data-category-delete="${escapeHtml(row.id)}" data-category-name="${escapeHtml(row.name)}">Delete</button>
+            </div>
+          </div>`;
+          })
+          .join("")
+      : `<div class="simple-item"><span>No categories returned.</span></div>`;
+    if (els.categoryManageStatus) showStatus(els.categoryManageStatus, `${rows.length} categories`, true);
+  } catch (error) {
+    if (els.categoryManageStatus) showStatus(els.categoryManageStatus, error.message || "Could not load categories", false);
+    els.categoryManageList.innerHTML = `<div class="simple-item"><span>Could not load categories.</span></div>`;
+  }
+}
+
+async function handleCategoryAddSubmit(event) {
+  event.preventDefault();
+  if (!canManageCategories()) return;
+  const name = els.categoryAddName?.value.trim() || "";
+  const group_type = els.categoryAddGroup?.value === "cross_cutting" ? "cross_cutting" : "main";
+  if (!name) {
+    showStatus(els.categoryManageStatus, "Enter a category name.", false);
+    return;
+  }
+  if (els.categoryManageStatus) showStatus(els.categoryManageStatus, "Adding…", true);
+  try {
+    const res = await apiFetch("/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, group_type }),
+      timeoutMs: 15000,
+    });
+    if (!res.ok) throw new Error(await errorText(res, "Could not add category"));
+    if (els.categoryAddName) els.categoryAddName.value = "";
+    showToast("Category added", true);
+    await refreshTaxonomyUiAfterCategoryChange();
+    await renderCategoryManageList();
+  } catch (error) {
+    if (els.categoryManageStatus) showStatus(els.categoryManageStatus, error.message || "Could not add", false);
+    showToast(error.message || "Could not add category", false);
   }
 }
 
@@ -2723,7 +2804,7 @@ function renderForumThreadDetail() {
   const opRole = thread.user?.role || "member";
   els.forumThreadDetail.innerHTML = `
     <article class="forum-thread-detail-card">
-      <div class="forum-thread-detail-top">
+      <header class="forum-detail-card-header">
         <div class="forum-thread-detail-intro">
           <div class="tag-row forum-detail-tags">
             <span class="tag">${escapeHtml(forumKindLabel(thread.thread_kind))}</span>
@@ -2743,8 +2824,12 @@ function renderForumThreadDetail() {
             </div>
           </div>
         </div>
-        ${canDeleteForumThread(thread) ? `<button type="button" class="secondary-btn forum-detail-delete" data-delete-thread="${escapeHtml(thread.id)}">Delete</button>` : ""}
-      </div>
+        ${
+          canDeleteForumThread(thread)
+            ? `<div class="forum-detail-delete-wrap"><button type="button" class="secondary-btn forum-detail-delete" data-delete-thread="${escapeHtml(thread.id)}">Delete thread</button></div>`
+            : ""
+        }
+      </header>
       ${thread.resource ? `<button type="button" class="simple-item related-resource-item linked-resource-chip forum-linked-resource" data-open-detail="${escapeHtml(thread.resource.id)}"><strong>${escapeHtml(thread.resource.title)}</strong><span>${escapeHtml([thread.resource.category, thread.resource.country].filter(Boolean).join(" · "))}</span></button>` : ""}
       <div class="forum-detail-original-body forum-thread-body-copy">${escapeHtml(thread.body || "")}</div>
     </article>
@@ -2793,8 +2878,8 @@ function renderForumThreadDetail() {
 }
 
 function renderCommunity() {
-  updateCommunityTabUi();
   renderCommunityComposeAvatar();
+  if (els.communityAdminTools) els.communityAdminTools.hidden = !canManageCategories();
   if (els.communityPostForm) els.communityPostForm.hidden = !canCreateCommunityPost();
   if (els.forumThreadForm) els.forumThreadForm.hidden = !canCreateForumThread();
   renderCommunityResourceOptions();
@@ -2909,7 +2994,6 @@ function applyRoute(route) {
     void loadNotifications(true);
     startNotificationsPolling();
   } else if (next === "community") {
-    if (state.activeForumThreadId) state.communityTab = "forum";
     void loadCommunity(true);
     if (state.user) startNotificationsPolling();
   } else {
@@ -2934,7 +3018,7 @@ function updateTopButtons() {
   }
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
-  if (els.btnHomeUpload) els.btnHomeUpload.hidden = !canUpload;
+  if (els.btnEditCategories) els.btnEditCategories.hidden = !canManageCategories();
   if (els.topUserSearch) els.topUserSearch.disabled = !canViewUserProfiles();
   if (els.btnTopNotifications) els.btnTopNotifications.hidden = !state.user;
   if (els.btnTopProfile) {
@@ -3033,7 +3117,7 @@ function renderSignedInView(currentUser, profile) {
   els.profileSocials.value = currentUser.social_handles || profile?.socials || "";
 
   if (els.taxonomyEditor) {
-    const showTax = hasPermission("manage_categories");
+    const showTax = canManageCategories();
     els.taxonomyEditor.hidden = !showTax;
     if (showTax) syncTaxonomyEditorFromMetadata();
   }
@@ -3056,6 +3140,13 @@ function renderProfilePage() {
   }
 
   renderSignedInView(currentUser, profile);
+  if (canManageCategories() && window.location.hash === "#library-lists" && els.taxonomyEditor && !els.taxonomyEditor.hidden) {
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        els.taxonomyEditor?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 120);
+    });
+  }
 }
 
 async function restoreSession() {
@@ -4119,13 +4210,12 @@ function bindEvents() {
   els.signupForm?.addEventListener("submit", handleSignUp);
   els.profileForm?.addEventListener("submit", handleProfileSave);
   els.taxonomyForm?.addEventListener("submit", handleTaxonomySave);
-  els.communityTabPosts?.addEventListener("click", () => {
-    state.communityTab = "posts";
-    renderCommunity();
-  });
-  els.communityTabForum?.addEventListener("click", () => {
-    state.communityTab = "forum";
-    renderCommunity();
+  els.btnEditCategories?.addEventListener("click", () => openCategoryManageModal());
+  els.categoryAddForm?.addEventListener("submit", handleCategoryAddSubmit);
+  els.btnCommunityEditTaxonomy?.addEventListener("click", () => {
+    if (!canManageCategories()) return;
+    window.location.hash = "library-lists";
+    setRoute("profile");
   });
   els.btnSignout?.addEventListener("click", handleSignOut);
   els.searchForm?.addEventListener("submit", (event) => {
@@ -4154,7 +4244,58 @@ function bindEvents() {
     if (!event.target.closest(".top-user-search-shell")) {
       renderTopUserSearchResults("");
     }
-      const categoryButton = event.target.closest("[data-category-value]");
+    if (event.target.closest("[data-close-category-modal]")) {
+      closeCategoryManageModal();
+      return;
+    }
+    const catEdit = event.target.closest("[data-category-edit]");
+    if (catEdit && canManageCategories()) {
+      const id = catEdit.getAttribute("data-category-edit") || "";
+      const current = catEdit.getAttribute("data-category-name") || "";
+      const next = window.prompt("Rename category", current);
+      if (next === null) return;
+      const trimmed = String(next).trim();
+      if (!trimmed || trimmed === current) return;
+      void (async () => {
+        try {
+          const res = await apiFetch(`/categories/${encodeURIComponent(id)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: trimmed }),
+            timeoutMs: 15000,
+          });
+          if (!res.ok) throw new Error(await errorText(res, "Could not update category"));
+          showToast("Category updated", true);
+          await refreshTaxonomyUiAfterCategoryChange();
+          await renderCategoryManageList();
+        } catch (error) {
+          showToast(error.message || "Could not update category", false);
+        }
+      })();
+      return;
+    }
+    const catDel = event.target.closest("[data-category-delete]");
+    if (catDel && canManageCategories()) {
+      const id = catDel.getAttribute("data-category-delete") || "";
+      const label = catDel.getAttribute("data-category-name") || "this category";
+      if (!window.confirm(`Delete “${label}”?`)) return;
+      void (async () => {
+        try {
+          const res = await apiFetch(`/categories/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            timeoutMs: 15000,
+          });
+          if (!res.ok) throw new Error(await errorText(res, "Could not delete category"));
+          showToast("Category removed", true);
+          await refreshTaxonomyUiAfterCategoryChange();
+          await renderCategoryManageList();
+        } catch (error) {
+          showToast(error.message || "Could not delete category", false);
+        }
+      })();
+      return;
+    }
+    const categoryButton = event.target.closest("[data-category-value]");
     if (categoryButton) {
       document.querySelectorAll(".category-tile.is-selected").forEach((t) => t.classList.remove("is-selected"));
       categoryButton.classList.add("is-selected");
@@ -4269,9 +4410,12 @@ function bindEvents() {
       const id = openCommunityThread.getAttribute("data-open-community-thread");
       setRoute("community");
       closeDetailModal();
-      state.communityTab = "forum";
       state.activeForumThreadId = id;
       renderCommunity();
+      requestAnimationFrame(() => {
+        document.getElementById("community-column-forum")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        els.forumThreadDetail?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
       return;
     }
 
@@ -4356,7 +4500,6 @@ function bindEvents() {
 
     const forumOpenButton = event.target.closest("[data-open-thread]");
     if (forumOpenButton) {
-      state.communityTab = "forum";
       state.activeForumThreadId = forumOpenButton.getAttribute("data-open-thread");
       renderCommunity();
       requestAnimationFrame(() => {
@@ -4411,6 +4554,7 @@ function bindEvents() {
       }
       syncForumThreadFormFocus();
       els.forumThreadBody?.focus();
+      document.getElementById("community-column-forum")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
 
