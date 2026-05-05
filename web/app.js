@@ -105,6 +105,12 @@ function roleLabel(role) {
   return labels[role] || role;
 }
 
+/** Map API role string onto keys in ROLE_PERMISSIONS (handles casing / whitespace). */
+function normalizeRoleKey(roleRaw) {
+  const key = String(roleRaw ?? "none").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(ROLE_PERMISSIONS, key) ? key : "none";
+}
+
 const state = {
   route: "home",
   backendReachable: false,
@@ -1808,15 +1814,14 @@ function notificationIcon(type) {
 
 function userPermissions(user = state.user) {
   if (!user) return [];
-  const raw = user.permissions;
-  if (Array.isArray(raw) && raw.length > 0) {
-    return raw;
+  const roleKey = normalizeRoleKey(user.role);
+  const fromRole = ROLE_PERMISSIONS[roleKey] || ROLE_PERMISSIONS.none;
+  const raw = Array.isArray(user.permissions) ? user.permissions.filter(Boolean).map(String) : [];
+  const set = new Set(fromRole);
+  for (const p of raw) {
+    set.add(p);
   }
-  const role = user.role;
-  if (role && ROLE_PERMISSIONS[role]) {
-    return [...ROLE_PERMISSIONS[role]];
-  }
-  return Array.isArray(raw) ? raw : [];
+  return [...set];
 }
 
 function hasPermission(permission, user = state.user) {
@@ -1827,8 +1832,8 @@ function hasPermission(permission, user = state.user) {
 function canManageCategories(user = state.user) {
   if (!user) return false;
   if (hasPermission("manage_categories", user)) return true;
-  const r = String(user.role || "").toLowerCase();
-  return r === "owner" || r === "admin";
+  const roleKey = normalizeRoleKey(user.role);
+  return roleKey === "owner" || roleKey === "admin";
 }
 
 async function loadConfig() {
@@ -3011,6 +3016,7 @@ function applyRoute(route) {
   if (next === "resources") {
     document.getElementById("resources-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  if (panelRoute === "home") updateTopButtons();
   if (next === "messages" && state.user) {
     void loadMessages();
     startNotificationsPolling();
@@ -3043,7 +3049,10 @@ function updateTopButtons() {
   }
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
-  if (els.btnEditCategories) els.btnEditCategories.hidden = !canManageCategories();
+  if (els.btnEditCategories) {
+    els.btnEditCategories.hidden = !canManageCategories();
+    els.btnEditCategories.removeAttribute("disabled");
+  }
   if (els.topUserSearch) els.topUserSearch.disabled = !canViewUserProfiles();
   if (els.btnTopNotifications) els.btnTopNotifications.hidden = !state.user;
   if (els.btnTopProfile) {
