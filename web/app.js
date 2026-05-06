@@ -1848,13 +1848,7 @@ function hasPermission(permission, user = state.user) {
 
 /** Library category management UI: only `owner` / `admin` roles (matches backend OwnerOrAdminGuard). */
 function canManageCategories(user = state.user) {
-  if (!user) return false;
-  const raw = user.role;
-  const r = String(raw == null ? "" : typeof raw === "object" ? (raw.name ?? raw.key ?? raw.slug ?? "") : raw)
-    .trim()
-    .toLowerCase()
-    .replace(/[\u200b-\u200d\ufeff]/g, "");
-  return ["owner", "admin"].includes(r);
+  return ["owner", "admin"].includes(normalizeRoleKey(normalizeUserRoleRaw(user)));
 }
 
 async function loadConfig() {
@@ -1888,6 +1882,18 @@ function refreshTaxonomyDependentUi() {
   renderCategoryTiles();
   renderAdmin();
   scheduleApplySearch();
+}
+
+function renderCategoryManageVisibility() {
+  if (!els.btnEditCategories) return;
+  const showEditCategories = Boolean(!state.authLoading && canManageCategories(state.user));
+  els.btnEditCategories.hidden = !showEditCategories;
+  els.btnEditCategories.disabled = !showEditCategories;
+  els.btnEditCategories.setAttribute("aria-hidden", showEditCategories ? "false" : "true");
+  if (!loggedCategoryAuthGate && !state.authLoading) {
+    loggedCategoryAuthGate = true;
+    console.info("currentUser role", state.user?.role, "canManageCategories", canManageCategories(state.user));
+  }
 }
 
 function parseTaxonomyLines(text) {
@@ -2183,7 +2189,7 @@ function initFields() {
   fillSelect(els.signupCountry, metadata.countries, "Choose country");
   fillSelect(els.profileCountry, metadata.countries, "Choose country");
   fillSelect(els.uploadCountry, metadata.countries, "Choose country");
-  fillSelect(els.uploadCategory, [...metadata.mainCategories, ...metadata.crossCuttingCategories], "Choose category");
+  fillSelect(els.uploadCategory, metadata.mainCategories, "Choose category");
   fillSelect(els.uploadType, metadata.types, "Choose type");
   fillSelect(els.uploadProductDetail, metadata.productDetails, "Choose detail");
   fillSelect(els.uploadCrossCutting, metadata.crossCuttingCategories, "Choose cross-cutting");
@@ -3139,16 +3145,7 @@ function updateTopButtons() {
   }
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
-  if (els.btnEditCategories) {
-    const authReady = typeof auth?.isReady === "function" ? auth.isReady() : !state.authLoading;
-    const showEditCategories = Boolean(authReady && canManageCategories());
-    els.btnEditCategories.hidden = !showEditCategories;
-    els.btnEditCategories.removeAttribute("disabled");
-    if (!loggedCategoryAuthGate && authReady && state.user) {
-      loggedCategoryAuthGate = true;
-      console.info("currentUser role", state.user.role, "canManageCategories", canManageCategories(state.user));
-    }
-  }
+  renderCategoryManageVisibility();
   if (els.topUserSearch) els.topUserSearch.disabled = !canViewUserProfiles();
   if (els.btnTopNotifications) els.btnTopNotifications.hidden = !state.user;
   if (els.btnTopProfile) {
@@ -4443,11 +4440,13 @@ function bindEvents() {
       const value = categoryButton.getAttribute("data-category-value") || "";
       if (kind === "main") {
         els.searchQuery.value = "";
+        if (els.filterCrossCutting) els.filterCrossCutting.value = "";
         if (els.filterCategory) els.filterCategory.value = value;
         state.filteredResources = filterResources(
           state.resources.filter((resource) => resource.category === value),
         );
       } else {
+        if (els.filterCategory) els.filterCategory.value = "";
         els.filterCrossCutting.value = value;
         state.filteredResources = filterResources(state.resources);
       }
@@ -4787,6 +4786,7 @@ function bindEvents() {
         }
       });
   });
+}
 
   window.addEventListener("hashchange", () => applyRoute(routeFromHash()));
   window.addEventListener("beforeunload", clearUploadPreview);

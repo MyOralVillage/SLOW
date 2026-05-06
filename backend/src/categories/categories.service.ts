@@ -135,37 +135,59 @@ export class CategoriesService implements OnModuleInit {
     const row = await this.prisma.category.findUnique({ where: { id } });
     if (!row) throw new NotFoundException("Category not found.");
 
-    const newName = dto.name !== undefined ? String(dto.name).trim() : row.name;
-    if (!newName) throw new BadRequestException("Name is required.");
+    if (dto.name === undefined && dto.group_type === undefined) {
+      return row;
+    }
 
-    if (newName === row.name) {
+    const nextName = dto.name !== undefined ? String(dto.name).trim() : row.name;
+    if (!nextName) throw new BadRequestException("Name is required.");
+
+    let nextGroup = row.group_type;
+    if (dto.group_type !== undefined) {
+      nextGroup = dto.group_type === "cross_cutting" ? CategoryGroup.cross_cutting : CategoryGroup.main;
+    }
+
+    const nameChanging = nextName !== row.name;
+    const groupChanging = nextGroup !== row.group_type;
+
+    if (!nameChanging && !groupChanging) {
       return row;
     }
 
     const dup = await this.prisma.category.findFirst({
       where: {
-        group_type: row.group_type,
-        name: newName,
+        group_type: nextGroup,
+        name: nextName,
         NOT: { id },
       },
     });
     if (dup) throw new BadRequestException("A category with this name already exists in that group.");
 
     await this.prisma.$transaction(async (tx) => {
-      if (row.group_type === CategoryGroup.main) {
-        await tx.resource.updateMany({
-          where: { category: row.name },
-          data: { category: newName },
-        });
-      } else {
-        await tx.resource.updateMany({
-          where: { cross_cutting_category: row.name },
-          data: { cross_cutting_category: newName },
-        });
+      if (nameChanging) {
+        if (row.group_type === CategoryGroup.main) {
+          await tx.resource.updateMany({
+            where: { category: row.name },
+            data: { category: nextName },
+          });
+        } else {
+          await tx.resource.updateMany({
+            where: { cross_cutting_category: row.name },
+            data: { cross_cutting_category: nextName },
+          });
+        }
+      }
+      const data: { name?: string; slug?: string; group_type?: CategoryGroup } = {};
+      if (nameChanging) {
+        data.name = nextName;
+        data.slug = makeUniqueSlug(nextName);
+      }
+      if (groupChanging) {
+        data.group_type = nextGroup;
       }
       await tx.category.update({
         where: { id },
-        data: { name: newName, slug: makeUniqueSlug(newName) },
+        data,
       });
     });
 

@@ -362,6 +362,8 @@ a.app-home-link,
 .category-edit-launch {
   flex-shrink: 0;
   font-weight: 650;
+  min-height: 42px;
+  padding-inline: 14px;
 }
 
 .category-manage-section-title {

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class UpdateCategoryDto {
   @IsOptional()
@@ -6,4 +6,9 @@ export class UpdateCategoryDto {
   @MinLength(1)
   @MaxLength(120)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(["main", "cross_cutting"])
+  group_type?: "main" | "cross_cutting";
 }
