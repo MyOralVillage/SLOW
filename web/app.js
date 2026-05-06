@@ -27,6 +27,9 @@ const metadata = window.SLOW_UPLOAD_OPTIONS || {
   sampleResources: [],
 };
 
+/** One-shot console trace for category edit visibility (role + gate). */
+let loggedCategoryAuthGate = false;
+
 const auth = window.SlowAuth;
 
 const ROLE_OPTIONS = ["owner", "admin", "vip", "specialist", "member", "none"];
@@ -105,9 +108,21 @@ function roleLabel(role) {
   return labels[role] || role;
 }
 
+/** Raw role string from API (handles `role: "owner"` or nested objects). */
+function normalizeUserRoleRaw(user) {
+  if (!user) return "";
+  const r = user.role;
+  if (r == null) return String(user.roleKey ?? user.userRole ?? "").trim();
+  if (typeof r === "object") return String(r.name ?? r.key ?? r.slug ?? "").trim();
+  return String(r).trim();
+}
+
 /** Map API role string onto keys in ROLE_PERMISSIONS (handles casing / whitespace). */
 function normalizeRoleKey(roleRaw) {
-  const key = String(roleRaw ?? "none").trim().toLowerCase();
+  const key = String(roleRaw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\u200b-\u200d\ufeff]/g, "");
   return Object.prototype.hasOwnProperty.call(ROLE_PERMISSIONS, key) ? key : "none";
 }
 
@@ -168,6 +183,8 @@ const state = {
   activeForumThreadId: null,
   /** @type {"posts" | "forum"} */
   communityTab: "posts",
+  /** From GET /categories when backend has seeded rows (`null` = not loaded yet). */
+  categoriesCatalog: null,
 };
 
 const els = {
@@ -198,7 +215,8 @@ const els = {
   resourceGrid: document.getElementById("resource-grid"),
   btnEditCategories: document.getElementById("btn-edit-categories"),
   categoryManageModal: document.getElementById("category-manage-modal"),
-  categoryManageList: document.getElementById("category-manage-list"),
+  categoryManageMainList: document.getElementById("category-manage-main-list"),
+  categoryManageCrossList: document.getElementById("category-manage-cross-list"),
   categoryAddForm: document.getElementById("category-add-form"),
   categoryAddName: document.getElementById("category-add-name"),
   categoryAddGroup: document.getElementById("category-add-group"),
@@ -1814,13 +1832,13 @@ function notificationIcon(type) {
 
 function userPermissions(user = state.user) {
   if (!user) return [];
-  const roleKey = normalizeRoleKey(user.role);
+  const roleKey = normalizeRoleKey(normalizeUserRoleRaw(user));
   const fromRole = ROLE_PERMISSIONS[roleKey] || ROLE_PERMISSIONS.none;
-  const raw = Array.isArray(user.permissions) ? user.permissions.filter(Boolean).map(String) : [];
+  const rawPerms = Array.isArray(user.permissions) ? user.permissions.filter(Boolean).map(String) : [];
+  const rawGrants = Array.isArray(user.permission_grants) ? user.permission_grants.filter(Boolean).map(String) : [];
   const set = new Set(fromRole);
-  for (const p of raw) {
-    set.add(p);
-  }
+  for (const p of rawPerms) set.add(p);
+  for (const p of rawGrants) set.add(p);
   return [...set];
 }
 
@@ -1828,22 +1846,30 @@ function hasPermission(permission, user = state.user) {
   return userPermissions(user).includes(permission);
 }
 
-/** Admin/owner library category management (matches backend `manage_categories`). */
+/** Library category management UI: only `owner` / `admin` roles (matches backend OwnerOrAdminGuard). */
 function canManageCategories(user = state.user) {
   if (!user) return false;
-  if (hasPermission("manage_categories", user)) return true;
-  const roleKey = normalizeRoleKey(user.role);
-  return roleKey === "owner" || roleKey === "admin";
+  const raw = user.role;
+  const r = String(raw == null ? "" : typeof raw === "object" ? (raw.name ?? raw.key ?? raw.slug ?? "") : raw)
+    .trim()
+    .toLowerCase()
+    .replace(/[\u200b-\u200d\ufeff]/g, "");
+  return ["owner", "admin"].includes(r);
 }
 
 async function loadConfig() {
-  if (!["127.0.0.1", "localhost"].includes(location.hostname)) return;
-  try {
-    const res = await fetchWithTimeout("config.local.json", { cache: "no-store", timeoutMs: 3000 });
-    if (res.ok) Object.assign(config, await res.json());
-  } catch {
-    /* optional */
-  }
+  /** Optional JSON next to index.html overrides `backendBaseUrl` etc. (`config.site.json`: any hosting; `config.local.json`: localhost preferred). */
+  const mergeOptional = async (filename) => {
+    try {
+      const res = await fetchWithTimeout(filename, { cache: "no-store", timeoutMs: 3000 });
+      if (res.ok) Object.assign(config, await res.json());
+    } catch {
+      /* file missing — normal */
+    }
+  };
+  const isLocalDev = ["127.0.0.1", "localhost"].includes(location.hostname);
+  if (isLocalDev) await mergeOptional("config.local.json");
+  await mergeOptional("config.site.json");
 }
 
 const TAXONOMY_KEYS = ["countries", "mainCategories", "crossCuttingCategories", "productDetails", "institutions", "types"];
@@ -1885,6 +1911,68 @@ function syncTaxonomyEditorFromMetadata() {
   els.taxonomyTypes.value = taxonomyLinesFromMetadata(metadata.types);
 }
 
+/** Normalize GET /categories body variants (`rows`, nested `data`, legacy keys). */
+function normalizedCategoryCatalogRows(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  let raw = payload.rows ?? payload.categories ?? payload.items;
+  const data = payload.data;
+  if (!Array.isArray(raw) && data && typeof data === "object" && !Array.isArray(data)) {
+    raw = data.rows ?? data.categories ?? data.items;
+  }
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray(payload)
+      ? payload
+      : [];
+
+  /** @type {{ id: string; name: string; group_type: string }[]} */
+  const out = [];
+  for (const r of list) {
+    if (!r || typeof r !== "object") continue;
+    const name = String(r.name || "").trim();
+    if (!name) continue;
+    const gt = String(r.group_type || r.group || r.groupType || "").toLowerCase().replace(/\s+/g, "_");
+    const group_type = gt.includes("cross") ? "cross_cutting" : "main";
+    const id = r.id != null && String(r.id).trim() ? String(r.id).trim() : "";
+    out.push({ id, name, group_type });
+  }
+  return out;
+}
+
+function syncMetadataCategoriesFromCatalog() {
+  const rows = Array.isArray(state.categoriesCatalog) ? state.categoriesCatalog : [];
+  if (!rows.length) return;
+  const main = rows
+    .filter((r) => String(r.group_type || "") === "main")
+    .map((r) => String(r.name || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  const cross = rows
+    .filter((r) => String(r.group_type || "") === "cross_cutting")
+    .map((r) => String(r.name || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  metadata.mainCategories = main;
+  metadata.crossCuttingCategories = cross;
+}
+
+async function refreshCategoriesCatalog() {
+  try {
+    const res = await apiFetch("/categories", { timeoutMs: 12000, clearSessionOnAuthFailure: false });
+    if (!res.ok) {
+      console.error("[categories] GET /categories failed:", res.status, res.statusText);
+      state.categoriesCatalog = [];
+      return;
+    }
+    const json = await res.json().catch(() => ({}));
+    state.categoriesCatalog = normalizedCategoryCatalogRows(json);
+    syncMetadataCategoriesFromCatalog();
+  } catch (err) {
+    console.error("[categories] GET /categories error:", err);
+    state.categoriesCatalog = [];
+  }
+}
+
 async function loadTaxonomy() {
   try {
     const res = await fetchWithTimeout(`${apiBase()}/site/taxonomy`, { cache: "no-store", timeoutMs: 10000 });
@@ -1894,6 +1982,8 @@ async function loadTaxonomy() {
     if (canManageCategories()) syncTaxonomyEditorFromMetadata();
   } catch {
     /* keep bundled metadata.js defaults */
+  } finally {
+    await refreshCategoriesCatalog();
   }
 }
 
@@ -1946,6 +2036,7 @@ async function handleTaxonomySave(event) {
 async function refreshTaxonomyUiAfterCategoryChange() {
   await loadTaxonomy();
   refreshTaxonomyDependentUi();
+  renderCategoryTiles();
   if (canManageCategories()) syncTaxonomyEditorFromMetadata();
 }
 
@@ -1961,35 +2052,33 @@ function closeCategoryManageModal() {
 }
 
 async function renderCategoryManageList() {
-  if (!els.categoryManageList) return;
+  if (!els.categoryManageMainList || !els.categoryManageCrossList) return;
   if (els.categoryManageStatus) showStatus(els.categoryManageStatus, "Loading categories…", true);
-  try {
-    const res = await apiFetch("/categories", { timeoutMs: 12000, clearSessionOnAuthFailure: false });
-    if (!res.ok) throw new Error(await errorText(res, "Could not load categories"));
-    const json = await res.json();
-    const rows = Array.isArray(json.rows) ? json.rows : [];
-    els.categoryManageList.innerHTML = rows.length
-      ? rows
-          .map((row) => {
-            const g = row.group_type === "cross_cutting" ? "Cross-cutting" : "Main";
-            return `
+  const emptyRow = `<div class="simple-item"><span>No categories in this section.</span></div>`;
+  const rowHtml = (row) => `
           <div class="category-manage-row">
             <div class="category-manage-row-main">
               <span class="category-manage-name-text">${escapeHtml(row.name)}</span>
-              <span class="tag">${escapeHtml(g)}</span>
             </div>
             <div class="category-manage-actions">
               <button type="button" class="secondary-btn" data-category-edit="${escapeHtml(row.id)}" data-category-name="${escapeHtml(row.name)}">Edit</button>
               <button type="button" class="secondary-btn" data-category-delete="${escapeHtml(row.id)}" data-category-name="${escapeHtml(row.name)}">Delete</button>
             </div>
           </div>`;
-          })
-          .join("")
-      : `<div class="simple-item"><span>No categories returned.</span></div>`;
+  try {
+    const res = await apiFetch("/categories", { timeoutMs: 12000, clearSessionOnAuthFailure: false });
+    if (!res.ok) throw new Error(await errorText(res, "Could not load categories"));
+    const json = await res.json();
+    const rows = normalizedCategoryCatalogRows(json).filter((r) => Boolean(r.id));
+    const mainRows = rows.filter((r) => r.group_type !== "cross_cutting");
+    const crossRows = rows.filter((r) => r.group_type === "cross_cutting");
+    els.categoryManageMainList.innerHTML = mainRows.length ? mainRows.map(rowHtml).join("") : emptyRow;
+    els.categoryManageCrossList.innerHTML = crossRows.length ? crossRows.map(rowHtml).join("") : emptyRow;
     if (els.categoryManageStatus) showStatus(els.categoryManageStatus, `${rows.length} categories`, true);
   } catch (error) {
     if (els.categoryManageStatus) showStatus(els.categoryManageStatus, error.message || "Could not load categories", false);
-    els.categoryManageList.innerHTML = `<div class="simple-item"><span>Could not load categories.</span></div>`;
+    els.categoryManageMainList.innerHTML = `<div class="simple-item"><span>Could not load categories.</span></div>`;
+    els.categoryManageCrossList.innerHTML = "";
   }
 }
 
@@ -2026,7 +2115,7 @@ async function apiFetch(path, options = {}) {
   const headers = new Headers(fetchOptions.headers || {});
   if (state.token) headers.set("Authorization", `Bearer ${state.token}`);
   const res = await fetchWithTimeout(`${apiBase()}${path}`, { ...fetchOptions, headers, timeoutMs });
-  if (clearSessionOnAuthFailure && (res.status === 401 || res.status === 403) && state.token) {
+  if (clearSessionOnAuthFailure && res.status === 401 && state.token) {
     auth.clearSession({
       preservePendingReset: true,
       error: "Your session expired. Please sign in again.",
@@ -2104,23 +2193,24 @@ function initFields() {
   }
 }
 
-function tileButtonHtml(label, kind) {
+function categoryTileHtml(label, kind) {
   const icon = kind === "cross" ? "users" : "folder";
   return `
     <button type="button" class="category-tile" data-category-kind="${escapeHtml(kind)}" data-category-value="${escapeHtml(label)}">
       <span class="category-tile-icon">${iconSvg(icon)}</span>
       <span class="category-tile-copy">${escapeHtml(label)}</span>
-    </button>
-  `;
+    </button>`;
 }
 
 function renderCategoryTiles() {
-  if (els.mainCategoryGrid) {
-    els.mainCategoryGrid.innerHTML = metadata.mainCategories.map((label) => tileButtonHtml(label, "main")).join("");
-  }
-  if (els.crossCategoryGrid) {
-    els.crossCategoryGrid.innerHTML = metadata.crossCuttingCategories.map((label) => tileButtonHtml(label, "cross")).join("");
-  }
+  const mains = Array.isArray(metadata.mainCategories)
+    ? metadata.mainCategories.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  const crosses = Array.isArray(metadata.crossCuttingCategories)
+    ? metadata.crossCuttingCategories.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  if (els.mainCategoryGrid) els.mainCategoryGrid.innerHTML = mains.map((label) => categoryTileHtml(label, "main")).join("");
+  if (els.crossCategoryGrid) els.crossCategoryGrid.innerHTML = crosses.map((label) => categoryTileHtml(label, "cross")).join("");
 }
 
 function colorForText(text) {
@@ -3050,8 +3140,14 @@ function updateTopButtons() {
   const canUpload = hasPermission("upload_resources");
   if (els.btnOpenUpload) els.btnOpenUpload.hidden = !canUpload;
   if (els.btnEditCategories) {
-    els.btnEditCategories.hidden = !canManageCategories();
+    const authReady = typeof auth?.isReady === "function" ? auth.isReady() : !state.authLoading;
+    const showEditCategories = Boolean(authReady && canManageCategories());
+    els.btnEditCategories.hidden = !showEditCategories;
     els.btnEditCategories.removeAttribute("disabled");
+    if (!loggedCategoryAuthGate && authReady && state.user) {
+      loggedCategoryAuthGate = true;
+      console.info("currentUser role", state.user.role, "canManageCategories", canManageCategories(state.user));
+    }
   }
   if (els.topUserSearch) els.topUserSearch.disabled = !canViewUserProfiles();
   if (els.btnTopNotifications) els.btnTopNotifications.hidden = !state.user;
@@ -3125,7 +3221,8 @@ function renderSignedInView(currentUser, profile) {
   setVisible(els.profileEditor, true);
   setVisible(els.btnSignout, true);
   if (els.profileSummary) {
-    els.profileSummary.innerHTML = `${escapeHtml(currentUser.name)} <span class="tag role-tag role-${escapeHtml(currentUser.role)}">${escapeHtml(roleLabel(currentUser.role))}</span>`;
+    const rk = normalizeRoleKey(normalizeUserRoleRaw(currentUser));
+    els.profileSummary.innerHTML = `${escapeHtml(currentUser.name)} <span class="tag role-tag role-${escapeHtml(rk)}">${escapeHtml(roleLabel(rk))}</span>`;
   }
   if (els.profileEmailLine) els.profileEmailLine.textContent = `Email: ${currentUser.email || profile?.email || ""}`;
   if (els.profileJoinedLine) els.profileJoinedLine.textContent = `Joined: ${formatDate(currentUser.created_at)}`;
@@ -4321,8 +4418,7 @@ function bindEvents() {
     const catDel = event.target.closest("[data-category-delete]");
     if (catDel && canManageCategories()) {
       const id = catDel.getAttribute("data-category-delete") || "";
-      const label = catDel.getAttribute("data-category-name") || "this category";
-      if (!window.confirm(`Delete “${label}”?`)) return;
+      if (!window.confirm("Delete this category?")) return;
       void (async () => {
         try {
           const res = await apiFetch(`/categories/${encodeURIComponent(id)}`, {
@@ -4694,13 +4790,21 @@ function bindEvents() {
 
   window.addEventListener("hashchange", () => applyRoute(routeFromHash()));
   window.addEventListener("beforeunload", clearUploadPreview);
-}
 
 async function bootstrap() {
   auth.subscribe((snapshot) => {
     const prevUserId = state.user?.id || "";
     syncAuthState(snapshot);
     updateTopButtons();
+    renderCategoryTiles();
+    if ((state.user?.id || "") !== prevUserId) {
+      void loadTaxonomy().then(() => {
+        refreshTaxonomyDependentUi();
+        syncTaxonomyEditorFromMetadata();
+        renderCategoryTiles();
+        updateTopButtons();
+      });
+    }
     renderProfilePage();
     renderCommunity();
     if (state.user?.id) {
@@ -4720,9 +4824,9 @@ async function bootstrap() {
   updateTopButtons();
   bindEvents();
   processPasswordResetFromQuery();
+  await loadConfig();
   await restoreSession();
   await processEmailVerifyFromQuery();
-  await loadConfig();
   await loadTaxonomy();
   initFields();
   renderCategoryTiles();

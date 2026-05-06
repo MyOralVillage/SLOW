@@ -12,7 +12,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 
-import { PermissionGuard, RequirePermission } from "../auth/guards/permission.guard";
+import { OwnerOrAdminGuard } from "../auth/guards/owner-or-admin.guard";
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
 import { CategoriesService } from "./categories.service";
 import { CreateCategoryDto } from "./dto/create-category.dto";
@@ -30,8 +30,7 @@ export class CategoriesController {
   }
 
   @Post()
-  @UseGuards(SessionAuthGuard, PermissionGuard)
-  @RequirePermission("manage_categories")
+  @UseGuards(SessionAuthGuard, OwnerOrAdminGuard)
   async create(@Req() req: Request & { authUser?: { id: string } }, @Body() body: CreateCategoryDto) {
     const userId = req.authUser?.id;
     if (!userId) throw new UnauthorizedException();
@@ -40,16 +39,14 @@ export class CategoriesController {
   }
 
   @Put(":id")
-  @UseGuards(SessionAuthGuard, PermissionGuard)
-  @RequirePermission("manage_categories")
+  @UseGuards(SessionAuthGuard, OwnerOrAdminGuard)
   async update(@Param("id") id: string, @Body() body: UpdateCategoryDto) {
     const row = await this.categories.update(id, body);
     return { category: row };
   }
 
   @Delete(":id")
-  @UseGuards(SessionAuthGuard, PermissionGuard)
-  @RequirePermission("manage_categories")
+  @UseGuards(SessionAuthGuard, OwnerOrAdminGuard)
   async remove(@Param("id") id: string) {
     await this.categories.remove(id);
     return { ok: true };
