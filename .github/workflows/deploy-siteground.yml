@@ -1,0 +1,45 @@
+name: Deploy SiteGround
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "web/**"
+      - ".github/workflows/deploy-siteground.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: siteground-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SG_SSH_KEY: ${{ secrets.SG_SSH_KEY }}
+          SG_HOST: ${{ secrets.SG_HOST }}
+          SG_PORT: ${{ secrets.SG_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SG_SSH_KEY" > ~/.ssh/siteground
+          chmod 600 ~/.ssh/siteground
+          ssh-keyscan -p "$SG_PORT" "$SG_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy web/ to SiteGround
+        env:
+          SG_HOST: ${{ secrets.SG_HOST }}
+          SG_PORT: ${{ secrets.SG_PORT }}
+          SG_TARGET_PATH: ${{ secrets.SG_TARGET_PATH }}
+          SG_USER: ${{ secrets.SG_USER }}
+        run: |
+          rsync -az --delete \
+            --exclude ".DS_Store" \
+            -e "ssh -i ~/.ssh/siteground -p $SG_PORT" \
+            web/ "${SG_USER}@${SG_HOST}:${SG_TARGET_PATH}/"

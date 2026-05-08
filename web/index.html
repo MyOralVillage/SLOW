@@ -557,41 +557,13 @@
           <div id="taxonomy-editor" class="card-panel taxonomy-editor-card" hidden>
             <h3 id="library-lists-heading" class="panel-title">Library lists</h3>
             <p class="panel-subtitle small-note">
-              Edit categories, cross-cutting labels, types, product details, institutions, and countries. One entry per line. Changes apply on the home page,
-              search filters, and upload form for everyone.
+              Manage the search and upload dropdowns with simple add, edit, and delete controls. Category changes automatically flow into the category search box.
             </p>
-            <form id="taxonomy-form" class="taxonomy-form">
-              <div class="taxonomy-form-grid">
-                <label class="field field-wide">
-                  <span>Countries</span>
-                  <textarea id="taxonomy-countries" rows="7" spellcheck="false" placeholder="One per line"></textarea>
-                </label>
-                <label class="field field-wide">
-                  <span>Main categories</span>
-                  <textarea id="taxonomy-main-categories" rows="7" spellcheck="false" placeholder="One per line"></textarea>
-                </label>
-                <label class="field field-wide">
-                  <span>Cross-cutting categories</span>
-                  <textarea id="taxonomy-cross-cutting" rows="7" spellcheck="false" placeholder="One per line"></textarea>
-                </label>
-                <label class="field field-wide">
-                  <span>Product details</span>
-                  <textarea id="taxonomy-product-details" rows="6" spellcheck="false" placeholder="One per line"></textarea>
-                </label>
-                <label class="field field-wide">
-                  <span>Institutions</span>
-                  <textarea id="taxonomy-institutions" rows="6" spellcheck="false" placeholder="One per line"></textarea>
-                </label>
-                <label class="field field-wide">
-                  <span>Types</span>
-                  <textarea id="taxonomy-types" rows="6" spellcheck="false" placeholder="One per line"></textarea>
-                </label>
-              </div>
-              <div class="profile-actions">
-                <p id="taxonomy-status" class="small-note"></p>
-                <button type="submit" class="primary-btn wide-btn" id="btn-taxonomy-save">Save library lists</button>
-              </div>
-            </form>
+            <div class="taxonomy-editor-actions">
+              <button type="button" class="secondary-btn" id="btn-open-category-manager-inline">Manage categories</button>
+              <button type="button" class="secondary-btn" id="btn-open-taxonomy-manager">Manage dropdown lists</button>
+            </div>
+            <p id="taxonomy-status" class="small-note"></p>
           </div>
 
           <div id="admin-panel" class="section-block nested-block" hidden>
@@ -769,6 +741,59 @@
         <div id="category-manage-main-list" class="category-manage-list"></div>
         <h3 class="category-manage-section-title">Cross-cutting categories</h3>
         <div id="category-manage-cross-list" class="category-manage-list"></div>
+      </div>
+    </div>
+
+    <div id="taxonomy-manage-modal" class="modal-shell" hidden>
+      <div class="modal-backdrop" data-close-taxonomy-modal></div>
+      <div class="detail-panel category-manage-panel taxonomy-manage-panel">
+        <div class="detail-top">
+          <h2 class="panel-title">Manage Dropdown Lists</h2>
+          <button type="button" class="close-btn" data-close-taxonomy-modal aria-label="Close">
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </div>
+        <p class="small-note category-manage-lede">
+          Add, rename, or remove values used in search filters and upload dropdowns. Categories still use the separate category manager.
+        </p>
+        <form id="taxonomy-item-form" class="category-add-form" novalidate>
+          <p class="upload-section-title">Add new dropdown value</p>
+          <div class="category-add-grid">
+            <label class="field">
+              <span>Section</span>
+              <select id="taxonomy-item-section" required>
+                <option value="countries">Countries</option>
+                <option value="productDetails">Product details</option>
+                <option value="institutions">Institutions</option>
+                <option value="types">Types</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Value</span>
+              <input id="taxonomy-item-value" type="text" maxlength="120" required placeholder="Add a new option" />
+            </label>
+          </div>
+          <p id="taxonomy-manage-status" class="small-note"></p>
+          <button type="submit" class="primary-btn" id="btn-taxonomy-item-save">Add value</button>
+        </form>
+        <div class="taxonomy-manage-sections">
+          <section>
+            <h3 class="category-manage-section-title">Countries</h3>
+            <div id="taxonomy-manage-countries-list" class="category-manage-list"></div>
+          </section>
+          <section>
+            <h3 class="category-manage-section-title">Product details</h3>
+            <div id="taxonomy-manage-product-details-list" class="category-manage-list"></div>
+          </section>
+          <section>
+            <h3 class="category-manage-section-title">Institutions</h3>
+            <div id="taxonomy-manage-institutions-list" class="category-manage-list"></div>
+          </section>
+          <section>
+            <h3 class="category-manage-section-title">Types</h3>
+            <div id="taxonomy-manage-types-list" class="category-manage-list"></div>
+          </section>
+        </div>
       </div>
     </div>
 

@@ -288,15 +288,18 @@ const els = {
   profileStatus: document.getElementById("profile-status"),
   btnProfileSave: document.getElementById("btn-profile-save"),
   taxonomyEditor: document.getElementById("taxonomy-editor"),
-  taxonomyForm: document.getElementById("taxonomy-form"),
-  taxonomyCountries: document.getElementById("taxonomy-countries"),
-  taxonomyMainCategories: document.getElementById("taxonomy-main-categories"),
-  taxonomyCrossCutting: document.getElementById("taxonomy-cross-cutting"),
-  taxonomyProductDetails: document.getElementById("taxonomy-product-details"),
-  taxonomyInstitutions: document.getElementById("taxonomy-institutions"),
-  taxonomyTypes: document.getElementById("taxonomy-types"),
   taxonomyStatus: document.getElementById("taxonomy-status"),
-  btnTaxonomySave: document.getElementById("btn-taxonomy-save"),
+  btnOpenCategoryManagerInline: document.getElementById("btn-open-category-manager-inline"),
+  btnOpenTaxonomyManager: document.getElementById("btn-open-taxonomy-manager"),
+  taxonomyManageModal: document.getElementById("taxonomy-manage-modal"),
+  taxonomyItemForm: document.getElementById("taxonomy-item-form"),
+  taxonomyItemSection: document.getElementById("taxonomy-item-section"),
+  taxonomyItemValue: document.getElementById("taxonomy-item-value"),
+  taxonomyManageStatus: document.getElementById("taxonomy-manage-status"),
+  taxonomyManageCountriesList: document.getElementById("taxonomy-manage-countries-list"),
+  taxonomyManageProductDetailsList: document.getElementById("taxonomy-manage-product-details-list"),
+  taxonomyManageInstitutionsList: document.getElementById("taxonomy-manage-institutions-list"),
+  taxonomyManageTypesList: document.getElementById("taxonomy-manage-types-list"),
   btnSignout: document.getElementById("btn-signout"),
   adminPanel: document.getElementById("admin-panel"),
   adminStatus: document.getElementById("admin-status"),
@@ -1867,6 +1870,13 @@ async function loadConfig() {
 }
 
 const TAXONOMY_KEYS = ["countries", "mainCategories", "crossCuttingCategories", "productDetails", "institutions", "types"];
+const TAXONOMY_VISUAL_SECTION_KEYS = ["countries", "productDetails", "institutions", "types"];
+const TAXONOMY_VISUAL_SECTION_META = {
+  countries: { label: "Countries", singular: "country", listProp: "taxonomyManageCountriesList" },
+  productDetails: { label: "Product details", singular: "product detail", listProp: "taxonomyManageProductDetailsList" },
+  institutions: { label: "Institutions", singular: "institution", listProp: "taxonomyManageInstitutionsList" },
+  types: { label: "Types", singular: "type", listProp: "taxonomyManageTypesList" },
+};
 
 function applyTaxonomyPayload(t) {
   if (!t || typeof t !== "object") return;
@@ -1896,25 +1906,133 @@ function renderCategoryManageVisibility() {
   }
 }
 
-function parseTaxonomyLines(text) {
-  return String(text || "")
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+function taxonomyPayloadFromMetadata() {
+  return {
+    countries: [...(metadata.countries || [])],
+    mainCategories: [...(metadata.mainCategories || [])],
+    crossCuttingCategories: [...(metadata.crossCuttingCategories || [])],
+    productDetails: [...(metadata.productDetails || [])],
+    institutions: [...(metadata.institutions || [])],
+    types: [...(metadata.types || [])],
+  };
 }
 
-function taxonomyLinesFromMetadata(arr) {
-  return (arr || []).join("\n");
+function applyTaxonomyListsToMetadata(payload) {
+  metadata.countries = [...(payload.countries || [])];
+  metadata.mainCategories = [...(payload.mainCategories || [])];
+  metadata.crossCuttingCategories = [...(payload.crossCuttingCategories || [])];
+  metadata.productDetails = [...(payload.productDetails || [])];
+  metadata.institutions = [...(payload.institutions || [])];
+  metadata.types = [...(payload.types || [])];
 }
 
 function syncTaxonomyEditorFromMetadata() {
-  if (!els.taxonomyMainCategories) return;
-  els.taxonomyCountries.value = taxonomyLinesFromMetadata(metadata.countries);
-  els.taxonomyMainCategories.value = taxonomyLinesFromMetadata(metadata.mainCategories);
-  els.taxonomyCrossCutting.value = taxonomyLinesFromMetadata(metadata.crossCuttingCategories);
-  els.taxonomyProductDetails.value = taxonomyLinesFromMetadata(metadata.productDetails);
-  els.taxonomyInstitutions.value = taxonomyLinesFromMetadata(metadata.institutions);
-  els.taxonomyTypes.value = taxonomyLinesFromMetadata(metadata.types);
+  renderTaxonomyManageList();
+}
+
+async function saveTaxonomyPayload(payload, successMessage = "Library lists updated") {
+  for (const k of TAXONOMY_KEYS) {
+    if (!Array.isArray(payload[k]) || !payload[k].length) {
+      const label = k.replace(/([A-Z])/g, " $1").trim();
+      const message = `Add at least one value for ${label}.`;
+      showStatus(els.taxonomyStatus, message, false);
+      showStatus(els.taxonomyManageStatus, message, false);
+      return false;
+    }
+  }
+  showStatus(els.taxonomyManageStatus, "Saving…", true);
+  try {
+    const res = await apiFetch("/site/taxonomy", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      clearSessionOnAuthFailure: false,
+      timeoutMs: 15000,
+    });
+    if (!res.ok) throw new Error(await errorText(res, "Could not save library lists"));
+    const data = await res.json();
+    applyTaxonomyPayload(data);
+    refreshTaxonomyDependentUi();
+    syncTaxonomyEditorFromMetadata();
+    showStatus(els.taxonomyStatus, successMessage, true);
+    showStatus(els.taxonomyManageStatus, successMessage, true);
+    showToast(successMessage, true);
+    return true;
+  } catch (error) {
+    const message = error.message || "Could not save library lists";
+    showStatus(els.taxonomyStatus, message, false);
+    showStatus(els.taxonomyManageStatus, message, false);
+    showToast(message, false);
+    return false;
+  }
+}
+
+function taxonomyManageRowHtml(sectionKey, value) {
+  return `
+    <div class="category-manage-row">
+      <div class="category-manage-row-main">
+        <span class="category-manage-name-text">${escapeHtml(value)}</span>
+      </div>
+      <div class="category-manage-actions">
+        <button type="button" class="secondary-btn" data-taxonomy-edit="${escapeHtml(sectionKey)}" data-taxonomy-value="${escapeHtml(value)}">Edit</button>
+        <button type="button" class="secondary-btn" data-taxonomy-delete="${escapeHtml(sectionKey)}" data-taxonomy-value="${escapeHtml(value)}">Delete</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTaxonomyManageList() {
+  if (!els.taxonomyManageModal) return;
+  const draft = taxonomyPayloadFromMetadata();
+  const emptyRow = `<div class="simple-item"><span>No values in this section yet.</span></div>`;
+  for (const key of TAXONOMY_VISUAL_SECTION_KEYS) {
+    const cfg = TAXONOMY_VISUAL_SECTION_META[key];
+    const target = els[cfg.listProp];
+    if (!target) continue;
+    const rows = draft[key] || [];
+    target.innerHTML = rows.length ? rows.map((value) => taxonomyManageRowHtml(key, value)).join("") : emptyRow;
+  }
+}
+
+function openTaxonomyManageModal() {
+  if (!canManageCategories()) return;
+  renderTaxonomyManageList();
+  if (els.taxonomyManageStatus) {
+    showStatus(els.taxonomyManageStatus, "Changes here save immediately.", true);
+  }
+  if (els.taxonomyManageModal) els.taxonomyManageModal.hidden = false;
+}
+
+function closeTaxonomyManageModal() {
+  if (els.taxonomyManageModal) els.taxonomyManageModal.hidden = true;
+  if (els.taxonomyManageStatus) els.taxonomyManageStatus.textContent = "";
+}
+
+async function updateTaxonomyEditorSection(sectionKey, values) {
+  const draft = taxonomyPayloadFromMetadata();
+  const cleaned = [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
+  if (!cleaned.length) {
+    showStatus(els.taxonomyManageStatus, `${TAXONOMY_VISUAL_SECTION_META[sectionKey].label} needs at least one value.`, false);
+    return false;
+  }
+  draft[sectionKey] = cleaned;
+  return await saveTaxonomyPayload(draft, `${TAXONOMY_VISUAL_SECTION_META[sectionKey].label} updated`);
+}
+
+async function addTaxonomyEditorValue(sectionKey, rawValue) {
+  const nextValue = String(rawValue || "").trim();
+  if (!nextValue) return false;
+  const draft = taxonomyPayloadFromMetadata();
+  const current = draft[sectionKey] || [];
+  if (current.includes(nextValue)) {
+    showStatus(els.taxonomyManageStatus, `“${nextValue}” is already in ${TAXONOMY_VISUAL_SECTION_META[sectionKey].label}.`, false);
+    return false;
+  }
+  if (await updateTaxonomyEditorSection(sectionKey, [...current, nextValue])) {
+    showStatus(els.taxonomyManageStatus, `${nextValue} added to ${TAXONOMY_VISUAL_SECTION_META[sectionKey].label}.`, true);
+    return true;
+  }
+  return false;
 }
 
 /** Normalize GET /categories body variants (`rows`, nested `data`, legacy keys). */
@@ -1990,52 +2108,6 @@ async function loadTaxonomy() {
     /* keep bundled metadata.js defaults */
   } finally {
     await refreshCategoriesCatalog();
-  }
-}
-
-async function handleTaxonomySave(event) {
-  event.preventDefault();
-  if (!canManageCategories()) return;
-  const payload = {
-    countries: parseTaxonomyLines(els.taxonomyCountries?.value),
-    mainCategories: parseTaxonomyLines(els.taxonomyMainCategories?.value),
-    crossCuttingCategories: parseTaxonomyLines(els.taxonomyCrossCutting?.value),
-    productDetails: parseTaxonomyLines(els.taxonomyProductDetails?.value),
-    institutions: parseTaxonomyLines(els.taxonomyInstitutions?.value),
-    types: parseTaxonomyLines(els.taxonomyTypes?.value),
-  };
-  for (const k of TAXONOMY_KEYS) {
-    if (!payload[k].length) {
-      showStatus(els.taxonomyStatus, `Add at least one line for ${k.replace(/([A-Z])/g, " $1").trim()}.`, false);
-      return;
-    }
-  }
-  showStatus(els.taxonomyStatus, "Saving…", true);
-  setButtonBusy(els.btnTaxonomySave, true, "Saving…");
-  try {
-    const res = await apiFetch("/site/taxonomy", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      clearSessionOnAuthFailure: false,
-      timeoutMs: 15000,
-    });
-    if (!res.ok) {
-      showStatus(els.taxonomyStatus, await errorText(res, "Could not save library lists"), false);
-      showToast(await errorText(res, "Could not save library lists"), false);
-      return;
-    }
-    const data = await res.json();
-    applyTaxonomyPayload(data);
-    refreshTaxonomyDependentUi();
-    syncTaxonomyEditorFromMetadata();
-    showStatus(els.taxonomyStatus, "Saved. Lists updated for all visitors.", true);
-    showToast("Library lists updated", true);
-  } catch (error) {
-    showStatus(els.taxonomyStatus, error.message || "Could not save", false);
-    showToast(error.message || "Could not save", false);
-  } finally {
-    setButtonBusy(els.btnTaxonomySave, false);
   }
 }
 
@@ -4101,6 +4173,10 @@ function bindEvents() {
       closeShareResourceModal();
       return;
     }
+    if (!els.taxonomyManageModal?.hidden) {
+      closeTaxonomyManageModal();
+      return;
+    }
     if (!els.detailModal?.hidden) {
       closeDetailModal();
       return;
@@ -4339,8 +4415,27 @@ function bindEvents() {
   els.signInForm?.addEventListener("submit", handleSignIn);
   els.signupForm?.addEventListener("submit", handleSignUp);
   els.profileForm?.addEventListener("submit", handleProfileSave);
-  els.taxonomyForm?.addEventListener("submit", handleTaxonomySave);
   els.btnEditCategories?.addEventListener("click", () => openCategoryManageModal());
+  els.btnOpenCategoryManagerInline?.addEventListener("click", () => openCategoryManageModal());
+  els.btnOpenTaxonomyManager?.addEventListener("click", () => openTaxonomyManageModal());
+  els.taxonomyItemForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!canManageCategories()) return;
+    const sectionKey = String(els.taxonomyItemSection?.value || "").trim();
+    const value = String(els.taxonomyItemValue?.value || "").trim();
+    if (!TAXONOMY_VISUAL_SECTION_META[sectionKey]) {
+      showStatus(els.taxonomyManageStatus, "Choose a section first.", false);
+      return;
+    }
+    if (!value) {
+      showStatus(els.taxonomyManageStatus, "Enter a value to add.", false);
+      return;
+    }
+    void (async () => {
+      const ok = await addTaxonomyEditorValue(sectionKey, value);
+      if (ok && els.taxonomyItemValue) els.taxonomyItemValue.value = "";
+    })();
+  });
   els.categoryAddForm?.addEventListener("submit", handleCategoryAddSubmit);
   els.communityTabPosts?.addEventListener("click", () => {
     state.communityTab = "posts";
@@ -4386,6 +4481,10 @@ function bindEvents() {
       closeCategoryManageModal();
       return;
     }
+    if (event.target.closest("[data-close-taxonomy-modal]")) {
+      closeTaxonomyManageModal();
+      return;
+    }
     const catEdit = event.target.closest("[data-category-edit]");
     if (catEdit && canManageCategories()) {
       const id = catEdit.getAttribute("data-category-edit") || "";
@@ -4428,6 +4527,38 @@ function bindEvents() {
           await renderCategoryManageList();
         } catch (error) {
           showToast(error.message || "Could not delete category", false);
+        }
+      })();
+      return;
+    }
+    const taxonomyEdit = event.target.closest("[data-taxonomy-edit]");
+    if (taxonomyEdit && canManageCategories()) {
+      const sectionKey = taxonomyEdit.getAttribute("data-taxonomy-edit") || "";
+      const current = taxonomyEdit.getAttribute("data-taxonomy-value") || "";
+      if (!TAXONOMY_VISUAL_SECTION_META[sectionKey]) return;
+      const next = window.prompt(`Rename ${TAXONOMY_VISUAL_SECTION_META[sectionKey].singular}`, current);
+      if (next === null) return;
+      const trimmed = String(next).trim();
+      if (!trimmed || trimmed === current) return;
+      const draft = taxonomyPayloadFromMetadata();
+      const rows = (draft[sectionKey] || []).map((value) => (value === current ? trimmed : value));
+      void (async () => {
+        if (await updateTaxonomyEditorSection(sectionKey, rows)) {
+          showStatus(els.taxonomyManageStatus, `${TAXONOMY_VISUAL_SECTION_META[sectionKey].label} updated.`, true);
+        }
+      })();
+      return;
+    }
+    const taxonomyDelete = event.target.closest("[data-taxonomy-delete]");
+    if (taxonomyDelete && canManageCategories()) {
+      const sectionKey = taxonomyDelete.getAttribute("data-taxonomy-delete") || "";
+      const current = taxonomyDelete.getAttribute("data-taxonomy-value") || "";
+      if (!TAXONOMY_VISUAL_SECTION_META[sectionKey]) return;
+      if (!window.confirm(`Remove “${current}” from ${TAXONOMY_VISUAL_SECTION_META[sectionKey].label}?`)) return;
+      const draft = taxonomyPayloadFromMetadata();
+      void (async () => {
+        if (await updateTaxonomyEditorSection(sectionKey, (draft[sectionKey] || []).filter((value) => value !== current))) {
+          showStatus(els.taxonomyManageStatus, `${current} removed.`, true);
         }
       })();
       return;

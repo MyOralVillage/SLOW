@@ -4334,10 +4334,23 @@ a.text-link-btn {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   margin-bottom: 12px;
 }
+.taxonomy-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
 .taxonomy-editor-card textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
+}
+.taxonomy-manage-panel {
+  max-width: 760px;
+}
+.taxonomy-manage-sections {
+  display: grid;
+  gap: 16px;
 }
 
 .signup-license-note a {

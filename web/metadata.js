@@ -116,7 +116,7 @@ window.SLOW_UPLOAD_OPTIONS = {
       id: "sample_7",
       title: "Digital icon sheet",
       description: "Picture sheet for digital service training.",
-      country: "East Timor",
+      country: "Timor-Leste",
       category: "Payments",
       type: "Digital",
       keywords: ["digital", "service"],

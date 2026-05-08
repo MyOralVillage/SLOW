@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 
 import { CategoriesService } from "../categories/categories.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { DEFAULT_SITE_TAXONOMY, type SiteTaxonomy } from "./default-taxonomy";
+import { DEFAULT_SITE_TAXONOMY, LEGACY_DEFAULT_COUNTRIES, type SiteTaxonomy } from "./default-taxonomy";
 import type { UpdateTaxonomyDto } from "./dto/update-taxonomy.dto";
 
 const TAXONOMY_KEYS = [
@@ -24,6 +24,12 @@ function dedupeTrimmed(values: string[]): string[] {
     out.push(s);
   }
   return out;
+}
+
+function hasSameMembers(values: string[], expected: readonly string[]): boolean {
+  if (values.length !== expected.length) return false;
+  const set = new Set(values);
+  return expected.every((item) => set.has(item));
 }
 
 @Injectable()
@@ -88,6 +94,11 @@ export class SiteService {
       const v = stored[key];
       if (Array.isArray(v) && v.length) {
         const cleaned = dedupeTrimmed(v.map((x) => String(x)));
+        // Auto-upgrade untouched legacy installs that still carry the original 7-country seed list.
+        if (key === "countries" && hasSameMembers(cleaned, LEGACY_DEFAULT_COUNTRIES)) {
+          out.countries = [...DEFAULT_SITE_TAXONOMY.countries];
+          continue;
+        }
         if (cleaned.length) out[key] = cleaned;
       }
     }

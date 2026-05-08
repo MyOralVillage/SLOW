@@ -1,17 +1,21 @@
+import defaultCountries from "./default-countries.json";
+
 /**
  * Default library taxonomy (must stay aligned with `web/metadata.js` fallbacks).
  * Replaced in full when an admin saves via PUT /api/site/taxonomy.
  */
+export const LEGACY_DEFAULT_COUNTRIES = [
+  "Sierra Leone",
+  "Ethiopia",
+  "Pakistan",
+  "Kenya",
+  "Bangladesh",
+  "Timor-Leste",
+  "Solomon Islands",
+] as const;
+
 export const DEFAULT_SITE_TAXONOMY = {
-  countries: [
-    "Sierra Leone",
-    "Ethiopia",
-    "Pakistan",
-    "Kenya",
-    "Bangladesh",
-    "Timor-Leste",
-    "Solomon Islands",
-  ],
+  countries: [...defaultCountries],
   mainCategories: [
     "Group Loans",
     "Individual Loans",
