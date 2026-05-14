@@ -36,6 +36,22 @@ export const DEFAULT_SITE_TAXONOMY = {
   ],
   productDetails: ["Group", "Individual", "Agent", "Farmer", "Women", "Youth"],
   institutions: ["Harvest Microfinance", "BRAC", "World Vision", "CARE", "UNCDF", "Community NGO"],
+  keywordOptions: [
+    "savings",
+    "loan",
+    "group",
+    "individual",
+    "template",
+    "frame",
+    "icon",
+    "payment",
+    "insurance",
+    "currency",
+    "money",
+    "digital",
+    "manual",
+    "research",
+  ],
   types: ["Icon", "Template", "Frame", "Digital", "Paper", "Document"],
 } as const;
 
@@ -45,5 +61,6 @@ export type SiteTaxonomy = {
   crossCuttingCategories: string[];
   productDetails: string[];
   institutions: string[];
+  keywordOptions: string[];
   types: string[];
 };

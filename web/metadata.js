@@ -6,6 +6,7 @@ window.SLOW_UPLOAD_OPTIONS = {
   crossCuttingCategories: ["Icons", "Templates", "Frames", "Digital", "Paper", "Documents - Manuals", "Documents - Research"],
   productDetails: ["Group", "Individual", "Agent", "Farmer", "Women", "Youth"],
   institutions: ["Harvest Microfinance", "BRAC", "World Vision", "CARE", "UNCDF", "Community NGO"],
+  keywordOptions: ["savings", "loan", "group", "individual", "template", "frame", "icon", "payment", "insurance", "currency", "money", "digital", "manual", "research"],
   types: ["Icon", "Template", "Frame", "Digital", "Paper", "Document"],
   sampleResources: [
     {

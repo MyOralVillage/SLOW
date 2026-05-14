@@ -23,6 +23,7 @@ const metadata = window.SLOW_UPLOAD_OPTIONS || {
   crossCuttingCategories: [],
   productDetails: [],
   institutions: [],
+  keywordOptions: [],
   types: [],
   sampleResources: [],
 };
@@ -209,11 +210,13 @@ const els = {
   filterCrossCutting: document.getElementById("filter-cross-cutting"),
   filterInstitution: document.getElementById("filter-institution"),
   filterKeywords: document.getElementById("filter-keywords"),
+  keywordOptionsList: document.getElementById("keyword-options-list"),
   btnClearSearch: document.getElementById("btn-clear-search"),
   btnRefreshLibrary: document.getElementById("btn-refresh-library"),
   browseStatus: document.getElementById("browse-status"),
   resourceGrid: document.getElementById("resource-grid"),
   btnEditCategories: document.getElementById("btn-edit-categories"),
+  btnEditSearchLists: document.getElementById("btn-edit-search-lists"),
   categoryManageModal: document.getElementById("category-manage-modal"),
   categoryManageMainList: document.getElementById("category-manage-main-list"),
   categoryManageCrossList: document.getElementById("category-manage-cross-list"),
@@ -297,8 +300,11 @@ const els = {
   taxonomyItemValue: document.getElementById("taxonomy-item-value"),
   taxonomyManageStatus: document.getElementById("taxonomy-manage-status"),
   taxonomyManageCountriesList: document.getElementById("taxonomy-manage-countries-list"),
+  taxonomyManageMainCategoriesList: document.getElementById("taxonomy-manage-main-categories-list"),
   taxonomyManageProductDetailsList: document.getElementById("taxonomy-manage-product-details-list"),
+  taxonomyManageCrossCuttingList: document.getElementById("taxonomy-manage-cross-cutting-list"),
   taxonomyManageInstitutionsList: document.getElementById("taxonomy-manage-institutions-list"),
+  taxonomyManageKeywordOptionsList: document.getElementById("taxonomy-manage-keyword-options-list"),
   taxonomyManageTypesList: document.getElementById("taxonomy-manage-types-list"),
   btnSignout: document.getElementById("btn-signout"),
   adminPanel: document.getElementById("admin-panel"),
@@ -1869,12 +1875,15 @@ async function loadConfig() {
   await mergeOptional("config.site.json");
 }
 
-const TAXONOMY_KEYS = ["countries", "mainCategories", "crossCuttingCategories", "productDetails", "institutions", "types"];
-const TAXONOMY_VISUAL_SECTION_KEYS = ["countries", "productDetails", "institutions", "types"];
+const TAXONOMY_KEYS = ["countries", "mainCategories", "crossCuttingCategories", "productDetails", "institutions", "keywordOptions", "types"];
+const TAXONOMY_VISUAL_SECTION_KEYS = ["countries", "mainCategories", "productDetails", "crossCuttingCategories", "institutions", "keywordOptions", "types"];
 const TAXONOMY_VISUAL_SECTION_META = {
   countries: { label: "Countries", singular: "country", listProp: "taxonomyManageCountriesList" },
+  mainCategories: { label: "Categories", singular: "category", listProp: "taxonomyManageMainCategoriesList", categoryGroup: "main" },
   productDetails: { label: "Product details", singular: "product detail", listProp: "taxonomyManageProductDetailsList" },
-  institutions: { label: "Institutions", singular: "institution", listProp: "taxonomyManageInstitutionsList" },
+  crossCuttingCategories: { label: "Other", singular: "other item", listProp: "taxonomyManageCrossCuttingList", categoryGroup: "cross_cutting" },
+  institutions: { label: "Institutions / NGOs", singular: "institution / NGO", listProp: "taxonomyManageInstitutionsList" },
+  keywordOptions: { label: "Keywords", singular: "keyword", listProp: "taxonomyManageKeywordOptionsList" },
   types: { label: "Types", singular: "type", listProp: "taxonomyManageTypesList" },
 };
 
@@ -1885,6 +1894,25 @@ function applyTaxonomyPayload(t) {
       metadata[k] = t[k].map((s) => String(s).trim()).filter(Boolean);
     }
   }
+}
+
+function isCategoryBackedTaxonomySection(sectionKey) {
+  return sectionKey === "mainCategories" || sectionKey === "crossCuttingCategories";
+}
+
+function taxonomySectionValues(sectionKey) {
+  return [...(metadata[sectionKey] || [])];
+}
+
+function taxonomySectionRows(sectionKey) {
+  if (isCategoryBackedTaxonomySection(sectionKey)) {
+    const groupType = TAXONOMY_VISUAL_SECTION_META[sectionKey]?.categoryGroup || "main";
+    const rows = Array.isArray(state.categoriesCatalog) ? state.categoriesCatalog : [];
+    return rows
+      .filter((row) => row.group_type === groupType)
+      .map((row) => ({ id: row.id || "", value: row.name || "" }));
+  }
+  return taxonomySectionValues(sectionKey).map((value) => ({ id: "", value }));
 }
 
 function refreshTaxonomyDependentUi() {
@@ -1900,6 +1928,10 @@ function renderCategoryManageVisibility() {
   els.btnEditCategories.hidden = !showEditCategories;
   els.btnEditCategories.disabled = !showEditCategories;
   els.btnEditCategories.setAttribute("aria-hidden", showEditCategories ? "false" : "true");
+  if (els.btnEditSearchLists) {
+    els.btnEditSearchLists.hidden = !showEditCategories;
+    els.btnEditSearchLists.disabled = !showEditCategories;
+  }
   if (!loggedCategoryAuthGate && !state.authLoading) {
     loggedCategoryAuthGate = true;
     console.info("currentUser role", state.user?.role, "canManageCategories", canManageCategories(state.user));
@@ -1913,17 +1945,9 @@ function taxonomyPayloadFromMetadata() {
     crossCuttingCategories: [...(metadata.crossCuttingCategories || [])],
     productDetails: [...(metadata.productDetails || [])],
     institutions: [...(metadata.institutions || [])],
+    keywordOptions: [...(metadata.keywordOptions || [])],
     types: [...(metadata.types || [])],
   };
-}
-
-function applyTaxonomyListsToMetadata(payload) {
-  metadata.countries = [...(payload.countries || [])];
-  metadata.mainCategories = [...(payload.mainCategories || [])];
-  metadata.crossCuttingCategories = [...(payload.crossCuttingCategories || [])];
-  metadata.productDetails = [...(payload.productDetails || [])];
-  metadata.institutions = [...(payload.institutions || [])];
-  metadata.types = [...(payload.types || [])];
 }
 
 function syncTaxonomyEditorFromMetadata() {
@@ -1967,15 +1991,15 @@ async function saveTaxonomyPayload(payload, successMessage = "Library lists upda
   }
 }
 
-function taxonomyManageRowHtml(sectionKey, value) {
+function taxonomyManageRowHtml(sectionKey, row) {
   return `
     <div class="category-manage-row">
       <div class="category-manage-row-main">
-        <span class="category-manage-name-text">${escapeHtml(value)}</span>
+        <span class="category-manage-name-text">${escapeHtml(row.value)}</span>
       </div>
       <div class="category-manage-actions">
-        <button type="button" class="secondary-btn" data-taxonomy-edit="${escapeHtml(sectionKey)}" data-taxonomy-value="${escapeHtml(value)}">Edit</button>
-        <button type="button" class="secondary-btn" data-taxonomy-delete="${escapeHtml(sectionKey)}" data-taxonomy-value="${escapeHtml(value)}">Delete</button>
+        <button type="button" class="secondary-btn" data-taxonomy-edit="${escapeHtml(sectionKey)}" data-taxonomy-id="${escapeHtml(row.id || "")}" data-taxonomy-value="${escapeHtml(row.value)}">Edit</button>
+        <button type="button" class="secondary-btn" data-taxonomy-delete="${escapeHtml(sectionKey)}" data-taxonomy-id="${escapeHtml(row.id || "")}" data-taxonomy-value="${escapeHtml(row.value)}">Delete</button>
       </div>
     </div>
   `;
@@ -1983,14 +2007,13 @@ function taxonomyManageRowHtml(sectionKey, value) {
 
 function renderTaxonomyManageList() {
   if (!els.taxonomyManageModal) return;
-  const draft = taxonomyPayloadFromMetadata();
   const emptyRow = `<div class="simple-item"><span>No values in this section yet.</span></div>`;
   for (const key of TAXONOMY_VISUAL_SECTION_KEYS) {
     const cfg = TAXONOMY_VISUAL_SECTION_META[key];
     const target = els[cfg.listProp];
     if (!target) continue;
-    const rows = draft[key] || [];
-    target.innerHTML = rows.length ? rows.map((value) => taxonomyManageRowHtml(key, value)).join("") : emptyRow;
+    const rows = taxonomySectionRows(key);
+    target.innerHTML = rows.length ? rows.map((row) => taxonomyManageRowHtml(key, row)).join("") : emptyRow;
   }
 }
 
@@ -2009,6 +2032,7 @@ function closeTaxonomyManageModal() {
 }
 
 async function updateTaxonomyEditorSection(sectionKey, values) {
+  if (isCategoryBackedTaxonomySection(sectionKey)) return false;
   const draft = taxonomyPayloadFromMetadata();
   const cleaned = [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
   if (!cleaned.length) {
@@ -2020,6 +2044,7 @@ async function updateTaxonomyEditorSection(sectionKey, values) {
 }
 
 async function addTaxonomyEditorValue(sectionKey, rawValue) {
+  if (isCategoryBackedTaxonomySection(sectionKey)) return false;
   const nextValue = String(rawValue || "").trim();
   if (!nextValue) return false;
   const draft = taxonomyPayloadFromMetadata();
@@ -2030,6 +2055,91 @@ async function addTaxonomyEditorValue(sectionKey, rawValue) {
   }
   if (await updateTaxonomyEditorSection(sectionKey, [...current, nextValue])) {
     showStatus(els.taxonomyManageStatus, `${nextValue} added to ${TAXONOMY_VISUAL_SECTION_META[sectionKey].label}.`, true);
+    return true;
+  }
+  return false;
+}
+
+async function addManagedSearchValue(sectionKey, rawValue) {
+  const nextValue = String(rawValue || "").trim();
+  if (!nextValue) return false;
+  if (isCategoryBackedTaxonomySection(sectionKey)) {
+    const group_type = TAXONOMY_VISUAL_SECTION_META[sectionKey].categoryGroup || "main";
+    try {
+      const res = await apiFetch("/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nextValue, group_type }),
+        timeoutMs: 15000,
+      });
+      if (!res.ok) throw new Error(await errorText(res, "Could not add category"));
+      await refreshTaxonomyUiAfterCategoryChange();
+      await renderCategoryManageList();
+      showStatus(els.taxonomyManageStatus, `${nextValue} added to ${TAXONOMY_VISUAL_SECTION_META[sectionKey].label}.`, true);
+      showToast(`${nextValue} added`, true);
+      return true;
+    } catch (error) {
+      showStatus(els.taxonomyManageStatus, error.message || "Could not add value", false);
+      showToast(error.message || "Could not add value", false);
+      return false;
+    }
+  }
+  return await addTaxonomyEditorValue(sectionKey, nextValue);
+}
+
+async function renameManagedSearchValue(sectionKey, rowId, currentValue, nextValue) {
+  const trimmed = String(nextValue || "").trim();
+  if (!trimmed || trimmed === currentValue) return false;
+  if (isCategoryBackedTaxonomySection(sectionKey)) {
+    try {
+      const res = await apiFetch(`/categories/${encodeURIComponent(rowId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+        timeoutMs: 15000,
+      });
+      if (!res.ok) throw new Error(await errorText(res, "Could not update category"));
+      await refreshTaxonomyUiAfterCategoryChange();
+      await renderCategoryManageList();
+      showStatus(els.taxonomyManageStatus, `${TAXONOMY_VISUAL_SECTION_META[sectionKey].label} updated.`, true);
+      showToast("Value updated", true);
+      return true;
+    } catch (error) {
+      showStatus(els.taxonomyManageStatus, error.message || "Could not update value", false);
+      showToast(error.message || "Could not update value", false);
+      return false;
+    }
+  }
+  const rows = taxonomySectionValues(sectionKey).map((value) => (value === currentValue ? trimmed : value));
+  if (await updateTaxonomyEditorSection(sectionKey, rows)) {
+    showStatus(els.taxonomyManageStatus, `${TAXONOMY_VISUAL_SECTION_META[sectionKey].label} updated.`, true);
+    return true;
+  }
+  return false;
+}
+
+async function deleteManagedSearchValue(sectionKey, rowId, currentValue) {
+  if (isCategoryBackedTaxonomySection(sectionKey)) {
+    try {
+      const res = await apiFetch(`/categories/${encodeURIComponent(rowId)}`, {
+        method: "DELETE",
+        timeoutMs: 15000,
+      });
+      if (!res.ok) throw new Error(await errorText(res, "Could not delete category"));
+      await refreshTaxonomyUiAfterCategoryChange();
+      await renderCategoryManageList();
+      showStatus(els.taxonomyManageStatus, `${currentValue} removed.`, true);
+      showToast("Value removed", true);
+      return true;
+    } catch (error) {
+      showStatus(els.taxonomyManageStatus, error.message || "Could not delete value", false);
+      showToast(error.message || "Could not delete value", false);
+      return false;
+    }
+  }
+  const rows = taxonomySectionValues(sectionKey).filter((value) => value !== currentValue);
+  if (await updateTaxonomyEditorSection(sectionKey, rows)) {
+    showStatus(els.taxonomyManageStatus, `${currentValue} removed.`, true);
     return true;
   }
   return false;
@@ -2233,6 +2343,18 @@ function fillSelect(selectEl, values, placeholder) {
   });
 }
 
+function fillDatalist(listEl, values) {
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((value) => {
+      const option = document.createElement("option");
+      option.value = value;
+      listEl.appendChild(option);
+    });
+}
+
 function inferredResourceCategory(resource) {
   const explicit = String(resource?.category || "").trim();
   if (explicit) return explicit;
@@ -2256,16 +2378,17 @@ function initFields() {
   fillSelect(els.filterCountry, metadata.countries, "All countries");
   fillSelect(els.filterCategory, metadata.mainCategories, "All categories");
   fillSelect(els.filterProductDetail, metadata.productDetails, "All product details");
-  fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All cross-cutting");
-  fillSelect(els.filterInstitution, metadata.institutions, "All institutions");
+  fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All other");
+  fillSelect(els.filterInstitution, metadata.institutions, "All institutions / NGOs");
   fillSelect(els.signupCountry, metadata.countries, "Choose country");
   fillSelect(els.profileCountry, metadata.countries, "Choose country");
   fillSelect(els.uploadCountry, metadata.countries, "Choose country");
   fillSelect(els.uploadCategory, metadata.mainCategories, "Choose category");
   fillSelect(els.uploadType, metadata.types, "Choose type");
   fillSelect(els.uploadProductDetail, metadata.productDetails, "Choose detail");
-  fillSelect(els.uploadCrossCutting, metadata.crossCuttingCategories, "Choose cross-cutting");
-  fillSelect(els.uploadInstitution, metadata.institutions, "Choose institution");
+  fillSelect(els.uploadCrossCutting, metadata.crossCuttingCategories, "Choose other");
+  fillSelect(els.uploadInstitution, metadata.institutions, "Choose institution / NGO");
+  fillDatalist(els.keywordOptionsList, metadata.keywordOptions);
   if (metadata.types.includes("Icon")) {
     els.uploadType.value = "Icon";
   }
@@ -3723,8 +3846,8 @@ function clearSearch() {
   fillSelect(els.filterCountry, metadata.countries, "All countries");
   fillSelect(els.filterCategory, metadata.mainCategories, "All categories");
   fillSelect(els.filterProductDetail, metadata.productDetails, "All product details");
-  fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All cross-cutting");
-  fillSelect(els.filterInstitution, metadata.institutions, "All institutions");
+  fillSelect(els.filterCrossCutting, metadata.crossCuttingCategories, "All other");
+  fillSelect(els.filterInstitution, metadata.institutions, "All institutions / NGOs");
   document.querySelectorAll(".category-tile.is-selected").forEach((t) => t.classList.remove("is-selected"));
   applySearch();
 }
@@ -4096,8 +4219,8 @@ async function handleUpload(event) {
     category: els.uploadCategory.value,
     type: els.uploadType.value,
     productDetail: els.uploadProductDetail?.value || "",
-    crossCuttingCategory: "",
-    institution: "",
+    crossCuttingCategory: els.uploadCrossCutting?.value || "",
+    institution: els.uploadInstitution?.value || "",
     keywords: els.uploadKeywords.value.trim(),
   };
 
@@ -4416,6 +4539,7 @@ function bindEvents() {
   els.signupForm?.addEventListener("submit", handleSignUp);
   els.profileForm?.addEventListener("submit", handleProfileSave);
   els.btnEditCategories?.addEventListener("click", () => openCategoryManageModal());
+  els.btnEditSearchLists?.addEventListener("click", () => openTaxonomyManageModal());
   els.btnOpenCategoryManagerInline?.addEventListener("click", () => openCategoryManageModal());
   els.btnOpenTaxonomyManager?.addEventListener("click", () => openTaxonomyManageModal());
   els.taxonomyItemForm?.addEventListener("submit", (event) => {
@@ -4432,7 +4556,7 @@ function bindEvents() {
       return;
     }
     void (async () => {
-      const ok = await addTaxonomyEditorValue(sectionKey, value);
+      const ok = await addManagedSearchValue(sectionKey, value);
       if (ok && els.taxonomyItemValue) els.taxonomyItemValue.value = "";
     })();
   });
@@ -4534,32 +4658,27 @@ function bindEvents() {
     const taxonomyEdit = event.target.closest("[data-taxonomy-edit]");
     if (taxonomyEdit && canManageCategories()) {
       const sectionKey = taxonomyEdit.getAttribute("data-taxonomy-edit") || "";
+      const rowId = taxonomyEdit.getAttribute("data-taxonomy-id") || "";
       const current = taxonomyEdit.getAttribute("data-taxonomy-value") || "";
       if (!TAXONOMY_VISUAL_SECTION_META[sectionKey]) return;
       const next = window.prompt(`Rename ${TAXONOMY_VISUAL_SECTION_META[sectionKey].singular}`, current);
       if (next === null) return;
       const trimmed = String(next).trim();
       if (!trimmed || trimmed === current) return;
-      const draft = taxonomyPayloadFromMetadata();
-      const rows = (draft[sectionKey] || []).map((value) => (value === current ? trimmed : value));
       void (async () => {
-        if (await updateTaxonomyEditorSection(sectionKey, rows)) {
-          showStatus(els.taxonomyManageStatus, `${TAXONOMY_VISUAL_SECTION_META[sectionKey].label} updated.`, true);
-        }
+        await renameManagedSearchValue(sectionKey, rowId, current, trimmed);
       })();
       return;
     }
     const taxonomyDelete = event.target.closest("[data-taxonomy-delete]");
     if (taxonomyDelete && canManageCategories()) {
       const sectionKey = taxonomyDelete.getAttribute("data-taxonomy-delete") || "";
+      const rowId = taxonomyDelete.getAttribute("data-taxonomy-id") || "";
       const current = taxonomyDelete.getAttribute("data-taxonomy-value") || "";
       if (!TAXONOMY_VISUAL_SECTION_META[sectionKey]) return;
       if (!window.confirm(`Remove “${current}” from ${TAXONOMY_VISUAL_SECTION_META[sectionKey].label}?`)) return;
-      const draft = taxonomyPayloadFromMetadata();
       void (async () => {
-        if (await updateTaxonomyEditorSection(sectionKey, (draft[sectionKey] || []).filter((value) => value !== current))) {
-          showStatus(els.taxonomyManageStatus, `${current} removed.`, true);
-        }
+        await deleteManagedSearchValue(sectionKey, rowId, current);
       })();
       return;
     }

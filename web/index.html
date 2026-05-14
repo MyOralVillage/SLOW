@@ -84,8 +84,13 @@
         </section>
 
         <section class="section-block">
-          <div class="section-head">
+          <div class="section-head section-head-stack">
+            <div>
               <h2>Search</h2>
+            </div>
+            <div class="section-actions">
+              <button type="button" class="secondary-btn" id="btn-edit-search-lists" hidden>Edit search lists</button>
+            </div>
           </div>
           <form id="search-form" class="search-panel" autocomplete="off">
             <div class="search-grid">
@@ -106,7 +111,7 @@
                 <select id="filter-product-detail"></select>
               </label>
               <label class="field">
-                <span>Cross-cutting</span>
+                <span>Other</span>
                 <select id="filter-cross-cutting"></select>
               </label>
               <label class="field">
@@ -115,7 +120,7 @@
               </label>
               <label class="field">
                 <span>Keywords</span>
-                <input id="filter-keywords" type="text" placeholder="Type keywords" />
+                <input id="filter-keywords" type="text" list="keyword-options-list" placeholder="Type keywords" />
               </label>
             </div>
             <div class="search-actions">
@@ -557,11 +562,11 @@
           <div id="taxonomy-editor" class="card-panel taxonomy-editor-card" hidden>
             <h3 id="library-lists-heading" class="panel-title">Library lists</h3>
             <p class="panel-subtitle small-note">
-              Manage the search and upload dropdowns with simple add, edit, and delete controls. Category changes automatically flow into the category search box.
+              Manage the search and upload lists with simple add, edit, and delete controls. Country, category, product detail, Other, institution / NGO, keyword, and type changes update the forms right away.
             </p>
             <div class="taxonomy-editor-actions">
               <button type="button" class="secondary-btn" id="btn-open-category-manager-inline">Manage categories</button>
-              <button type="button" class="secondary-btn" id="btn-open-taxonomy-manager">Manage dropdown lists</button>
+              <button type="button" class="secondary-btn" id="btn-open-taxonomy-manager">Manage search lists</button>
             </div>
             <p id="taxonomy-status" class="small-note"></p>
           </div>
@@ -672,9 +677,17 @@
                 <span>Product detail</span>
                 <select id="upload-product-detail" name="productDetail"></select>
               </label>
+              <label class="field">
+                <span>Other</span>
+                <select id="upload-cross-cutting" name="crossCutting"></select>
+              </label>
+              <label class="field">
+                <span>Institution / NGO</span>
+                <select id="upload-institution" name="institution"></select>
+              </label>
               <label class="field field-wide">
                 <span>Keywords</span>
-                <input id="upload-keywords" name="keywords" type="text" maxlength="200" placeholder="Comma separated words" />
+                <input id="upload-keywords" name="keywords" type="text" list="keyword-options-list" maxlength="200" placeholder="Comma separated words" />
               </label>
             </div>
           </div>
@@ -748,23 +761,26 @@
       <div class="modal-backdrop" data-close-taxonomy-modal></div>
       <div class="detail-panel category-manage-panel taxonomy-manage-panel">
         <div class="detail-top">
-          <h2 class="panel-title">Manage Dropdown Lists</h2>
+          <h2 class="panel-title">Manage Search Lists</h2>
           <button type="button" class="close-btn" data-close-taxonomy-modal aria-label="Close">
             <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
           </button>
         </div>
         <p class="small-note category-manage-lede">
-          Add, rename, or remove values used in search filters and upload dropdowns. Categories still use the separate category manager.
+          Add, rename, or remove values used in search filters and upload dropdowns. Category and Other changes stay in sync with the category editor.
         </p>
         <form id="taxonomy-item-form" class="category-add-form" novalidate>
-          <p class="upload-section-title">Add new dropdown value</p>
+          <p class="upload-section-title">Add new search or upload value</p>
           <div class="category-add-grid">
             <label class="field">
               <span>Section</span>
               <select id="taxonomy-item-section" required>
                 <option value="countries">Countries</option>
+                <option value="mainCategories">Categories</option>
                 <option value="productDetails">Product details</option>
+                <option value="crossCuttingCategories">Other</option>
                 <option value="institutions">Institutions</option>
+                <option value="keywordOptions">Keywords</option>
                 <option value="types">Types</option>
               </select>
             </label>
@@ -782,12 +798,24 @@
             <div id="taxonomy-manage-countries-list" class="category-manage-list"></div>
           </section>
           <section>
+            <h3 class="category-manage-section-title">Categories</h3>
+            <div id="taxonomy-manage-main-categories-list" class="category-manage-list"></div>
+          </section>
+          <section>
             <h3 class="category-manage-section-title">Product details</h3>
             <div id="taxonomy-manage-product-details-list" class="category-manage-list"></div>
           </section>
           <section>
-            <h3 class="category-manage-section-title">Institutions</h3>
+            <h3 class="category-manage-section-title">Other</h3>
+            <div id="taxonomy-manage-cross-cutting-list" class="category-manage-list"></div>
+          </section>
+          <section>
+            <h3 class="category-manage-section-title">Institutions / NGOs</h3>
             <div id="taxonomy-manage-institutions-list" class="category-manage-list"></div>
+          </section>
+          <section>
+            <h3 class="category-manage-section-title">Keywords</h3>
+            <div id="taxonomy-manage-keyword-options-list" class="category-manage-list"></div>
           </section>
           <section>
             <h3 class="category-manage-section-title">Types</h3>
@@ -837,6 +865,7 @@
     </div>
 
     <div id="toast-root" class="toast-root" aria-live="polite"></div>
+    <datalist id="keyword-options-list"></datalist>
 
     <footer class="site-footer">
       <p class="site-footer-license">

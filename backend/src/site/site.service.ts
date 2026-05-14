@@ -11,6 +11,7 @@ const TAXONOMY_KEYS = [
   "crossCuttingCategories",
   "productDetails",
   "institutions",
+  "keywordOptions",
   "types",
 ] as const;
 
@@ -56,6 +57,7 @@ export class SiteService {
       crossCuttingCategories: dedupeTrimmed(dto.crossCuttingCategories),
       productDetails: dedupeTrimmed(dto.productDetails),
       institutions: dedupeTrimmed(dto.institutions),
+      keywordOptions: dedupeTrimmed(dto.keywordOptions),
       types: dedupeTrimmed(dto.types),
     };
 
@@ -87,6 +89,7 @@ export class SiteService {
       crossCuttingCategories: [...DEFAULT_SITE_TAXONOMY.crossCuttingCategories],
       productDetails: [...DEFAULT_SITE_TAXONOMY.productDetails],
       institutions: [...DEFAULT_SITE_TAXONOMY.institutions],
+      keywordOptions: [...DEFAULT_SITE_TAXONOMY.keywordOptions],
       types: [...DEFAULT_SITE_TAXONOMY.types],
     };
 

@@ -44,5 +44,12 @@ export class UpdateTaxonomyDto {
   @ArrayMaxSize(maxListLen)
   @IsString({ each: true })
   @MaxLength(maxItemLen, { each: true })
+  keywordOptions!: string[];
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(maxListLen)
+  @IsString({ each: true })
+  @MaxLength(maxItemLen, { each: true })
   types!: string[];
 }
