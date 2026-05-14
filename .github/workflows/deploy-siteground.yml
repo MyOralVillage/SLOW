@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure SSH
         env:
@@ -31,6 +31,14 @@ jobs:
           printf '%s\n' "$SG_SSH_KEY" > ~/.ssh/siteground
           chmod 600 ~/.ssh/siteground
           ssh-keyscan -p "$SG_PORT" "$SG_HOST" >> ~/.ssh/known_hosts
+
+      - name: Test SSH connection
+        env:
+          SG_HOST: ${{ secrets.SG_HOST }}
+          SG_PORT: ${{ secrets.SG_PORT }}
+          SG_USER: ${{ secrets.SG_USER }}
+        run: |
+          ssh -i ~/.ssh/siteground -p "$SG_PORT" -o BatchMode=yes "${SG_USER}@${SG_HOST}" "printf 'SSH connection ok\n'"
 
       - name: Deploy web/ to SiteGround
         env:
