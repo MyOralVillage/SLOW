@@ -41,5 +41,7 @@ jobs:
         run: |
           rsync -az --delete \
             --exclude ".DS_Store" \
+            --exclude "config.local.json" \
+            --exclude ".htaccess" \
             -e "ssh -i ~/.ssh/siteground -p $SG_PORT" \
             web/ "${SG_USER}@${SG_HOST}:${SG_TARGET_PATH}/"
