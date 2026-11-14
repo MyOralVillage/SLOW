@@ -158,3 +158,34 @@ chmod +x scripts/api_smoke_test.sh
    - `bookstack_base_url` — URL your device/emulator can reach (e.g. emulator: `http://10.0.2.2:6875`).
    - Optional: `bookstack_api_token_id` and `bookstack_api_token_secret` for native upload/API calls.
 3. Run the **app** configuration on a device or emulator.
+
+Licensing
+
+SLOW uses two licences: one for the software and one for the content.
+
+What	Licence
+Software: the code in backend/, web/, android-webview/, scripts/ and .github/	GNU General Public License v3.0 (GPL-3.0)
+Content: OIM icons, designs, images, documents and text published on SLOW, including the Salone OIM Library	Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+
+Icon, image and design files kept in this repository count as content and are licensed under CC BY-SA 4.0, even though they sit alongside GPL-3.0 code. GitHub's sidebar shows only the software licence.
+
+Contributing content
+
+Everyone who creates a profile on SLOW agrees to publish their contributions under CC BY-SA 4.0. They also confirm that they have the right to do so, because the work is their own or its owner has given permission. Copyright in each contribution stays with its creator. The licence gives everyone else permission to use it. The sign-up wording and the full licence text are in docs/slow-licence-signup.html.
+
+Reusing content
+
+You may copy, share, adapt and build on SLOW content for any purpose, including commercial use, as long as you:
+
+Give credit. Name the contributor shown on the item and the Sierra Leone OIM Wiki, link to the licence, and say whether you made changes.
+Share alike. If you change or build on the content, release your version under CC BY-SA 4.0 or a compatible licence.
+
+Suggested credit line:
+
+[Item name] by [Contributor], Sierra Leone OIM Wiki (My Oral Village), licensed under CC BY-SA 4.0. [Note any changes.]
+
+The full legal code governs; this summary does not replace it. The licence does not cover trademarks, so the names and logos of My Oral Village, SLOW and partner organizations are not licensed for reuse.
+
+Questions
+
+Contact My Oral Village through myoralvillage.org.
