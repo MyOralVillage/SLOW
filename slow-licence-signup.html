@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SLOW Licence Sign-up Block</title>
+<style>
+  :root { --ink:#1f2933; --muted:#52606d; --line:#d9e2ec; --accent:#1f4e79; --bg:#f7f9fb; --note:#fff8e1; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .page { max-width:860px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  h2 { font-size:1.15rem; margin:32px 0 8px; }
+  .lead { color:var(--muted); margin:0 0 16px; }
+  .devnotes { background:var(--note); border:1px solid #f0d98c; border-radius:8px; padding:16px 20px; }
+  .devnotes ol { padding-left:20px; margin:8px 0 0; }
+  .devnotes li { margin-bottom:8px; }
+  code { background:#eef2f6; padding:1px 4px; border-radius:3px; font-size:.9em; }
+  pre { background:#102a43; color:#e6edf3; padding:16px; border-radius:8px; overflow-x:auto; font-size:.8rem; line-height:1.45; white-space:pre-wrap; word-break:break-word; max-height:480px; overflow-y:auto; }
+  .copybtn { margin:8px 0; padding:6px 12px; border:1px solid var(--accent); background:#fff; color:var(--accent); border-radius:6px; cursor:pointer; font:inherit; }
+  .preview-frame { background:#fff; border:2px dashed var(--line); border-radius:10px; padding:16px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>SLOW licence block for profile sign-up</h1>
+  <p class="lead">Sierra Leone OIM Wiki (myoralvillage.org/slow) · Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) · Terms version: <code>SLOW-CCBYSA4-v1</code> (13 November 2026)</p>
+
+  <div class="devnotes">
+    <strong>Notes for the developer</strong>
+    <ol>
+      <li><strong>What to add.</strong> Insert the block in Section 2 into the profile sign-up form, above the submit button. It is self-contained: styles are prefixed <code>slow-lic-</code> so they should not clash with the site's CSS. Section 3 is an optional one-line licence notice for the footer of every SLOW page.</li>
+      <li><strong>Full legal code is built in.</strong> The complete CC BY-SA 4.0 legal code sits inside the block in a collapsed panel ("Read the full legal code"), styled in MOVE's Century Gothic with navy (<code>#0B2545</code>) section titles. The "legal code" and "CC BY-SA 4.0" links open that panel; no extra page needs to be hosted. Creative Commons dedicates its licence texts to the public domain (CC0), so reproducing them here is permitted. The panel also links to the official version on creativecommons.org. Please do not edit the legal code text.</li>
+      <li><strong>Font.</strong> The block asks for Century Gothic, falling back to similar geometric fonts (AppleGothic, URW Gothic) and then the device's default sans-serif. Century Gothic is installed on most Windows and Mac computers but not on Android phones, so many users in Sierra Leone will see the fallback unless a licensed Century Gothic web font is added to the site.</li>
+      <li><strong>Enforce on the server, not only in the browser.</strong> The checkbox is unticked by default and marked <code>required</code>, and a small script keeps the submit button disabled until it is ticked. Browser checks can be bypassed, so the server must also refuse to create a profile unless <code>slow_licence_agree=yes</code> is received.</li>
+      <li><strong>Keep a record of acceptance.</strong> For each profile, store the user ID, the date and time of acceptance, and the terms version (<code>slow_terms_version</code>, currently <code>SLOW-CCBYSA4-v1</code>). If the wording changes later, bump the version and ask users to accept again.</li>
+      <li><strong>Existing accounts.</strong> Anyone who already has a profile should be asked to accept on their next login before they can post or edit.</li>
+      <li><strong>Credit field.</strong> The block includes a "How should we credit your contributions?" field (<code>slow_credit_name</code>). Store it with the profile and show it next to each contribution; this is how the Attribution (BY) requirement is met for contributors such as partner organizations. Making it required is recommended.</li>
+      <li><strong>Links.</strong> External links open in a new tab, so the person does not lose what they have typed in the form. Official URLs: deed <code>https://creativecommons.org/licenses/by-sa/4.0/deed.en</code>; legal code <code>https://creativecommons.org/licenses/by-sa/4.0/legalcode.en</code>.</li>
+      <li><strong>If SLOW runs on MediaWiki</strong>, also set the site-wide licence in <code>LocalSettings.php</code> (<code>$wgRightsUrl</code>, <code>$wgRightsText</code>) so the licence shows in every page footer; WordPress and other platforms have equivalent footer settings.</li>
+    </ol>
+  </div>
+
+  <h2>1. Preview (what the person sees)</h2>
+  <div class="preview-frame">
+<form onsubmit="alert('Preview only: the real form posts to the server.'); return false;">
+<!-- ===== START: SLOW licence block (CC BY-SA 4.0) — terms version SLOW-CCBYSA4-v1 ===== -->
+<div id="slow-licence-block" class="slow-lic">
+  <style>
+    .slow-lic { border:1px solid #d9e2ec; border-radius:8px; padding:16px 20px; background:#fbfcfd; color:#1f2933; font-family:"Century Gothic", CenturyGothic, AppleGothic, "URW Gothic L", "URW Gothic", sans-serif; font-size:15px; line-height:1.55; }
+    .slow-lic h3 { margin:0 0 4px; font-size:1.1em; }
+    .slow-lic h4 { margin:14px 0 4px; font-size:1em; }
+    .slow-lic p { margin:6px 0; }
+    .slow-lic ul, .slow-lic ol { margin:4px 0 8px; padding-left:22px; }
+    .slow-lic li { margin-bottom:4px; }
+    .slow-lic a { color:#1f4e79; font-weight:600; }
+    .slow-lic input { font-family:inherit; }
+    .slow-lic .slow-lic-small { font-size:.88em; color:#52606d; }
+    .slow-lic .slow-lic-agree { margin-top:14px; padding:12px; background:#eef4fa; border-radius:6px; }
+    .slow-lic .slow-lic-agree label { display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+    .slow-lic .slow-lic-agree input[type=checkbox] { width:20px; height:20px; margin-top:2px; flex:0 0 auto; }
+    .slow-lic .slow-lic-credit { margin-top:12px; }
+    .slow-lic .slow-lic-credit input { width:100%; max-width:420px; padding:7px 9px; border:1px solid #bcccdc; border-radius:5px; font-size:inherit; box-sizing:border-box; }
+    /* Full legal code panel */
+    .slow-lic .slow-lic-legal { margin-top:12px; border:1px solid #d9e2ec; border-radius:6px; background:#fff; }
+    .slow-lic .slow-lic-legal > summary { cursor:pointer; padding:10px 12px; font-weight:700; color:#0B2545; }
+    .slow-lic .slow-lic-legal-body { max-height:420px; overflow-y:auto; padding:4px 16px 16px; font-size:14px; line-height:1.6; border-top:1px solid #d9e2ec; }
+    .slow-lic .slow-lic-legal-body h5 { color:#0B2545; font-size:1.15em; margin:12px 0 6px; }
+    .slow-lic .slow-lic-legal-body h6 { color:#0B2545; font-size:1.02em; margin:18px 0 6px; }
+    .slow-lic .slow-lic-legal-body ol { padding-left:26px; }
+    .slow-lic .slow-lic-legal-body li { margin-bottom:6px; }
+  </style>
+
+  <h3>Licence for everything on SLOW</h3>
+  <p>All content on the Sierra Leone OIM Wiki, including OIM icons, designs, images, documents and text, is published under the
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.en" target="_blank" rel="noopener license">Creative Commons Attribution-ShareAlike 4.0 International licence (CC BY-SA 4.0)</a>.
+    To create a profile and contribute, you must agree to publish your contributions under this licence.</p>
+
+  <h4>Summary of the licence</h4>
+  <p class="slow-lic-small">This is a plain-language summary, not the licence itself. Read the official
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.en" target="_blank" rel="noopener">licence deed</a> and the full
+    <a href="#slow-lic-legalcode" data-slow-open-legal>legal code</a>.</p>
+  <p><strong>Anyone may:</strong></p>
+  <ul>
+    <li><strong>Share</strong>: copy and pass on the material in any form, for any purpose, including commercial use.</li>
+    <li><strong>Adapt</strong>: change it and build on it, for any purpose, including commercial use.</li>
+  </ul>
+  <p><strong>On these conditions:</strong></p>
+  <ul>
+    <li><strong>Give credit (Attribution)</strong>: name the creator, link to the licence, and say whether changes were made.</li>
+    <li><strong>Share alike (ShareAlike)</strong>: anyone who shares a changed version must release it under the same licence (CC BY-SA 4.0 or a compatible licence).</li>
+    <li><strong>No extra restrictions</strong>: no one may add legal terms or technical locks that stop others from doing what the licence allows.</li>
+  </ul>
+  <p class="slow-lic-small">The licence does not cover patents or trademarks, and it gives no warranty. Uses allowed by law without permission (such as fair dealing) are not restricted by it. Once material is shared under this licence, the licence cannot be withdrawn for that material.</p>
+
+  <details class="slow-lic-legal" id="slow-lic-legalcode">
+    <summary>Read the full legal code (CC BY-SA 4.0)</summary>
+    <div class="slow-lic-legal-body">
+      <p class="slow-lic-small">Complete text of the licence as published by Creative Commons (version 4.0), which dedicates its licence texts to the public domain. Official version:
+        <a href="https://creativecommons.org/licenses/by-sa/4.0/legalcode.en" target="_blank" rel="noopener">creativecommons.org/licenses/by-sa/4.0/legalcode.en</a>. See the <a href="https://creativecommons.org/legal-code-errata/" target="_blank" rel="noopener">errata page</a> for any corrections.</p>
+
+      <h5>Creative Commons Attribution-ShareAlike 4.0 International Public License</h5>
+      <p>By exercising the Licensed Rights (defined below), You accept and agree to be bound by the terms and conditions of this Creative Commons Attribution-ShareAlike 4.0 International Public License ("Public License"). To the extent this Public License may be interpreted as a contract, You are granted the Licensed Rights in consideration of Your acceptance of these terms and conditions, and the Licensor grants You such rights in consideration of benefits the Licensor receives from making the Licensed Material available under these terms and conditions.</p>
+
+      <h6 id="slow-s1">Section 1 – Definitions.</h6>
+      <ol type="a">
+        <li><strong>Adapted Material</strong> means material subject to Copyright and Similar Rights that is derived from or based upon the Licensed Material and in which the Licensed Material is translated, altered, arranged, transformed, or otherwise modified in a manner requiring permission under the Copyright and Similar Rights held by the Licensor. For purposes of this Public License, where the Licensed Material is a musical work, performance, or sound recording, Adapted Material is always produced where the Licensed Material is synched in timed relation with a moving image.</li>
+        <li><strong>Adapter's License</strong> means the license You apply to Your Copyright and Similar Rights in Your contributions to Adapted Material in accordance with the terms and conditions of this Public License.</li>
+        <li><strong>BY-SA Compatible License</strong> means a license listed at <a href="https://creativecommons.org/compatiblelicenses" target="_blank" rel="noopener">creativecommons.org/compatiblelicenses</a>, approved by Creative Commons as essentially the equivalent of this Public License.</li>
+        <li><strong>Copyright and Similar Rights</strong> means copyright and/or similar rights closely related to copyright including, without limitation, performance, broadcast, sound recording, and Sui Generis Database Rights, without regard to how the rights are labeled or categorized. For purposes of this Public License, the rights specified in Section 2(b)(1)-(2) are not Copyright and Similar Rights.</li>
+        <li><strong>Effective Technological Measures</strong> means those measures that, in the absence of proper authority, may not be circumvented under laws fulfilling obligations under Article 11 of the WIPO Copyright Treaty adopted on December 20, 1996, and/or similar international agreements.</li>
+        <li><strong>Exceptions and Limitations</strong> means fair use, fair dealing, and/or any other exception or limitation to Copyright and Similar Rights that applies to Your use of the Licensed Material.</li>
+        <li><strong>License Elements</strong> means the license attributes listed in the name of a Creative Commons Public License. The License Elements of this Public License are Attribution and ShareAlike.</li>
+        <li><strong>Licensed Material</strong> means the artistic or literary work, database, or other material to which the Licensor applied this Public License.</li>
+        <li><strong>Licensed Rights</strong> means the rights granted to You subject to the terms and conditions of this Public License, which are limited to all Copyright and Similar Rights that apply to Your use of the Licensed Material and that the Licensor has authority to license.</li>
+        <li><strong>Licensor</strong> means the individual(s) or entity(ies) granting rights under this Public License.</li>
+        <li><strong>Share</strong> means to provide material to the public by any means or process that requires permission under the Licensed Rights, such as reproduction, public display, public performance, distribution, dissemination, communication, or importation, and to make material available to the public including in ways that members of the public may access the material from a place and at a time individually chosen by them.</li>
+        <li><strong>Sui Generis Database Rights</strong> means rights other than copyright resulting from Directive 96/9/EC of the European Parliament and of the Council of 11 March 1996 on the legal protection of databases, as amended and/or succeeded, as well as other essentially equivalent rights anywhere in the world.</li>
+        <li><strong>You</strong> means the individual or entity exercising the Licensed Rights under this Public License. <strong>Your</strong> has a corresponding meaning.</li>
+      </ol>
+
+      <h6 id="slow-s2">Section 2 – Scope.</h6>
+      <ol type="a">
+        <li><strong>License grant</strong>.
+          <ol type="1">
+            <li>Subject to the terms and conditions of this Public License, the Licensor hereby grants You a worldwide, royalty-free, non-sublicensable, non-exclusive, irrevocable license to exercise the Licensed Rights in the Licensed Material to:
+              <ol type="A">
+                <li>reproduce and Share the Licensed Material, in whole or in part; and</li>
+                <li>produce, reproduce, and Share Adapted Material.</li>
+              </ol>
+            </li>
+            <li><strong>Exceptions and Limitations</strong>. For the avoidance of doubt, where Exceptions and Limitations apply to Your use, this Public License does not apply, and You do not need to comply with its terms and conditions.</li>
+            <li><strong>Term</strong>. The term of this Public License is specified in Section 6(a).</li>
+            <li><strong>Media and formats; technical modifications allowed</strong>. The Licensor authorizes You to exercise the Licensed Rights in all media and formats whether now known or hereafter created, and to make technical modifications necessary to do so. The Licensor waives and/or agrees not to assert any right or authority to forbid You from making technical modifications necessary to exercise the Licensed Rights, including technical modifications necessary to circumvent Effective Technological Measures. For purposes of this Public License, simply making modifications authorized by this Section 2(a)(4) never produces Adapted Material.</li>
+            <li><strong>Downstream recipients</strong>.
+              <ol type="A">
+                <li><strong>Offer from the Licensor – Licensed Material</strong>. Every recipient of the Licensed Material automatically receives an offer from the Licensor to exercise the Licensed Rights under the terms and conditions of this Public License.</li>
+                <li><strong>Additional offer from the Licensor – Adapted Material</strong>. Every recipient of Adapted Material from You automatically receives an offer from the Licensor to exercise the Licensed Rights in the Adapted Material under the conditions of the Adapter’s License You apply.</li>
+                <li><strong>No downstream restrictions</strong>. You may not offer or impose any additional or different terms or conditions on, or apply any Effective Technological Measures to, the Licensed Material if doing so restricts exercise of the Licensed Rights by any recipient of the Licensed Material.</li>
+              </ol>
+            </li>
+            <li><strong>No endorsement</strong>. Nothing in this Public License constitutes or may be construed as permission to assert or imply that You are, or that Your use of the Licensed Material is, connected with, or sponsored, endorsed, or granted official status by, the Licensor or others designated to receive attribution as provided in Section 3(a)(1)(A)(i).</li>
+          </ol>
+        </li>
+        <li><strong>Other rights</strong>.
+          <ol type="1">
+            <li>Moral rights, such as the right of integrity, are not licensed under this Public License, nor are publicity, privacy, and/or other similar personality rights; however, to the extent possible, the Licensor waives and/or agrees not to assert any such rights held by the Licensor to the limited extent necessary to allow You to exercise the Licensed Rights, but not otherwise.</li>
+            <li>Patent and trademark rights are not licensed under this Public License.</li>
+            <li>To the extent possible, the Licensor waives any right to collect royalties from You for the exercise of the Licensed Rights, whether directly or through a collecting society under any voluntary or waivable statutory or compulsory licensing scheme. In all other cases the Licensor expressly reserves any right to collect such royalties.</li>
+          </ol>
+        </li>
+      </ol>
+
+      <h6 id="slow-s3">Section 3 – License Conditions.</h6>
+      <p>Your exercise of the Licensed Rights is expressly made subject to the following conditions.</p>
+      <ol type="a">
+        <li><strong>Attribution</strong>.
+          <ol type="1">
+            <li>If You Share the Licensed Material (including in modified form), You must:
+              <ol type="A">
+                <li>retain the following if it is supplied by the Licensor with the Licensed Material:
+                  <ol type="i">
+                    <li>identification of the creator(s) of the Licensed Material and any others designated to receive attribution, in any reasonable manner requested by the Licensor (including by pseudonym if designated);</li>
+                    <li>a copyright notice;</li>
+                    <li>a notice that refers to this Public License;</li>
+                    <li>a notice that refers to the disclaimer of warranties;</li>
+                    <li>a URI or hyperlink to the Licensed Material to the extent reasonably practicable;</li>
+                  </ol>
+                </li>
+                <li>indicate if You modified the Licensed Material and retain an indication of any previous modifications; and</li>
+                <li>indicate the Licensed Material is licensed under this Public License, and include the text of, or the URI or hyperlink to, this Public License.</li>
+              </ol>
+            </li>
+            <li>You may satisfy the conditions in Section 3(a)(1) in any reasonable manner based on the medium, means, and context in which You Share the Licensed Material. For example, it may be reasonable to satisfy the conditions by providing a URI or hyperlink to a resource that includes the required information.</li>
+            <li>If requested by the Licensor, You must remove any of the information required by Section 3(a)(1)(A) to the extent reasonably practicable.</li>
+          </ol>
+        </li>
+        <li><strong>ShareAlike</strong>.
+          <p>In addition to the conditions in Section 3(a), if You Share Adapted Material You produce, the following conditions also apply.</p>
+          <ol type="1">
+            <li>The Adapter’s License You apply must be a Creative Commons license with the same License Elements, this version or later, or a BY-SA Compatible License.</li>
+            <li>You must include the text of, or the URI or hyperlink to, the Adapter's License You apply. You may satisfy this condition in any reasonable manner based on the medium, means, and context in which You Share Adapted Material.</li>
+            <li>You may not offer or impose any additional or different terms or conditions on, or apply any Effective Technological Measures to, Adapted Material that restrict exercise of the rights granted under the Adapter's License You apply.</li>
+          </ol>
+        </li>
+      </ol>
+
+      <h6 id="slow-s4">Section 4 – Sui Generis Database Rights.</h6>
+      <p>Where the Licensed Rights include Sui Generis Database Rights that apply to Your use of the Licensed Material:</p>
+      <ol type="a">
+        <li>for the avoidance of doubt, Section 2(a)(1) grants You the right to extract, reuse, reproduce, and Share all or a substantial portion of the contents of the database;</li>
+        <li>if You include all or a substantial portion of the database contents in a database in which You have Sui Generis Database Rights, then the database in which You have Sui Generis Database Rights (but not its individual contents) is Adapted Material, including for purposes of Section 3(b); and</li>
+        <li>You must comply with the conditions in Section 3(a) if You Share all or a substantial portion of the contents of the database.</li>
+      </ol>
+      <p>For the avoidance of doubt, this Section 4 supplements and does not replace Your obligations under this Public License where the Licensed Rights include other Copyright and Similar Rights.</p>
+
+      <h6 id="slow-s5">Section 5 – Disclaimer of Warranties and Limitation of Liability.</h6>
+      <ol type="a">
+        <li><strong>Unless otherwise separately undertaken by the Licensor, to the extent possible, the Licensor offers the Licensed Material as-is and as-available, and makes no representations or warranties of any kind concerning the Licensed Material, whether express, implied, statutory, or other. This includes, without limitation, warranties of title, merchantability, fitness for a particular purpose, non-infringement, absence of latent or other defects, accuracy, or the presence or absence of errors, whether or not known or discoverable. Where disclaimers of warranties are not allowed in full or in part, this disclaimer may not apply to You.</strong></li>
+        <li><strong>To the extent possible, in no event will the Licensor be liable to You on any legal theory (including, without limitation, negligence) or otherwise for any direct, special, indirect, incidental, consequential, punitive, exemplary, or other losses, costs, expenses, or damages arising out of this Public License or use of the Licensed Material, even if the Licensor has been advised of the possibility of such losses, costs, expenses, or damages. Where a limitation of liability is not allowed in full or in part, this limitation may not apply to You.</strong></li>
+        <li>The disclaimer of warranties and limitation of liability provided above shall be interpreted in a manner that, to the extent possible, most closely approximates an absolute disclaimer and waiver of all liability.</li>
+      </ol>
+
+      <h6 id="slow-s6">Section 6 – Term and Termination.</h6>
+      <ol type="a">
+        <li>This Public License applies for the term of the Copyright and Similar Rights licensed here. However, if You fail to comply with this Public License, then Your rights under this Public License terminate automatically.</li>
+        <li>Where Your right to use the Licensed Material has terminated under Section 6(a), it reinstates:
+          <ol type="1">
+            <li>automatically as of the date the violation is cured, provided it is cured within 30 days of Your discovery of the violation; or</li>
+            <li>upon express reinstatement by the Licensor.</li>
+          </ol>
+          <p>For the avoidance of doubt, this Section 6(b) does not affect any right the Licensor may have to seek remedies for Your violations of this Public License.</p>
+        </li>
+        <li>For the avoidance of doubt, the Licensor may also offer the Licensed Material under separate terms or conditions or stop distributing the Licensed Material at any time; however, doing so will not terminate this Public License.</li>
+        <li>Sections 1, 5, 6, 7, and 8 survive termination of this Public License.</li>
+      </ol>
+
+      <h6 id="slow-s7">Section 7 – Other Terms and Conditions.</h6>
+      <ol type="a">
+        <li>The Licensor shall not be bound by any additional or different terms or conditions communicated by You unless expressly agreed.</li>
+        <li>Any arrangements, understandings, or agreements regarding the Licensed Material not stated herein are separate from and independent of the terms and conditions of this Public License.</li>
+      </ol>
+
+      <h6 id="slow-s8">Section 8 – Interpretation.</h6>
+      <ol type="a">
+        <li>For the avoidance of doubt, this Public License does not, and shall not be interpreted to, reduce, limit, restrict, or impose conditions on any use of the Licensed Material that could lawfully be made without permission under this Public License.</li>
+        <li>To the extent possible, if any provision of this Public License is deemed unenforceable, it shall be automatically reformed to the minimum extent necessary to make it enforceable. If the provision cannot be reformed, it shall be severed from this Public License without affecting the enforceability of the remaining terms and conditions.</li>
+        <li>No term or condition of this Public License will be waived and no failure to comply consented to unless expressly agreed to by the Licensor.</li>
+        <li>Nothing in this Public License constitutes or may be interpreted as a limitation upon, or waiver of, any privileges and immunities that apply to the Licensor or You, including from the legal processes of any jurisdiction or authority.</li>
+      </ol>
+    </div>
+  </details>
+
+  <div class="slow-lic-credit">
+    <label for="slow_credit_name"><strong>How should we credit your contributions?</strong><br>
+      <span class="slow-lic-small">Your name, your organization, or both (for example, "Jane Doe, New Salone Woman Organization").</span></label><br>
+    <input type="text" id="slow_credit_name" name="slow_credit_name" maxlength="200" required>
+  </div>
+
+  <div class="slow-lic-agree">
+    <label for="slow_licence_agree">
+      <input type="checkbox" id="slow_licence_agree" name="slow_licence_agree" value="yes" required>
+      <span>I have read the licence summary and I agree that:
+        <ol>
+          <li>everything I contribute to SLOW will be published under
+            <a href="#slow-lic-legalcode" data-slow-open-legal>CC BY-SA 4.0</a>;</li>
+          <li>I have the right to do this, because the work is my own or the owner (for example, my employer or organization) has given me permission;</li>
+          <li>I will clearly mark anything I post that belongs to someone else and is not under this licence.</li>
+        </ol>
+      </span>
+    </label>
+  </div>
+  <input type="hidden" name="slow_terms_version" value="SLOW-CCBYSA4-v1">
+
+  <script>
+    (function () {
+      var box = document.getElementById('slow-licence-block');
+      if (!box) return;
+      // "legal code" links open the built-in legal code panel instead of following the anchor
+      var panel = document.getElementById('slow-lic-legalcode');
+      var openers = box.querySelectorAll('[data-slow-open-legal]');
+      for (var j = 0; j < openers.length; j++) {
+        openers[j].addEventListener('click', function (e) {
+          e.preventDefault();
+          if (panel) { panel.open = true; panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        });
+      }
+      // keep the form's submit button disabled until the licence box is ticked
+      // (runs after the page has loaded, so it also finds a submit button placed after this block)
+      function setup() {
+        var form = box.closest('form');
+        var cb = document.getElementById('slow_licence_agree');
+        if (!form || !cb) return;
+        var submits = form.querySelectorAll('button[type=submit], input[type=submit], button:not([type])');
+        function sync() { for (var i = 0; i < submits.length; i++) submits[i].disabled = !cb.checked; }
+        cb.addEventListener('change', sync);
+        sync();
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup); else setup();
+    })();
+  </script>
+</div>
+<!-- ===== END: SLOW licence block ===== -->
+<button type="submit" class="copybtn" style="margin-top:12px">Create profile (preview)</button>
+</form>
+  </div>
+
+  <h2>2. Code to insert into the sign-up form</h2>
+  <p class="lead">Paste this inside the existing <code>&lt;form&gt;</code>, above the submit button.</p>
+  <button class="copybtn" data-target="code-block">Copy code</button>
+  <pre id="code-block"></pre>
+
+  <h2>3. Optional footer notice for every SLOW page</h2>
+  <button class="copybtn" data-target="footer-block">Copy code</button>
+  <pre id="footer-block">&lt;p class="slow-footer-licence"&gt;Except where otherwise noted, content on the Sierra Leone OIM Wiki is licensed under
+  &lt;a href="https://creativecommons.org/licenses/by-sa/4.0/deed.en" rel="license noopener" target="_blank"&gt;Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)&lt;/a&gt;.
+  Please credit the contributor named on each item and link to this licence.&lt;/p&gt;</pre>
+
+</div>
+
+<script>
+  // Show the exact block used in the preview as copyable code, so the two can never differ.
+  (function () {
+    var src = document.querySelector('.preview-frame').innerHTML;
+    var start = src.indexOf('<!-- ===== START');
+    var endMarker = '<!-- ===== END: SLOW licence block ===== -->';
+    var end = src.indexOf(endMarker) + endMarker.length;
+    document.getElementById('code-block').textContent = src.slice(start, end);
+    document.querySelectorAll('.copybtn[data-target]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var t = document.getElementById(b.getAttribute('data-target')).textContent;
+        navigator.clipboard.writeText(t).then(function () { b.textContent = 'Copied'; setTimeout(function(){ b.textContent = 'Copy code'; }, 1500); });
+      });
+    });
+  })();
+</script>
+</body>
+</html>
