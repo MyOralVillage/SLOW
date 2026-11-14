@@ -16,6 +16,7 @@ import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { DiskStorage } from "../storage/disk.storage";
 import { effectivePermissions, normalizePermissionGrants } from "./permissions";
+import { CURRENT_TERMS_VERSION, hasAcceptedCurrentLicence, LicenceInput, parseLicenceAcceptance } from "./licence";
 import { avatarUrlForUser } from "../users/user-view.util";
 
 const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS || "14");
@@ -130,6 +131,11 @@ export class AuthService {
       social_handles: user.social_handles || "",
       permission_grants: normalizePermissionGrants(user.permission_grants),
       permissions: effectivePermissions(user.role, user.permission_grants),
+      credit_name: user.credit_name || "",
+      licence_terms_version: user.licence_terms_version || null,
+      licence_accepted_at: user.licence_accepted_at,
+      licence_accepted: hasAcceptedCurrentLicence(user),
+      licence_current_version: CURRENT_TERMS_VERSION,
       created_at: user.created_at,
     };
   }
@@ -159,6 +165,7 @@ export class AuthService {
     password?: string;
     country?: string;
     whyInterested?: string;
+    licence?: LicenceInput;
   }) {
     const email = normalizeEmail(input.email || "");
     const password = String(input.password || "");
@@ -168,6 +175,9 @@ export class AuthService {
     if (password.length < 6) {
       throw new UnauthorizedException("Password must be at least 6 characters.");
     }
+    // No profile is created unless the licence was explicitly accepted.
+    const licence = parseLicenceAcceptance(input.licence || {});
+    const acceptedAt = new Date();
 
     const ownerEmails = ownerEmailsFromEnv();
     const adminEmails = adminEmailsFromEnv();
@@ -201,6 +211,16 @@ export class AuthService {
         email_verified: isTrusted,
         email_verification_token: verifyToken,
         email_verification_expires: verifyExpires,
+        credit_name: licence.creditName,
+        licence_terms_version: licence.termsVersion,
+        licence_accepted_at: acceptedAt,
+        licenceAcceptances: {
+          create: {
+            terms_version: licence.termsVersion,
+            credit_name: licence.creditName,
+            accepted_at: acceptedAt,
+          },
+        },
       },
     });
 
@@ -304,6 +324,31 @@ export class AuthService {
       },
     });
     return this.serializeUser(user);
+  }
+
+  /** Records acceptance of the current licence terms for an existing user. */
+  async acceptLicence(userId: string, input: LicenceInput) {
+    const licence = parseLicenceAcceptance(input);
+    const acceptedAt = new Date();
+    const [, user] = await this.prisma.$transaction([
+      this.prisma.licenceAcceptance.create({
+        data: {
+          user_id: userId,
+          terms_version: licence.termsVersion,
+          credit_name: licence.creditName,
+          accepted_at: acceptedAt,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          credit_name: licence.creditName,
+          licence_terms_version: licence.termsVersion,
+          licence_accepted_at: acceptedAt,
+        },
+      }),
+    ]);
+    return { user: this.serializeUser(user) };
   }
 
   async getUserForToken(token: string | undefined) {

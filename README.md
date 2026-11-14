@@ -58,6 +58,14 @@ python3 web/server.py
 4. Create an account from the web UI, then sign in with the same email and password.
 If the email matches `OWNER_EMAILS` or `ADMIN_EMAILS`, the app exposes the admin page.
 
+## Content licence (CC BY-SA 4.0)
+
+Sign-up requires accepting the SLOW licence block (source: `docs/slow-licence-signup.html`). The server refuses to create a profile without `slow_licence_agree=yes`, the current `slow_terms_version` and a `slow_credit_name`. Each acceptance is stored in `LicenceAcceptance` (user ID, timestamp, terms version, credit name).
+
+Members who have not accepted the current version can browse but cannot post or edit; the web app asks them to accept after login (`POST /api/auth/accept-licence`).
+
+To change the licence wording: edit the template in `web/index.html`, then bump the version in both the hidden `slow_terms_version` field there and `CURRENT_TERMS_VERSION` in `backend/src/auth/licence.ts`. Everyone is asked to accept again.
+
 ## Main API endpoints
 
 - `POST /api/auth/signup`
@@ -65,6 +73,7 @@ If the email matches `OWNER_EMAILS` or `ADMIN_EMAILS`, the app exposes the admin
 - `GET /api/auth/me`
 - `POST /api/auth/sign-out`
 - `POST /api/auth/profile`
+- `POST /api/auth/accept-licence`
 - `GET /api/users` (admin only)
 - `GET /api/resources`
 - `GET /api/resources/search`

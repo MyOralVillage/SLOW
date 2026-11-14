@@ -6,9 +6,16 @@ import type { Request, Response } from "express";
 
 import { SessionAuthGuard } from "./guards/session-auth.guard";
 import { AuthService } from "./auth.service";
+import { AllowWithoutLicence, LicenceInput } from "./licence";
 import { inferMimeFromFilename } from "../resources/mime.util";
 
-type SignInBody = {
+type LicenceBody = {
+  slow_licence_agree?: string;
+  slow_terms_version?: string;
+  slow_credit_name?: string;
+};
+
+type SignInBody = LicenceBody & {
   name?: string;
   email?: string;
   password?: string;
@@ -16,6 +23,14 @@ type SignInBody = {
   whyInterested?: string;
   why_interested?: string;
 };
+
+function licenceFromBody(body: LicenceBody | undefined): LicenceInput {
+  return {
+    agree: body?.slow_licence_agree,
+    termsVersion: body?.slow_terms_version,
+    creditName: body?.slow_credit_name,
+  };
+}
 
 type UpdateProfileBody = {
   name?: string;
@@ -67,6 +82,7 @@ export class AuthController {
       password: String(body?.password || ""),
       country: body?.country,
       whyInterested: body?.whyInterested || body?.why_interested,
+      licence: licenceFromBody(body),
     });
   }
 
@@ -83,6 +99,7 @@ export class AuthController {
       password: String(body?.password || ""),
       country: body?.country,
       whyInterested: body?.whyInterested || body?.why_interested,
+      licence: licenceFromBody(body),
     });
   }
 
@@ -122,6 +139,14 @@ export class AuthController {
     };
   }
 
+  @Post("accept-licence")
+  @UseGuards(SessionAuthGuard)
+  @AllowWithoutLicence()
+  async acceptLicence(@Req() req: Request & { authUser?: { id: string } }, @Body() body: LicenceBody) {
+    if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
+    return await this.auth.acceptLicence(req.authUser.id, licenceFromBody(body));
+  }
+
   @Post("forgot-password")
   async forgotPassword(@Body() body: { email?: string }) {
     return await this.auth.requestPasswordReset(String(body?.email || ""));
@@ -144,6 +169,7 @@ export class AuthController {
 
   @Post("request-verification")
   @UseGuards(SessionAuthGuard)
+  @AllowWithoutLicence()
   async requestVerification(@Req() req: Request & { authUser?: { id: string } }) {
     if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
     return await this.auth.requestVerificationEmail(req.authUser.id);
@@ -151,6 +177,7 @@ export class AuthController {
 
   @Post("send-verification")
   @UseGuards(SessionAuthGuard)
+  @AllowWithoutLicence()
   async sendVerification(@Req() req: Request & { authUser?: { id: string } }) {
     if (!req.authUser?.id) throw new UnauthorizedException("Please sign in.");
     return await this.auth.requestVerificationEmail(req.authUser.id);
