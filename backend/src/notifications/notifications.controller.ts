@@ -1,12 +1,14 @@
 import { Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 
 import { SessionAuthGuard } from "../auth/guards/session-auth.guard";
+import { AllowWithoutLicence } from "../auth/licence";
 import { NotificationsService } from "./notifications.service";
 
 type Authed = { authUser?: { id: string } };
 
 @Controller("notifications")
 @UseGuards(SessionAuthGuard)
+@AllowWithoutLicence()
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 

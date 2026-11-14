@@ -46,10 +46,16 @@ model User {
   biodata    String?
   social_handles String?
   permission_grants String[] @default([])
+  /// How the contributor wants to be credited (CC BY-SA attribution).
+  credit_name String?
+  /// Latest licence terms version this user accepted, e.g. "SLOW-CCBYSA4-v1".
+  licence_terms_version String?
+  licence_accepted_at DateTime?
   created_at DateTime    @default(now())
   updated_at DateTime    @updatedAt
 
   sessions   Session[]
+  licenceAcceptances LicenceAcceptance[]
   resources  Resource[]  @relation("UploadedResources")
   comments   Comment[]
   messagesSent     Message[] @relation("MessagesSent")
@@ -64,6 +70,20 @@ model User {
 
   @@index([role])
   @@index([status])
+}
+
+/// Append-only record of every licence acceptance (sign-up and re-acceptance).
+model LicenceAcceptance {
+  id            String   @id @default(uuid())
+  user_id       String
+  terms_version String
+  credit_name   String
+  accepted_at   DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([terms_version])
 }
 
 model Notification {

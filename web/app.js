@@ -273,6 +273,11 @@ const els = {
   signupCountry: document.getElementById("signup-country"),
   signupInterest: document.getElementById("signup-interest"),
   signupStatus: document.getElementById("signup-status"),
+  licenceAcceptModal: document.getElementById("licence-accept-modal"),
+  licenceAcceptForm: document.getElementById("licence-accept-form"),
+  licenceAcceptStatus: document.getElementById("licence-accept-status"),
+  btnLicenceAccept: document.getElementById("btn-licence-accept"),
+  btnLicenceCancel: document.getElementById("btn-licence-cancel"),
   btnSignupSubmit: document.getElementById("btn-signup-submit"),
   profileEditor: document.getElementById("profile-editor"),
   profileForm: document.getElementById("profile-form"),
@@ -2310,6 +2315,11 @@ async function apiFetch(path, options = {}) {
     });
     syncAuthState();
   }
+  if (res.status === 403 && state.user) {
+    res.clone().json().then((body) => {
+      if (body?.code === "LICENCE_REQUIRED") openLicenceAcceptModal();
+    }).catch(() => undefined);
+  }
   return res;
 }
 
@@ -3993,10 +4003,15 @@ async function handleSignUp(event) {
     setButtonBusy(els.btnSignupSubmit, false);
     return;
   }
+  const licence = readLicenceFields(els.signupForm, els.signupStatus);
+  if (!licence) {
+    setButtonBusy(els.btnSignupSubmit, false);
+    return;
+  }
   showStatus(els.signupStatus, "Creating account…", true);
   const result = await doAuthRequest(
     "/auth/signup",
-    { name, email, password, country, whyInterested: interest },
+    { name, email, password, country, whyInterested: interest, ...licence },
     els.signupStatus,
   );
   if (!result) {
@@ -4028,6 +4043,143 @@ async function handleSignUp(event) {
   }
   setButtonBusy(els.btnSignupSubmit, false);
   setRoute("home");
+}
+
+
+/* ───── SLOW licence (CC BY-SA 4.0) ───── */
+
+/** Clones the licence block template into a mount point, giving its fields unique ids. */
+function mountLicenceBlock(mount) {
+  const template = document.getElementById("slow-licence-template");
+  if (!mount || !template || mount.dataset.mounted) return null;
+  const prefix = `licence-${mount.dataset.licenceMount}`;
+  const block = template.content.firstElementChild.cloneNode(true);
+  block.id = `${prefix}-block`;
+  block.querySelectorAll("[data-lic]").forEach((el) => {
+    el.id = `${prefix}-${el.dataset.lic}`;
+  });
+  block.querySelectorAll("[data-lic-for]").forEach((el) => {
+    el.htmlFor = `${prefix}-${el.dataset.licFor}`;
+  });
+  const panel = block.querySelector('[data-lic="legal"]');
+  block.querySelectorAll("[data-slow-open-legal]").forEach((link) => {
+    link.setAttribute("href", `#${panel.id}`);
+    link.addEventListener("click", (event) => {
+      // Opens the built-in legal code instead of changing the app's hash route.
+      event.preventDefault();
+      panel.open = true;
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  mount.classList.add("slow-lic-mount");
+  mount.appendChild(block);
+  mount.dataset.mounted = "1";
+
+  // Keep the form's submit button disabled until the licence box is ticked.
+  const form = mount.closest("form");
+  const agree = block.querySelector('[data-lic="agree"]');
+  if (form && agree) {
+    const sync = () => {
+      form.querySelectorAll('button[type="submit"]').forEach((btn) => {
+        btn.disabled = !agree.checked;
+      });
+    };
+    agree.addEventListener("change", sync);
+    form.addEventListener("reset", () => window.setTimeout(sync, 0));
+    sync();
+  }
+  return block;
+}
+
+/** Reads and validates the licence fields inside a form. Returns null (and reports) if invalid. */
+function readLicenceFields(form, statusEl) {
+  const agree = form?.querySelector('[data-lic="agree"]');
+  const credit = form?.querySelector('[data-lic="credit"]');
+  const version = form?.querySelector('[data-lic="version"]');
+  if (!agree || !credit || !version) {
+    showStatus(statusEl, "The licence section did not load. Please reload the page.", false);
+    return null;
+  }
+  const creditName = credit.value.trim();
+  if (!creditName) {
+    showStatus(statusEl, "Tell us how we should credit your contributions", false);
+    credit.focus();
+    return null;
+  }
+  if (!agree.checked) {
+    showStatus(statusEl, "Tick the box to agree to the licence", false);
+    agree.focus();
+    return null;
+  }
+  return {
+    slow_licence_agree: "yes",
+    slow_terms_version: version.value,
+    slow_credit_name: creditName,
+  };
+}
+
+function needsLicenceAcceptance() {
+  return Boolean(state.user?.id) && state.user.licence_accepted === false;
+}
+
+function openLicenceAcceptModal() {
+  if (!els.licenceAcceptModal || !needsLicenceAcceptance()) return;
+  const credit = els.licenceAcceptForm?.querySelector('[data-lic="credit"]');
+  if (credit && !credit.value) credit.value = state.user.credit_name || state.user.name || "";
+  showStatus(els.licenceAcceptStatus, "", true);
+  els.licenceAcceptModal.hidden = false;
+}
+
+function closeLicenceAcceptModal() {
+  if (els.licenceAcceptModal) els.licenceAcceptModal.hidden = true;
+}
+
+/** Shows the acceptance dialog once per sign-in for members who have not accepted the current terms. */
+function renderLicenceGate() {
+  const userId = state.user?.id || "";
+  if (!needsLicenceAcceptance()) {
+    state.licencePromptedFor = "";
+    closeLicenceAcceptModal();
+    return;
+  }
+  if (state.licencePromptedFor !== userId) {
+    state.licencePromptedFor = userId;
+    openLicenceAcceptModal();
+  }
+}
+
+async function handleLicenceAccept(event) {
+  event.preventDefault();
+  const payload = readLicenceFields(els.licenceAcceptForm, els.licenceAcceptStatus);
+  if (!payload) return;
+  setButtonBusy(els.btnLicenceAccept, true, "Saving...");
+  try {
+    const res = await apiFetch("/auth/accept-licence", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      showStatus(els.licenceAcceptStatus, await errorText(res, "Could not save your acceptance"), false);
+      return;
+    }
+    const json = await res.json();
+    auth.setCurrentUser(json.user);
+    closeLicenceAcceptModal();
+    showToast("Thank you. You can now post and edit on SLOW.", true);
+  } catch (error) {
+    showStatus(els.licenceAcceptStatus, error.message || "Could not reach the server", false);
+  } finally {
+    setButtonBusy(els.btnLicenceAccept, false);
+  }
+}
+
+/** Declining the licence ends the session: members must accept to stay signed in. */
+async function handleLicenceCancel() {
+  closeLicenceAcceptModal();
+  await handleSignOut();
+  setRoute("profile");
+  showToast("Signed out. You need to accept the licence to sign in.", false);
 }
 
 async function handleSignOut() {
@@ -4537,6 +4689,8 @@ function bindEvents() {
   document.getElementById("admin-user-search")?.addEventListener("input", () => renderUsers());
   els.signInForm?.addEventListener("submit", handleSignIn);
   els.signupForm?.addEventListener("submit", handleSignUp);
+  els.licenceAcceptForm?.addEventListener("submit", handleLicenceAccept);
+  els.btnLicenceCancel?.addEventListener("click", handleLicenceCancel);
   els.profileForm?.addEventListener("submit", handleProfileSave);
   els.btnEditCategories?.addEventListener("click", () => openCategoryManageModal());
   els.btnEditSearchLists?.addEventListener("click", () => openTaxonomyManageModal());
@@ -5042,9 +5196,11 @@ function bindEvents() {
   window.addEventListener("beforeunload", clearUploadPreview);
 
 async function bootstrap() {
+  document.querySelectorAll("[data-licence-mount]").forEach((mount) => mountLicenceBlock(mount));
   auth.subscribe((snapshot) => {
     const prevUserId = state.user?.id || "";
     syncAuthState(snapshot);
+    renderLicenceGate();
     updateTopButtons();
     renderCategoryTiles();
     if ((state.user?.id || "") !== prevUserId) {
