@@ -24,7 +24,7 @@
 <div class="page">
 
   <h1>SLOW licence block for profile sign-up</h1>
-  <p class="lead">Sierra Leone OIM Wiki (myoralvillage.org/slow) · Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) · Terms version: <code>SLOW-CCBYSA4-v1</code> (13 November 2026)</p>
+  <p class="lead">Sierra Leone OIM Wiki (myoralvillage.org/slow) · Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) · Terms version: <code>SLOW-CCBYSA4-v1</code> (14 November 2026; revised before launch, so still v1)</p>
 
   <div class="devnotes">
     <strong>Notes for the developer</strong>
@@ -35,9 +35,11 @@
       <li><strong>Enforce on the server, not only in the browser.</strong> The checkbox is unticked by default and marked <code>required</code>, and a small script keeps the submit button disabled until it is ticked. Browser checks can be bypassed, so the server must also refuse to create a profile unless <code>slow_licence_agree=yes</code> is received.</li>
       <li><strong>Keep a record of acceptance.</strong> For each profile, store the user ID, the date and time of acceptance, and the terms version (<code>slow_terms_version</code>, currently <code>SLOW-CCBYSA4-v1</code>). If the wording changes later, bump the version and ask users to accept again.</li>
       <li><strong>Existing accounts.</strong> Anyone who already has a profile should be asked to accept on their next login before they can post or edit.</li>
-      <li><strong>Credit field.</strong> The block includes a "How should we credit your contributions?" field (<code>slow_credit_name</code>). Store it with the profile and show it next to each contribution; this is how the Attribution (BY) requirement is met for contributors such as partner organizations. Making it required is recommended.</li>
+      <li><strong>Credit field (profile).</strong> The block includes a "How should we credit your contributions?" field (<code>slow_credit_name</code>). Store it with the profile and use it as the default credit for that person's uploads. Making it required is recommended.</li>
+      <li><strong>Team-made work.</strong> Point 2 of the agreement now covers three cases: made by the uploader alone, made by a team whose members all agreed, or owned by an organization that agreed. No extra checkbox is needed; the wording itself covers teams.</li>
+      <li><strong>"Made by" field (upload form).</strong> Add the field in Section 4 to the form used to upload each item (<code>slow_made_by</code>). Store it with the item and show it on the item's page as "Made by: …". It pre-fills with the uploader's profile credit and can be edited, so every team member can be named. This is how the Attribution (BY) requirement is met for teams and partner organizations.</li>
       <li><strong>Links.</strong> External links open in a new tab, so the person does not lose what they have typed in the form. Official URLs: deed <code>https://creativecommons.org/licenses/by-sa/4.0/deed.en</code>; legal code <code>https://creativecommons.org/licenses/by-sa/4.0/legalcode.en</code>.</li>
-      <li><strong>If SLOW runs on MediaWiki</strong>, also set the site-wide licence in <code>LocalSettings.php</code> (<code>$wgRightsUrl</code>, <code>$wgRightsText</code>) so the licence shows in every page footer; WordPress and other platforms have equivalent footer settings.</li>
+      <li><strong>Footer.</strong> Add the notice in Section 3 to the footer of every SLOW page, in <code>web/</code> and in the Android web view if it has its own footer.</li>
     </ol>
   </div>
 
@@ -59,6 +61,8 @@
     .slow-lic .slow-lic-agree { margin-top:14px; padding:12px; background:#eef4fa; border-radius:6px; }
     .slow-lic .slow-lic-agree label { display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
     .slow-lic .slow-lic-agree input[type=checkbox] { width:20px; height:20px; margin-top:2px; flex:0 0 auto; }
+    .slow-lic .slow-lic-agree ul.slow-lic-or { list-style:none; padding-left:4px; margin:4px 0; }
+    .slow-lic .slow-lic-agree ul.slow-lic-or li::before { content:"– "; }
     .slow-lic .slow-lic-credit { margin-top:12px; }
     .slow-lic .slow-lic-credit input { width:100%; max-width:420px; padding:7px 9px; border:1px solid #bcccdc; border-radius:5px; font-size:inherit; box-sizing:border-box; }
     /* Full legal code panel */
@@ -233,7 +237,7 @@
 
   <div class="slow-lic-credit">
     <label for="slow_credit_name"><strong>How should we credit your contributions?</strong><br>
-      <span class="slow-lic-small">Your name, your organization, or both (for example, "Jane Doe, New Salone Woman Organization").</span></label><br>
+      <span class="slow-lic-small">Your name, your team's name, your project's name, your organization, or a combination (for example, "Jane Doe, New Salone Woman Organization").</span></label><br>
     <input type="text" id="slow_credit_name" name="slow_credit_name" maxlength="200" required>
   </div>
 
@@ -244,7 +248,13 @@
         <ol>
           <li>everything I contribute to SLOW will be published under
             <a href="#slow-lic-legalcode" data-slow-open-legal>CC BY-SA 4.0</a>;</li>
-          <li>I have the right to do this, because the work is my own or the owner (for example, my employer or organization) has given me permission;</li>
+          <li>I have the right to do this, because:
+            <ul class="slow-lic-or">
+              <li>I made it myself; <strong>or</strong></li>
+              <li>we made it as a team, and everyone who drew or designed part of it has agreed to share it under this licence; <strong>or</strong></li>
+              <li>it belongs to an organization (for example, my employer), and that organization has agreed to share it under this licence;</li>
+            </ul>
+          </li>
           <li>I will clearly mark anything I post that belongs to someone else and is not under this licence.</li>
         </ol>
       </span>
@@ -290,11 +300,25 @@
   <button class="copybtn" data-target="code-block">Copy code</button>
   <pre id="code-block"></pre>
 
-  <h2>3. Optional footer notice for every SLOW page</h2>
+  <h2>3. Footer notice for every SLOW page</h2>
   <button class="copybtn" data-target="footer-block">Copy code</button>
   <pre id="footer-block">&lt;p class="slow-footer-licence"&gt;Except where otherwise noted, content on the Sierra Leone OIM Wiki is licensed under
   &lt;a href="https://creativecommons.org/licenses/by-sa/4.0/deed.en" rel="license noopener" target="_blank"&gt;Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)&lt;/a&gt;.
   Please credit the contributor named on each item and link to this licence.&lt;/p&gt;</pre>
+
+  <h2>4. "Made by" field for the upload form</h2>
+  <p class="lead">Add this to the form used to upload each item. Pre-fill the value with the uploader's profile credit (<code>slow_credit_name</code>).</p>
+  <div class="preview-frame" style="margin-bottom:8px">
+<!-- ===== START: SLOW made-by field ===== -->
+<div class="slow-madeby" style="font-family:'Century Gothic', CenturyGothic, AppleGothic, 'URW Gothic L', 'URW Gothic', sans-serif; font-size:15px; line-height:1.55; color:#1f2933;">
+  <label for="slow_made_by"><strong>Made by</strong><br>
+    <span style="font-size:.88em; color:#52606d;">Everyone who drew or designed this item, and their team, project or organization (for example, "Fatmata Kamara and Mohamed Sesay, New Salone Woman Organization"). This name appears with the item wherever it is used.</span></label><br>
+  <input type="text" id="slow_made_by" name="slow_made_by" maxlength="300" required style="width:100%; max-width:520px; padding:7px 9px; border:1px solid #bcccdc; border-radius:5px; font:inherit; box-sizing:border-box;">
+</div>
+<!-- ===== END: SLOW made-by field ===== -->
+  </div>
+  <button class="copybtn" data-target="madeby-block">Copy code</button>
+  <pre id="madeby-block"></pre>
 
 </div>
 
@@ -306,6 +330,10 @@
     var endMarker = '<!-- ===== END: SLOW licence block ===== -->';
     var end = src.indexOf(endMarker) + endMarker.length;
     document.getElementById('code-block').textContent = src.slice(start, end);
+    var all = document.body.innerHTML;
+    var ms = all.indexOf('<!-- ===== START: SLOW made-by field');
+    var me = all.indexOf('<!-- ===== END: SLOW made-by field ===== -->') + '<!-- ===== END: SLOW made-by field ===== -->'.length;
+    document.getElementById('madeby-block').textContent = all.slice(ms, me);
     document.querySelectorAll('.copybtn[data-target]').forEach(function (b) {
       b.addEventListener('click', function () {
         var t = document.getElementById(b.getAttribute('data-target')).textContent;
