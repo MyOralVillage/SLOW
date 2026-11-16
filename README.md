@@ -60,7 +60,7 @@ If the email matches `OWNER_EMAILS` or `ADMIN_EMAILS`, the app exposes the admin
 
 ## Content licence (CC BY-SA 4.0)
 
-Sign-up requires accepting the SLOW licence block (source: `docs/slow-licence-signup.html`). The server refuses to create a profile without `slow_licence_agree=yes`, the current `slow_terms_version` and a `slow_credit_name`. Each acceptance is stored in `LicenceAcceptance` (user ID, timestamp, terms version, credit name).
+Sign-up requires accepting the SLOW licence block (source: `web/slow-licence.html`). The server refuses to create a profile without `slow_licence_agree=yes` and the current `slow_terms_version`. Each acceptance is stored in `LicenceAcceptance` (user ID, timestamp, terms version).
 
 Members who have not accepted the current version can browse but cannot post or edit; the web app asks them to accept after login (`POST /api/auth/accept-licence`).
 
@@ -180,7 +180,7 @@ Icon, image and design files kept in this repository count as content and are li
 
 Contributing content
 
-Everyone who creates a profile on SLOW agrees to publish their contributions under CC BY-SA 4.0. They also confirm that they have the right to do so, because the work is their own or its owner has given permission. Copyright in each contribution stays with its creator. The licence gives everyone else permission to use it. The sign-up wording and the full licence text are in docs/slow-licence-signup.html.
+Everyone who creates a profile on SLOW agrees to publish their contributions under CC BY-SA 4.0. They also confirm that they have the right to do so, because the work is their own or its owner has given permission. Copyright in each contribution stays with its creator. The licence gives everyone else permission to use it. The sign-up wording and the full licence text are in web/slow-licence.html.
 
 Reusing content
 
