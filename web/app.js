@@ -4094,16 +4094,9 @@ function mountLicenceBlock(mount) {
 /** Reads and validates the licence fields inside a form. Returns null (and reports) if invalid. */
 function readLicenceFields(form, statusEl) {
   const agree = form?.querySelector('[data-lic="agree"]');
-  const credit = form?.querySelector('[data-lic="credit"]');
   const version = form?.querySelector('[data-lic="version"]');
-  if (!agree || !credit || !version) {
+  if (!agree || !version) {
     showStatus(statusEl, "The licence section did not load. Please reload the page.", false);
-    return null;
-  }
-  const creditName = credit.value.trim();
-  if (!creditName) {
-    showStatus(statusEl, "Tell us how we should credit your contributions", false);
-    credit.focus();
     return null;
   }
   if (!agree.checked) {
@@ -4114,7 +4107,6 @@ function readLicenceFields(form, statusEl) {
   return {
     slow_licence_agree: "yes",
     slow_terms_version: version.value,
-    slow_credit_name: creditName,
   };
 }
 
@@ -4124,8 +4116,6 @@ function needsLicenceAcceptance() {
 
 function openLicenceAcceptModal() {
   if (!els.licenceAcceptModal || !needsLicenceAcceptance()) return;
-  const credit = els.licenceAcceptForm?.querySelector('[data-lic="credit"]');
-  if (credit && !credit.value) credit.value = state.user.credit_name || state.user.name || "";
   showStatus(els.licenceAcceptStatus, "", true);
   els.licenceAcceptModal.hidden = false;
 }

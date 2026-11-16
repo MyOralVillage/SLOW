@@ -211,7 +211,7 @@ export class AuthService {
         email_verified: isTrusted,
         email_verification_token: verifyToken,
         email_verification_expires: verifyExpires,
-        credit_name: licence.creditName,
+        credit_name: licence.creditName || null,
         licence_terms_version: licence.termsVersion,
         licence_accepted_at: acceptedAt,
         licenceAcceptances: {
@@ -342,7 +342,8 @@ export class AuthService {
       this.prisma.user.update({
         where: { id: userId },
         data: {
-          credit_name: licence.creditName,
+          // keep any credit name the user gave before; the form no longer asks for one
+          credit_name: licence.creditName || undefined,
           licence_terms_version: licence.termsVersion,
           licence_accepted_at: acceptedAt,
         },

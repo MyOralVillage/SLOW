@@ -26,10 +26,8 @@ export function parseLicenceAcceptance(input: LicenceInput) {
   if (termsVersion !== CURRENT_TERMS_VERSION) {
     throw new BadRequestException("The licence terms have been updated. Please reload the page and accept the current terms.");
   }
+  // Optional: the sign-up form no longer asks for a credit name.
   const creditName = String(input.creditName ?? "").trim();
-  if (!creditName) {
-    throw new BadRequestException("Tell us how we should credit your contributions.");
-  }
   if (creditName.length > CREDIT_NAME_MAX_LENGTH) {
     throw new BadRequestException(`Credit name must be ${CREDIT_NAME_MAX_LENGTH} characters or fewer.`);
   }
